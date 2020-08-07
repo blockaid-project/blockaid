@@ -10,12 +10,32 @@ import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 
 public class TableState {
     HashMap<String, ArrayList<Pair<String, SqlNode>>> derived_tables;
+    HashMap<String, String> pk_table;
 
     public TableState(){
-        this.derived_tables = new HashMap<String, ArrayList<Pair<String, String>>>();
+        this.derived_tables = new HashMap<String, ArrayList<Pair<String, SqlNode>>>();
+        this.pk_table = new HashMap<String, String>();
+    }
+
+    public void insert_pk(HashMap<String, String> new_pk) {
+        this.pk_table.putAll(new_pk);
+    }
+
+    // Based on the initial schema, observe the creation of a base table
+    public void insertBaseTable(String baseTable){
+        derived_tables.put(baseTable, new ArrayList<Pair<String, SqlNode>>());
+    }
+
+    public HashMap<String, ArrayList<Pair<String, SqlNode>>> getDerived_tables() {
+        return this.derived_tables;
+    }
+
+    public HashMap<String, String> getPk_Table(){
+        return this.pk_table;
     }
 
     // Updates Derived Tables if applicable

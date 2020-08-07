@@ -1,3 +1,4 @@
+import datastore.TableState;
 import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
@@ -40,7 +41,6 @@ public class main {
         // Set up a JDBC Connection for Calcite
         Class.forName("org.apache.calcite.jdbc.Driver");
         Properties info = new Properties();
-        //info.setProperty("lex", "JAVA");
         Connection connection =
                 DriverManager.getConnection("jdbc:calcite:model="
                         + "/Users/michaelchang/privacy_proxy/src/main/java/model_file.json", info);
@@ -74,7 +74,7 @@ public class main {
         String query = "select PRODUCTID from SORDERS";
         boolean isCompliant = true;
         for (Policy policy: policy_set) {
-            if (!policy.check_query_policy(query)){
+            if (!policy.check_policy(query)){
                    isCompliant = false;
                    break;
             }
@@ -84,28 +84,25 @@ public class main {
         //CREATE VIEW blah as
         String querytest = "CREATE VIEW blah as select PRODUCTID,ORDERID from SORDERS";
         //String querytest = "select PRODUCTID,ORDERID into hello from SORDERS";
+
         SqlParser.Config sqlParserConfig = SqlParser.configBuilder()
                 .setParserFactory(SqlDdlParserImpl.FACTORY)
                 .build();
         SqlParser parser = SqlParser.create(querytest, sqlParserConfig);
         SqlNode n = parser.parseStmt();
 
-        System.out.println(n.getKind());
-        System.out.println(((SqlCreateView) n).getOperandList());
-        SqlSelect test = ((SqlCreateView) n).operand(2);
-        System.out.println(test.getFrom());
-
-        //final SqlNode sqlNode = parser.parseStmt();
-        //final List<String> tables = QueryParserUtils.extractTableAliases(sqlNode);
-        //System.out.println(tables);
-
+        TableState datastore = new TableState();
+        datastore.insertBaseTable("SORDERS");
+        datastore.updateDerivedTables(n);
+        System.out.println(datastore.getDerived_tables());
 
         Statement statement = calciteConnection.createStatement();
         ResultSet resultSet = statement.executeQuery(query);
-
 
         resultSet.close();
         statement.close();
         connection.close();
     }
+
+
 }
