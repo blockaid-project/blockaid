@@ -29,29 +29,17 @@
     </properties>
 
     <build>
+
         <resources>
-	  <resource>
-            <directory>src</directory>
-            <includes>
-              <include>**/*.txt</include>
-              <include>**/*.sql</include>
-	      <include>**/*.json</include>
-            </includes>
-	  </resource>
-	</resources>
-
-	<testResources>
-	  <testResource>
-            <directory>${project.basedir}/src/test/java</directory>
-            <excludes>
-	      <exclude>**/*.java</exclude>
-            </excludes>
-	  </testResource>
-	  <testResource>
-	    <directory>${project.basedir}/src/test/resources</directory>
-	  </testResource>
-	</testResources>
-
+      <resource>
+        <directory>src/my-resources</directory>
+        <includes>
+          <include>**/*.txt</include>
+          <include>**/*.rtf</include>
+        </includes>
+      </resource>
+      ...
+    </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
