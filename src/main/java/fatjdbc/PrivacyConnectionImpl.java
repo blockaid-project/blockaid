@@ -16,7 +16,8 @@ import org.apache.calcite.schema.SchemaPlus;
 
 import sql.ParserFactory;
 import sql.ParserResult;
-import sql.SqlQueryParser;
+import sql.PrivacyException;
+import sql.PrivacyParser;
 
 import java.sql.SQLException;
 import java.util.Properties;
@@ -78,7 +79,7 @@ public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyC
         return preparedStatement;
     }
 
-    public SchemaPlus getRootSchema() {
+    public SchemaPlus getRootSchema() throws PrivacyException {
         try {
             return getSqlQueryParser().getRootSchma();
         } catch (SQLException e) {
@@ -100,11 +101,11 @@ public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyC
         return driver;
     }
 
-    public SqlQueryParser getSqlQueryParser() throws SQLException {
-        return parserFactory.getSqlQueryParser(info);
+    public PrivacyParser getSqlQueryParser() throws SQLException, PrivacyException {
+        return (PrivacyParser) parserFactory.getParser(info);
     }
 
-    public synchronized ParserResult parse(String sql) throws SQLException {
-        return parserFactory.getParser(sql, info).parse(sql);
+    public synchronized ParserResult parse(String sql) throws SQLException, PrivacyException {
+        return parserFactory.getParser(info).parse(sql);
     }
 }

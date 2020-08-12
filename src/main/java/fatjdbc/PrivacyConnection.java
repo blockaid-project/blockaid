@@ -3,6 +3,7 @@ package fatjdbc;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.schema.SchemaPlus;
+import sql.PrivacyException;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -21,7 +22,7 @@ public interface PrivacyConnection extends Connection {
      *
      * @return Root schema
      */
-    SchemaPlus getRootSchema();
+    SchemaPlus getRootSchema() throws PrivacyException;
 
     /**
      * Returns the type factory.

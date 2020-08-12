@@ -28,11 +28,11 @@ import java.util.Properties;
  * Main class of Privacy JDBC driver.
  */
 public class PrivacyDriver extends UnregisteredDriver {
-    public static final String CONNECT_STRING_PREFIX = "jdbc:quark:fat:";
-    private static final String DB_SCHEMA_FACTORY = "com.qubole.quark.catalog.db.SchemaFactory";
+    public static final String CONNECT_STRING_PREFIX = "jdbc:privacy:fat:";
+    private static final String DB_SCHEMA_FACTORY = "catalog.db.SchemaFactory";
     private static final String DB_PREFIX = "db:";
 
-    private static final String JSON_SCHEMA_FACTORY = "com.qubole.quark.catalog.json.SchemaFactory";
+    private static final String JSON_SCHEMA_FACTORY = "catalog.json.SchemaFactory";
     private static final String JSON_PREFIX = "json:";
 
     static {
@@ -57,7 +57,7 @@ public class PrivacyDriver extends UnregisteredDriver {
                         + jdbcVersion);
             case JDBC_41:
             default:
-                return "com.qubole.quark.fatjdbc.QuarkJdbc41Factory";
+                return "fatjdbc.PrivacyJdbc41Factory";
         }
     }
 

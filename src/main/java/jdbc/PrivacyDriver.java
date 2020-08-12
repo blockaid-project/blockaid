@@ -7,7 +7,7 @@ import org.apache.calcite.avatica.DriverVersion;
  */
 public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
 
-    public static final String CONNECT_STRING_PREFIX = "jdbc:quark:thin:";
+    public static final String CONNECT_STRING_PREFIX = "jdbc:privacy:thin:";
 
     static {
         new PrivacyDriver().register();

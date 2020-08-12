@@ -1,6 +1,5 @@
 package datastore;
 
-import javafx.util.Pair;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlSelect;
@@ -11,13 +10,14 @@ import org.apache.calcite.sql.parser.ddl.SqlDdlParserImpl;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 public class TableState {
-    HashMap<String, ArrayList<Pair<String, SqlNode>>> derived_tables;
+    HashMap<String, ArrayList<HashMap<String, SqlNode>>> derived_tables;
     HashMap<String, String> pk_table;
 
     public TableState(){
-        this.derived_tables = new HashMap<String, ArrayList<Pair<String, SqlNode>>>();
+        this.derived_tables = new HashMap<String, ArrayList<HashMap<String, SqlNode>>>();
         this.pk_table = new HashMap<String, String>();
     }
 
@@ -27,10 +27,10 @@ public class TableState {
 
     // Based on the initial schema, observe the creation of a base table
     public void insertBaseTable(String baseTable){
-        derived_tables.put(baseTable, new ArrayList<Pair<String, SqlNode>>());
+        derived_tables.put(baseTable, new ArrayList<HashMap<String, SqlNode>>());
     }
 
-    public HashMap<String, ArrayList<Pair<String, SqlNode>>> getDerived_tables() {
+    public HashMap<String, ArrayList<HashMap<String, SqlNode>>> getDerived_tables() {
         return this.derived_tables;
     }
 
@@ -47,7 +47,9 @@ public class TableState {
             SqlSelect view_select = ((SqlCreateView) node).operand(2);
             String basetable = view_select.getFrom().toString();
             if (derived_tables.get(basetable) != null) {
-                Pair<String, SqlNode> derived_entry = new Pair(new_view, view_select);
+                //this.derived_tables = new HashMap<String, ArrayList<Pair<String, SqlNode>>>();
+                HashMap<String, SqlNode> derived_entry = new HashMap<String, SqlNode>();
+                derived_entry.put(new_view, view_select);
                 derived_tables.get(basetable).add(derived_entry);
             }
             else{throw new RuntimeException("Base table not registered inside system");}

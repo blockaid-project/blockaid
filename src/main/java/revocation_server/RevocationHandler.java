@@ -1,12 +1,13 @@
 package revocation_server;
 
 import datastore.TableState;
-import javafx.util.Pair;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.util.SqlString;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 public class RevocationHandler {
 
@@ -21,15 +22,16 @@ public class RevocationHandler {
     public ArrayList<SqlString> revokePk(String primary_key)
     {
         String base_table = derived_tables.getPk_Table().get(primary_key);
-        ArrayList<Pair<String, SqlNode>> affected_tables =
+        ArrayList<HashMap<String, SqlNode>> affected_tables =
                 derived_tables.getDerived_tables().get(base_table);
 
         ArrayList<SqlString> modification_queries = new ArrayList<>();
         for (int i = 0; i < affected_tables.size(); i++){
-            Pair<String, SqlNode> affected_table = affected_tables.get(i);
-            if (isTableAffected(affected_table.getKey(), affected_table.getValue()))
+            HashMap<String, SqlNode> affected_table = affected_tables.get(i);
+            Map.Entry<String, SqlNode> entry = affected_table.entrySet().iterator().next();
+            if (isTableAffected(entry))
             {
-                SqlNode query = modifyTable(affected_table.getKey(), affected_table.getValue());
+                SqlNode query = modifyTable(entry.getKey(), entry.getValue());
                 modification_queries.add(query.toSqlString(dialect));
             }
             else{
@@ -40,7 +42,7 @@ public class RevocationHandler {
     }
 
     // Todo: Wen Blackbox
-    public boolean isTableAffected(String table_name, SqlNode query)
+    public boolean isTableAffected(Map.Entry<String, SqlNode> entry)
     {
         return true;
     }

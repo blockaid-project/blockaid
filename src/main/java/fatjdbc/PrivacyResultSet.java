@@ -1,21 +1,4 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package com.qubole.quark.fatjdbc;
+package fatjdbc;
 
 import org.apache.calcite.avatica.AvaticaResultSet;
 import org.apache.calcite.avatica.AvaticaResultSetMetaData;
@@ -43,18 +26,18 @@ import java.util.TimeZone;
  * Implementation of {@link ResultSet}
  * for the Quark engine.
  */
-public class QuarkResultSet extends AvaticaResultSet {
-  QuarkResultSet(AvaticaStatement statement,
-                 Meta.Signature signature,
-                 ResultSetMetaData resultSetMetaData, TimeZone timeZone,
-                 Meta.Frame firstFrame) {
+public class PrivacyResultSet extends AvaticaResultSet {
+  PrivacyResultSet(AvaticaStatement statement,
+                   Meta.Signature signature,
+                   ResultSetMetaData resultSetMetaData, TimeZone timeZone,
+                   Meta.Frame firstFrame) throws SQLException {
     super(statement, null, signature, resultSetMetaData, timeZone, firstFrame);
   }
 
   @Override
-  protected QuarkResultSet execute() throws SQLException {
+  protected fatjdbc.PrivacyResultSet execute() throws SQLException {
     // Call driver's callback. It is permitted to throw a RuntimeException.
-    QuarkConnectionImpl connection = getQuarkConnection();
+    PrivacyConnectionImpl connection = getPrivacyConnection();
     final boolean autoTemp = connection.config().autoTemp();
     Handler.ResultSink resultSink = null;
     if (autoTemp) {
@@ -71,7 +54,7 @@ public class QuarkResultSet extends AvaticaResultSet {
 
   @Override
   public ResultSet create(ColumnMetaData.AvaticaType elementType,
-                          Iterable<Object> iterable) {
+                          Iterable<Object> iterable) throws SQLException {
     final List<ColumnMetaData> columnMetaDataList;
     if (elementType instanceof ColumnMetaData.StructType) {
       columnMetaDataList = ((ColumnMetaData.StructType) elementType).columns;
@@ -88,8 +71,8 @@ public class QuarkResultSet extends AvaticaResultSet {
             signature.rootSchema, ImmutableList.<RelCollation>of(), -1, null);
     ResultSetMetaData subResultSetMetaData =
         new AvaticaResultSetMetaData(statement, null, newSignature);
-    final QuarkResultSet resultSet =
-        new QuarkResultSet(statement, signature, subResultSetMetaData,
+    final fatjdbc.PrivacyResultSet resultSet =
+        new fatjdbc.PrivacyResultSet(statement, signature, subResultSetMetaData,
             localCalendar.getTimeZone(), new Meta.Frame(0, true, iterable));
     final Cursor cursor = resultSet.createCursor(elementType, iterable);
     return resultSet.execute2(cursor, columnMetaDataList);
@@ -106,7 +89,7 @@ public class QuarkResultSet extends AvaticaResultSet {
   }
 
   // do not make public
-  QuarkConnectionImpl getQuarkConnection() {
-    return (QuarkConnectionImpl) statement.getConnection();
+  PrivacyConnectionImpl getPrivacyConnection() throws SQLException {
+    return (PrivacyConnectionImpl) statement.getConnection();
   }
 }

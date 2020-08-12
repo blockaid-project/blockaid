@@ -1,19 +1,4 @@
-/*
- * Copyright (c) 2015. Qubole Inc
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- *    limitations under the License.
- */
-
-package com.qubole.quark.fatjdbc;
+package fatjdbc;
 
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.avatica.AvaticaConnection;
@@ -37,46 +22,46 @@ import java.util.TimeZone;
  * and
  * JDBC 4.1 (corresponds to JDK 1.7).
  */
-public class QuarkJdbc41Factory extends QuarkJdbcFactory {
+public class PrivacyJdbc41Factory extends PrivacyJdbcFactory {
 
   /**
    * Creates a factory for JDBC version 4.1.
    */
-  public QuarkJdbc41Factory() {
+  public PrivacyJdbc41Factory() {
     this(4, 1);
   }
 
   /**
    * Creates a JDBC factory with given major/minor version number.
    */
-  protected QuarkJdbc41Factory(int major, int minor) {
+  protected PrivacyJdbc41Factory(int major, int minor) {
     super(major, minor);
   }
 
 
   @Override
-  protected QuarkConnectionImpl newConnection(QuarkDriver driver,
-                                              QuarkJdbcFactory factory,
+  protected PrivacyConnectionImpl newConnection(PrivacyDriver driver,
+                                              PrivacyJdbcFactory factory,
                                               String url,
                                               Properties info,
                                               CalciteRootSchema rootSchema,
                                               JavaTypeFactory typeFactory) throws SQLException {
-    return new QuarkConnectionImpl(driver, factory, url, info, rootSchema, typeFactory);
+    return new PrivacyConnectionImpl(driver, factory, url, info, rootSchema, typeFactory);
   }
 
   public QuarkJdbc41DatabaseMetaData newDatabaseMetaData(
       AvaticaConnection connection) {
     return new QuarkJdbc41DatabaseMetaData(
-        (QuarkConnectionImpl) connection);
+        (PrivacyConnectionImpl) connection);
   }
 
   @Override
-  public QuarkStatement newStatement(AvaticaConnection connection,
+  public PrivacyStatement newStatement(AvaticaConnection connection,
                                      Meta.StatementHandle statementHandle,
                                      int resultSetType,
                                      int resultSetConcurrency,
                                      int resultSetHoldability) {
-    return new QuarkJdbc41Statement((QuarkConnectionImpl) connection,
+    return new QuarkJdbc41Statement((PrivacyConnectionImpl) connection,
         statementHandle,
         resultSetType,
         resultSetConcurrency,
@@ -99,10 +84,10 @@ public class QuarkJdbc41Factory extends QuarkJdbcFactory {
                                        QueryState state,
                                        Meta.Signature signature,
                                        TimeZone timeZone,
-                                       Meta.Frame firstFrame) {
+                                       Meta.Frame firstFrame) throws SQLException {
     final ResultSetMetaData metaData =
         newResultSetMetaData(statement, signature);
-    return new QuarkResultSet(statement, signature, metaData, timeZone,
+    return new PrivacyResultSet(statement, signature, metaData, timeZone,
         firstFrame);
   }
 
@@ -115,8 +100,8 @@ public class QuarkJdbc41Factory extends QuarkJdbcFactory {
   /**
    * Implementation of statement for JDBC 4.1.
    */
-  private static class QuarkJdbc41Statement extends QuarkStatement {
-    QuarkJdbc41Statement(QuarkConnectionImpl connection,
+  private static class QuarkJdbc41Statement extends PrivacyStatement {
+    QuarkJdbc41Statement(PrivacyConnectionImpl connection,
                          Meta.StatementHandle h,
                          int resultSetType,
                          int resultSetConcurrency,
@@ -131,7 +116,7 @@ public class QuarkJdbc41Factory extends QuarkJdbcFactory {
    */
   private static class QuarkJdbc41DatabaseMetaData
       extends AvaticaDatabaseMetaData {
-    QuarkJdbc41DatabaseMetaData(QuarkConnectionImpl connection) {
+    QuarkJdbc41DatabaseMetaData(PrivacyConnectionImpl connection) {
       super(connection);
     }
   }

@@ -59,12 +59,17 @@ public abstract class DataSourceSchema extends PrivacySchema {
 
     @Override
     public void initialize(QueryContext queryContext, SchemaPlus schemaPlus) throws PrivacyException {
+        System.out.println("trying to initialize");
+        System.out.println(this.getDataSource().getClass());
         subSchemaMap = this.getDataSource().getSchemas();
+        System.out.print("Trying to initialize2");
         this.schemaPlus = schemaPlus;
         for (Map.Entry<String, Schema> entry : subSchemaMap.entrySet()) {
+
             SchemaPlus subSchemaPlus = this.schemaPlus.add(entry.getKey(), entry.getValue());
-            PrivacySchema quarkSchema = (PrivacySchema) entry.getValue();
-            quarkSchema.initialize(queryContext, subSchemaPlus);
+            PrivacySchema privacySchema = (PrivacySchema) entry.getValue();
+
+            privacySchema.initialize(queryContext, subSchemaPlus);
         }
     }
 

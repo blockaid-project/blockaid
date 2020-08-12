@@ -52,6 +52,7 @@ import policy_checker.Policy;
 import policy_checker.QueryChecker;
 
 import datastore.TableState;
+import sql.PrivacyException;
 
 import java.lang.reflect.Field;
 import java.sql.Connection;
@@ -112,6 +113,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
     public PrivacyMetaImpl(PrivacyConnectionImpl connection, Properties info) {
         super(connection);
+        System.out.println("inside privacy meta impl");
         this.info = info;
         this.url = info.getProperty("url");
 
@@ -171,7 +173,7 @@ public class PrivacyMetaImpl extends MetaImpl {
     private void set_policy()
     {
         FrameworkConfig config = (FrameworkConfig) Frameworks.newConfigBuilder().build();
-        final RelBuilder builder = RelBuilder.create(config);
+        /*final RelBuilder builder = RelBuilder.create(config);
         final RelNode node = builder
                 .scan("SORDERS")
                 .build();
@@ -183,7 +185,7 @@ public class PrivacyMetaImpl extends MetaImpl {
         ArrayList<RelNode> policy_nodes = new ArrayList<RelNode>();
         policy_nodes.add(node);
         policy_nodes.add(node2);
-        this.policy_list.add(new Policy(policy_nodes));
+        this.policy_list.add(new Policy(policy_nodes));*/
     }
 
 
@@ -246,6 +248,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
     @Override
     public StatementHandle createStatement(ConnectionHandle ch) {
+        System.out.println("Creating statement in privacymetimpl");
         final StatementHandle h = super.createStatement(ch);
         final PrivacyConnectionImpl privacyConnection = getConnection();
         privacyConnection.server.addStatement(privacyConnection, h);
@@ -352,10 +355,9 @@ public class PrivacyMetaImpl extends MetaImpl {
     @Override
     public Meta.StatementHandle prepare(Meta.ConnectionHandle ch, String sql,
                                         long maxRowCount) {
+        System.out.println("in prepare in privacymetaimpl");
         final Meta.StatementHandle h = createStatement(ch);
         final PrivacyConnectionImpl privacyConnection = getConnection();
-
-
 
         PrivacyJdbcStatement statement = privacyConnection.server.getStatement(h);
         statement.setSignature(h.signature);
@@ -366,6 +368,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                                                 String sql,
                                                 long maxRowCount,
                                                 Meta.PrepareCallback callback) {
+        System.out.println("in prepareandexecute in privacymetaimpl");
         // Check against policies
         if (!queryChecker.check_policy(sql))
             throw new RuntimeException("Policy Violation");
@@ -396,16 +399,21 @@ public class PrivacyMetaImpl extends MetaImpl {
                                            int maxRowsInFirstFrame,
                                            PrepareCallback prepareCallback)
             throws NoSuchStatementException {
+        System.out.println("in prepareAndExecute2 in privacymetaimpl");
         try {
             MetaResultSet metaResultSet;
             synchronized (prepareCallback.getMonitor()) {
+                System.out.println("inside callback");
                 prepareCallback.clear();
+                System.out.println("cleared callback");
                 ParserResult result = getConnection().parse(sql);
+                System.out.println("parsing sql");
                 metaResultSet = new PlanExecutor(statementHandle, getConnection(),
                         connectionCache, maxRowCount).execute(result);
                 prepareCallback.assign(metaResultSet.signature, metaResultSet.firstFrame,
                         metaResultSet.updateCount);
             }
+            System.out.println("about to execute callback");
             prepareCallback.execute();
             return new ExecuteResult(ImmutableList.of(metaResultSet));
         } catch (Exception e) {
@@ -485,26 +493,32 @@ public class PrivacyMetaImpl extends MetaImpl {
             };
         }
         final Predicate1<MetaSchema> schemaMatcher = namedMatcher(schemaPattern);
-        return createResultSet(schemas(catalog)
-                        .where(schemaMatcher)
-                        .selectMany(
-                                new Function1<MetaSchema, Enumerable<MetaTable>>() {
-                                    public Enumerable<MetaTable> apply(MetaSchema schema) {
-                                        return tables(schema, matcher(tableNamePattern));
-                                    }
-                                })
-                        .where(typeFilter),
-                MetaTable.class,
-                "TABLE_CAT",
-                "TABLE_SCHEM",
-                "TABLE_NAME",
-                "TABLE_TYPE",
-                "REMARKS",
-                "TYPE_CAT",
-                "TYPE_SCHEM",
-                "TYPE_NAME",
-                "SELF_REFERENCING_COL_NAME",
-                "REF_GENERATION");
+        try {
+            return createResultSet(schemas(catalog)
+                            .where(schemaMatcher)
+                            .selectMany(
+                                    new Function1<MetaSchema, Enumerable<MetaTable>>() {
+                                        public Enumerable<MetaTable> apply(MetaSchema schema) {
+                                            return tables(schema, matcher(tableNamePattern));
+                                        }
+                                    })
+                            .where(typeFilter),
+                    MetaTable.class,
+                    "TABLE_CAT",
+                    "TABLE_SCHEM",
+                    "TABLE_NAME",
+                    "TABLE_TYPE",
+                    "REMARKS",
+                    "TYPE_CAT",
+                    "TYPE_SCHEM",
+                    "TYPE_NAME",
+                    "SELF_REFERENCING_COL_NAME",
+                    "REF_GENERATION");
+        } catch (PrivacyException e) {
+            e.printStackTrace();
+            throw new RuntimeException(
+                    "parse failed: " + e.getMessage(), e);
+        }
     }
 
     public MetaResultSet getTypeInfo(ConnectionHandle ch) {
@@ -539,49 +553,55 @@ public class PrivacyMetaImpl extends MetaImpl {
         final Predicate1<MetaSchema> schemaMatcher = namedMatcher(schemaPattern);
         final Predicate1<MetaColumn> columnMatcher =
                 namedMatcher(columnNamePattern);
-        return createResultSet(schemas(catalog)
-                        .where(schemaMatcher)
-                        .selectMany(
-                                new Function1<MetaSchema, Enumerable<MetaTable>>() {
-                                    public Enumerable<MetaTable> apply(MetaSchema schema) {
-                                        return tables(schema, tableNameMatcher);
-                                    }
-                                })
-                        .selectMany(
-                                new Function1<MetaTable, Enumerable<MetaColumn>>() {
-                                    public Enumerable<MetaColumn> apply(MetaTable schema) {
-                                        return columns(schema);
-                                    }
-                                })
-                        .where(columnMatcher),
-                MetaColumn.class,
-                "TABLE_CAT",
-                "TABLE_SCHEM",
-                "TABLE_NAME",
-                "COLUMN_NAME",
-                "DATA_TYPE",
-                "TYPE_NAME",
-                "COLUMN_SIZE",
-                "BUFFER_LENGTH",
-                "DECIMAL_DIGITS",
-                "NUM_PREC_RADIX",
-                "NULLABLE",
-                "REMARKS",
-                "COLUMN_DEF",
-                "SQL_DATA_TYPE",
-                "SQL_DATETIME_SUB",
-                "CHAR_OCTET_LENGTH",
-                "ORDINAL_POSITION",
-                "IS_NULLABLE",
-                "SCOPE_CATALOG",
-                "SCOPE_SCHEMA",
-                "SCOPE_TABLE",
-                "SOURCE_DATA_TYPE",
-                "IS_AUTOINCREMENT",
-                "IS_GENERATEDCOLUMN");
+        try {
+            return createResultSet(schemas(catalog)
+                            .where(schemaMatcher)
+                            .selectMany(
+                                    new Function1<MetaSchema, Enumerable<MetaTable>>() {
+                                        public Enumerable<MetaTable> apply(MetaSchema schema) {
+                                            return tables(schema, tableNameMatcher);
+                                        }
+                                    })
+                            .selectMany(
+                                    new Function1<MetaTable, Enumerable<MetaColumn>>() {
+                                        public Enumerable<MetaColumn> apply(MetaTable schema) {
+                                            return columns(schema);
+                                        }
+                                    })
+                            .where(columnMatcher),
+                    MetaColumn.class,
+                    "TABLE_CAT",
+                    "TABLE_SCHEM",
+                    "TABLE_NAME",
+                    "COLUMN_NAME",
+                    "DATA_TYPE",
+                    "TYPE_NAME",
+                    "COLUMN_SIZE",
+                    "BUFFER_LENGTH",
+                    "DECIMAL_DIGITS",
+                    "NUM_PREC_RADIX",
+                    "NULLABLE",
+                    "REMARKS",
+                    "COLUMN_DEF",
+                    "SQL_DATA_TYPE",
+                    "SQL_DATETIME_SUB",
+                    "CHAR_OCTET_LENGTH",
+                    "ORDINAL_POSITION",
+                    "IS_NULLABLE",
+                    "SCOPE_CATALOG",
+                    "SCOPE_SCHEMA",
+                    "SCOPE_TABLE",
+                    "SOURCE_DATA_TYPE",
+                    "IS_AUTOINCREMENT",
+                    "IS_GENERATEDCOLUMN");
+        } catch (PrivacyException e) {
+            e.printStackTrace();
+            throw new RuntimeException(
+                    "parse failed: " + e.getMessage(), e);
+        }
     }
 
-    Enumerable<MetaCatalog> catalogs() {
+    Enumerable<MetaCatalog> catalogs() throws PrivacyException {
         return Linq4j.asEnumerable(
                 CalciteSchema.from(getConnection().getRootSchema()).getSubSchemaMap().values())
                 .select(
@@ -598,7 +618,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                         new MetaTableType("TABLE"), new MetaTableType("VIEW")));
     }
 
-    Enumerable<MetaSchema> schemas(String catalog) {
+    Enumerable<MetaSchema> schemas(String catalog) throws PrivacyException {
         final Predicate1<MetaSchema> catalogMatcher = namedMatcher(Pat.of(catalog));
         return Linq4j.asEnumerable(
                 CalciteSchema.from(getConnection().getRootSchema()).getSubSchemaMap().values())
@@ -751,17 +771,29 @@ public class PrivacyMetaImpl extends MetaImpl {
     @Override
     public MetaResultSet getSchemas(ConnectionHandle ch, String catalog, Pat schemaPattern) {
         final Predicate1<MetaSchema> schemaMatcher = namedMatcher(schemaPattern);
-        return createResultSet(schemas(catalog).where(schemaMatcher),
-                MetaSchema.class,
-                "TABLE_SCHEM",
-                "TABLE_CATALOG");
+        try {
+            return createResultSet(schemas(catalog).where(schemaMatcher),
+                    MetaSchema.class,
+                    "TABLE_SCHEM",
+                    "TABLE_CATALOG");
+        } catch (PrivacyException e) {
+            e.printStackTrace();
+            throw new RuntimeException(
+                    "parse failed: " + e.getMessage(), e);
+        }
     }
 
     @Override
     public MetaResultSet getCatalogs(ConnectionHandle ch) {
-        return createResultSet(catalogs(),
-                MetaCatalog.class,
-                "TABLE_CAT");
+        try {
+            return createResultSet(catalogs(),
+                    MetaCatalog.class,
+                    "TABLE_CAT");
+        } catch (PrivacyException e) {
+            e.printStackTrace();
+            throw new RuntimeException(
+                    "parse failed: " + e.getMessage(), e);
+        }
     }
 
 

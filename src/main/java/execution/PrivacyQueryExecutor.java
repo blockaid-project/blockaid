@@ -5,13 +5,12 @@ import com.google.common.cache.Cache;
 import planner.DataSourceSchema;
 
 import sql.ParserResult;
-import sql.SqlQueryParser;
 import plugin.Executor;
 import plugin.jdbc.JdbcDB;
 
-import plugin.jdbc.JdbcDB;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sql.PrivacyParser;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -32,9 +31,10 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
     }
 
     public Object execute(ParserResult parserResult) throws Exception {
+        System.out.println("Executing queries inside PrivacyQueryExecutor");
         Object object = null;
         final DataSourceSchema dataSourceSchema =
-                ((SqlQueryParser.SqlQueryParserResult) parserResult).getDataSource();
+                ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource();
 
         if (dataSourceSchema != null) {
             Connection conn;

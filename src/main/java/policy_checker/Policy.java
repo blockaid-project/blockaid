@@ -1,12 +1,12 @@
 package policy_checker;
 
-import javafx.util.Pair;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.RelBuilder;
 
 import java.util.ArrayList;
+import java.util.Map;
 
 public class Policy {
 
@@ -21,9 +21,9 @@ public class Policy {
 
     }
 
-    public ArrayList<Pair<Integer, Integer>> applicable_relations(){
+    public ArrayList<Map<Integer, Integer>> applicable_relations(){
 
-        return new ArrayList<Pair<Integer, Integer>>();
+        return new ArrayList<Map<Integer, Integer>>();
     }
 
     public boolean check_policy(String query)

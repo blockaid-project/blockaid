@@ -16,11 +16,9 @@ import java.util.Properties;
  * Created by adeshr on 5/24/16.
  */
 public class ParserFactory {
-    private SqlQueryParser sqlQueryParser;
     private boolean reloadCache;
 
     public ParserFactory(Properties info) throws SQLException {
-        sqlQueryParser = getSqlQueryParser(info);
         reloadCache = false;
     }
 
@@ -32,29 +30,11 @@ public class ParserFactory {
         this.reloadCache = false;
     }
 
-    public SqlQueryParser getSqlQueryParser(Properties info)
-            throws SQLException {
-        if (reloadCache || sqlQueryParser == null) {
-            try {
-                sqlQueryParser = new SqlQueryParser(info);
-                clearReloadCache();
-            } catch (PrivacyException e) {
-                throw new SQLException(e.getMessage(), e);
-            }
-        }
-        return sqlQueryParser;
-    }
+    public Parser getParser(Properties info)
+            throws PrivacyException {
+        return new PrivacyParser(info);
 
-    public Parser getParser(String sql, Properties info)
-            throws SQLException {
-        SqlParser parser = SqlParser.create(sql,
-                SqlParser.configBuilder()
-                        .setQuotedCasing(Casing.UNCHANGED)
-                        .setUnquotedCasing(Casing.UNCHANGED)
-                        .setQuoting(Quoting.DOUBLE_QUOTE)
-                        //.setParserFactory(PrivacyParserImpl.FACTORY)
-                        .build());
-        SqlNode sqlNode;
+        /*
         try {
             sqlNode = parser.parseStmt();
         } catch (SqlParseException e) {
@@ -65,6 +45,6 @@ public class ParserFactory {
             return new DDLParser();
         } else  {
             return getSqlQueryParser(info);
-        }
+        }*/
     }
 }

@@ -13,7 +13,7 @@
  *    limitations under the License.
  */
 
-package com.qubole.quark.fatjdbc;
+package fatjdbc;
 
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.avatica.AvaticaConnection;
@@ -31,14 +31,14 @@ import java.util.Properties;
  * Handles JDBC version number.
  * </p>
  */
-public abstract class QuarkJdbcFactory implements AvaticaFactory {
+public abstract class PrivacyJdbcFactory implements AvaticaFactory {
   protected final int major;
   protected final int minor;
 
   /**
    * Creates a JDBC factory with given major/minor version number.
    */
-  protected QuarkJdbcFactory(int major, int minor) {
+  protected PrivacyJdbcFactory(int major, int minor) {
     this.major = major;
     this.minor = minor;
   }
@@ -58,7 +58,7 @@ public abstract class QuarkJdbcFactory implements AvaticaFactory {
    * Creates a Quark connection for Avatica (in terms of Avatica types).
    * <p>
    * This implementation delegates to
-   * {@link #newConnection(QuarkDriver, QuarkJdbcFactory, String, Properties, CalciteRootSchema,
+   * {@link #newConnection(PrivacyDriver, fatjdbc.PrivacyJdbcFactory, String, Properties, CalciteRootSchema,
    * JavaTypeFactory)}.
    * </p>
    */
@@ -67,15 +67,15 @@ public abstract class QuarkJdbcFactory implements AvaticaFactory {
                                                AvaticaFactory factory,
                                                String url,
                                                Properties info) throws SQLException {
-    return newConnection((QuarkDriver) driver, (QuarkJdbcFactory) factory, url, info,
+    return newConnection((PrivacyDriver) driver, (fatjdbc.PrivacyJdbcFactory) factory, url, info,
         null, null);
   }
 
   /**
    * Creates a Quark connection (in terms of Quark-specific types).
    */
-  protected abstract QuarkConnectionImpl newConnection(QuarkDriver driver,
-                                                       QuarkJdbcFactory factory,
+  protected abstract PrivacyConnectionImpl newConnection(PrivacyDriver driver,
+                                                       fatjdbc.PrivacyJdbcFactory factory,
                                                        String url,
                                                        Properties info,
                                                        CalciteRootSchema rootSchema,

@@ -65,11 +65,12 @@ public class ConnectionTest {
                 DriverManager.getConnection("jdbc:privacy:fat:json:" + resPath.toString(), props);
         System.out.println("connection established");
         Statement statement = connection.createStatement();
+        System.out.println(statement.getConnection());
         System.out.println("statement created");
         ResultSet rows =
                 statement.executeQuery("select * from h2.public.warehouse as wr where wr" +
                         ".w_warehouse_sq_ft > 200");
-        System.out.println("query execfuted");
+        System.out.println("query executed");
         assertThat(rows.getMetaData().getColumnCount()).isEqualTo(14);
 
         statement.close();

@@ -20,12 +20,12 @@ public class JdbcFactory implements DataSourceFactory {
     // Static Registry for JDBC DB plugin
     private static final Map<String, Class<? extends JdbcDB>> DB_PLUGINS =
             new ImmutableMap.Builder<String, Class<? extends JdbcDB>>()
-                    .put("HIVE", EMRDb.class)
-                    .put("REDSHIFT", RedShiftDb.class)
+                    //.put("HIVE", EMRDb.class)
+                    //.put("REDSHIFT", RedShiftDb.class)
                     .put("H2", H2Db.class)
                     .put("MYSQL", MysqlDB.class)
-                    .put("ORACLE", OracleDb.class)
-                    .put("GENERIC", GenericDb.class)
+                    //.put("ORACLE", OracleDb.class)
+                    //.put("GENERIC", GenericDb.class)
                     .build();
 
     public DataSource create(Map<String, Object> properties) throws PrivacyException {

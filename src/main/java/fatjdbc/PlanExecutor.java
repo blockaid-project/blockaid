@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableList;
 
 import execution.PrivacyExecutorFactory;
 import sql.ParserResult;
+import sql.PrivacyException;
 
 import java.lang.reflect.Type;
 import java.sql.Connection;
@@ -57,6 +58,7 @@ public class PlanExecutor {
     }
 
     public PrivacyMetaResultSet execute(ParserResult parserResult) throws Exception {
+        System.out.println("Executing inside Plan Executor");
         PrivacyJdbcStatement stmt = connection.server.getStatement(h);
 
         PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),
@@ -66,22 +68,17 @@ public class PlanExecutor {
         if (result instanceof Integer) {
             // Alter, Create, Drop DDL commands will either return id or 0
             return PrivacyMetaResultSet.count(h.connectionId, h.id, ((Integer) result).intValue());
-        } else if (result instanceof ArrayList) {
-            // Show DDL returns an arraylist
+        } /*// Show DDL returns an arraylist
             Class pojoType = getPojoType(parserResult.getParsedSql());
 
             return getMetaResultSetFromIterator(
                     convertToIterator((ArrayList) result, pojoType),
                     connection, parserResult, "", connection.server.getStatement(h), h,
                     AvaticaStatement.DEFAULT_FETCH_SIZE, pojoType);
-        } else if (result instanceof ResultSet) {
+        } */else if (result instanceof ResultSet) {
             // Querying JdbcDB
             return PrivacyMetaResultSet.create(h.connectionId, h.id, (ResultSet) result,
                     maxRowCount);
-        } else if (result instanceof Iterator) {
-            // Querying QuboleDB
-            return getMetaResultSetFromIterator((Iterator<Object>) result,
-                    connection, parserResult, parserResult.getParsedSql(), stmt, h, maxRowCount, null);
         }
 
         throw new RuntimeException("Cannot handle execution for: " + parserResult.getParsedSql());
@@ -171,6 +168,7 @@ public class PlanExecutor {
                 !(String.class.isPrimitive()), Util.getDefaultCharset(), null);
     }
 
+    /*
     private PrivacyMetaResultSet getMetaResultSetFromIterator(Iterator<Object> iterator,
                                                             PrivacyConnectionImpl connection,
                                                             ParserResult result,
@@ -178,7 +176,7 @@ public class PlanExecutor {
                                                             PrivacyJdbcStatement stmt,
                                                             Meta.StatementHandle h,
                                                             long maxRowCount,
-                                                            Class clazz) throws SQLException {
+                                                            Class clazz) throws SQLException, PrivacyException {
         PrivacyMetaResultSet metaResultSet;
         final JavaTypeFactory typeFactory =
                 connection.getSqlQueryParser().getTypeFactory();
@@ -213,7 +211,7 @@ public class PlanExecutor {
                     iterator, maxRowCount, signature);
         }
         return metaResultSet;
-    }
+    }*/
 
     private List<ColumnMetaData> getColumnMetaDataList(
             JavaTypeFactory typeFactory, RelDataType x, RelDataType jdbcType) {
