@@ -77,7 +77,7 @@ public class ConnectionTest {
         connection.close();
     }
 
-    @Test
+    //@Test
     public void testEmptyDataSources() throws SQLException, URISyntaxException {
         Properties props = new Properties();
         java.net.URL url = fatjdbc.ConnectionTest.class.getResource("/" + "ConnectionTest/" +

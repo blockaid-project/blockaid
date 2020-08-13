@@ -56,6 +56,7 @@ plugin/jdbc/JdbcSchema.class
 sql/ParserFactory.class
 fatjdbc/PrivacyMetaImpl.class
 planner/PrivacyEnumerator.class
+sql/PrivacyParser$1.class
 fatjdbc/PrivacyMetaImpl$6.class
 catalog/json/DataSourceSchema.class
 fatjdbc/PrivacyConnection.class

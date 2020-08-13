@@ -40,7 +40,9 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
             Connection conn;
             final String id = dataSourceSchema.getName();
             Executor executor = (Executor) dataSourceSchema.getDataSource();
+            System.out.println("wef " + dataSourceSchema.getSubSchemaNames());
             String parsedSql = parserResult.getParsedSql();
+            System.out.println("wef2 " + ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource().getSubSchemaNames());
 
             LOG.info("Execute query[" + parsedSql + "]");
 
@@ -50,8 +52,9 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
                 try {
                     statement.setQueryTimeout(QUERY_TIMEOUT);
                 } catch (Exception e) {
-                    LOG.warn("Couldnot set Query Timeout to " + QUERY_TIMEOUT + " seconds", e);
+                    LOG.warn("Could not set Query Timeout to " + QUERY_TIMEOUT + " seconds", e);
                 }
+
                 object = statement.executeQuery(parsedSql);
             } else {
                 object = executor.executeQuery(parsedSql);
