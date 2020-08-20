@@ -10,7 +10,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Schemas;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.Util;
-import sql.PrivacyView;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -36,7 +35,7 @@ public abstract class MetadataSchema extends PrivacySchema {
     public static final String NAME = "QUARK_METADATA";
 
     //protected List<QuarkCube> cubes;
-    //protected List<QuarkView> views;
+    protected List<PrivacyView> views;
 
     public MetadataSchema() {
         super(NAME);
@@ -47,14 +46,11 @@ public abstract class MetadataSchema extends PrivacySchema {
         return ImmutableMap.of();
     }
 
-    /*
-    public List<QuarkView> getViews() {
+
+    public List<PrivacyView> getViews() {
         return views;
     }
 
-    public List<QuarkCube> getCubes() {
-        return cubes;
-    }*/
 
     @Override
     public void initialize(final QueryContext queryContext, SchemaPlus schemaPlus)

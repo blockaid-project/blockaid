@@ -1,11 +1,7 @@
 package sql;
 
 import org.apache.calcite.adapter.java.JavaTypeFactory;
-import org.apache.calcite.avatica.util.Casing;
-import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.config.CalciteConnectionConfig;
-import org.apache.calcite.jdbc.CalcitePrepare;
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;

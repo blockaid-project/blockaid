@@ -75,6 +75,7 @@ public class QueryContext {
 
     public QueryContext(Properties info) throws PrivacyException {
         System.out.println("inside query context");
+        System.out.println(info);
         try {
             Class schemaFactoryClazz = Class.forName(info.getProperty("schemaFactory"));
             if (!info.contains(CalciteConnectionProperty.FUN.camelName())) {
@@ -92,6 +93,7 @@ public class QueryContext {
                 System.out.println("inside privacy factory");
                 final PrivacyFactory schemaFactory = (PrivacyFactory) schemaFactoryClazz.newInstance();
                 PrivacyFactoryResult factoryResult = schemaFactory.create(info);
+                System.out.println("finished parsing");
 
                 this.defaultDataSource = factoryResult.defaultSchema;
                 defaultSchema = parseDefaultSchema(info);

@@ -101,6 +101,7 @@ public class PrivacyMetaImpl extends MetaImpl {
     private final Properties info;
     private final Cache<String, Connection> connectionCache;
     private final Cache<Integer, StatementInfo> statementCache;
+
     private ArrayList<Policy> policy_list;
     private QueryChecker queryChecker;
     private TableState tableState;

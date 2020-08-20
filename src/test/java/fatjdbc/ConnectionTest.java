@@ -16,9 +16,6 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Created by rajatv on 2/9/16.
- */
 public class ConnectionTest {
     private static final Logger log = LoggerFactory.getLogger(fatjdbc.ConnectionTest.class);
 

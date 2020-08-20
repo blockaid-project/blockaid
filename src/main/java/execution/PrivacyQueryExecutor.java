@@ -66,30 +66,16 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
     private Connection getExecutorConnection(String id, Executor executor)
             throws SQLException, ClassNotFoundException {
         Connection conn;
-        /*
-        if (executor instanceof EMRDb) {
-            if (this.connectionCache.asMap().containsKey(id)) {
-                conn = this.connectionCache.getIfPresent(id);
-                if (conn.isClosed()) {
-                    conn = ((EMRDb) executor).getConnectionExec();
-                    this.connectionCache.put(id, conn);
-                }
-            } else {
-                conn = ((EMRDb) executor).getConnectionExec();
-                this.connectionCache.put(id, conn);
-            }
-        } else {*/
-
-            if (this.connectionCache.asMap().containsKey(id)) {
-                conn = this.connectionCache.getIfPresent(id);
-                if (conn.isClosed()) {
-                    conn = ((JdbcDB) executor).getConnection();
-                    this.connectionCache.put(id, conn);
-                }
-            } else {
+        if (this.connectionCache.asMap().containsKey(id)) {
+            conn = this.connectionCache.getIfPresent(id);
+            if (conn.isClosed()) {
                 conn = ((JdbcDB) executor).getConnection();
                 this.connectionCache.put(id, conn);
             }
+        } else {
+            conn = ((JdbcDB) executor).getConnection();
+            this.connectionCache.put(id, conn);
+        }
 
         return conn;
     }
