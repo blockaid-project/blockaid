@@ -82,7 +82,7 @@ public final class Main implements Runnable {
             final HandlerFactory handlerFactory = new HandlerFactory();
             Service service = new LocalService(meta);
             server = new HttpServer(port, getHandler(service, handlerFactory));
-            Class.forName("com.qubole.quark.fatjdbc.QuarkDriver");
+            Class.forName("fatjdbc.PrivacyDriver");
             server.start();
             runningLatch.countDown();
             server.join();

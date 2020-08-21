@@ -1,3 +1,4 @@
+server/EndToEndTest.class
 datastore/TableStateTest.class
 fatjdbc/DbSelectTest.class
 fatjdbc/ConnectionTest.class

@@ -2,3 +2,4 @@
 /Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/ConnectionTest.java
 /Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/utility/SelectTest.java
 /Users/michaelchang/privacy_proxy/src/test/java/datastore/TableStateTest.java
+/Users/michaelchang/privacy_proxy/src/test/java/server/EndToEndTest.java

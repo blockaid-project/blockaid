@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuite tests="1" failures="0" name="fatjdbc.ConnectionTest" time="0.301" errors="0" skipped="0">
+<testsuite tests="1" failures="0" name="fatjdbc.ConnectionTest" time="0.409" errors="0" skipped="0">
   <properties>
     <property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
     <property name="java.vm.version" value="14.0.1+14"/>
@@ -57,5 +57,5 @@
     <property name="socksNonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
     <property name="ftp.nonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
   </properties>
-  <testcase classname="fatjdbc.ConnectionTest" name="testValid" time="0.301"/>
+  <testcase classname="fatjdbc.ConnectionTest" name="testValid" time="0.409"/>
 </testsuite>

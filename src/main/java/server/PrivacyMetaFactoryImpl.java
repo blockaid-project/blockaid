@@ -29,7 +29,7 @@ public class PrivacyMetaFactoryImpl implements Meta.Factory {
 
     @Override
     public Meta create(List<String> args) {
-        String url = "jdbc:quark:fat:db:";
+        String url = "jdbc:privacy:fat:db:";
 
         try {
             if (args.size() == 1) {
