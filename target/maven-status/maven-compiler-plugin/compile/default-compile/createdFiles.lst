@@ -3,8 +3,10 @@ sql/DDLParser.class
 sql/QueryParserUtils.class
 fatjdbc/PrivacyDriver$1.class
 plugin/jdbc/JdbcDB$1.class
+sql/PrivacyQuery.class
 catalog/db/mapper/ViewMapper.class
 sql/PrivacyParser.class
+sql/PrivacyQueryFactory$1.class
 plugin/jdbc/JdbcFactory.class
 catalog/db/DataSourceSchema.class
 planner/MetadataSchema$1.class
@@ -16,6 +18,7 @@ fatjdbc/PrivacyStatement.class
 catalog/db/dao/ViewDAO.class
 fatjdbc/PrivacyMetaImpl$2.class
 planner/DataSourceSchema.class
+fatjdbc/PrivacyMetaImpl$11$1.class
 catalog/json/SchemaFactory.class
 catalog/json/RelSchema.class
 catalog/db/SchemaFactory.class
@@ -72,6 +75,7 @@ fatjdbc/PrivacyMetaImpl.class
 planner/PrivacyEnumerator.class
 sql/PrivacyParser$1.class
 fatjdbc/PrivacyMetaImpl$6.class
+sql/PrivacyQueryFactory.class
 catalog/json/DataSourceSchema.class
 fatjdbc/PrivacyConnection.class
 fatjdbc/PlanExecutor.class
@@ -87,6 +91,7 @@ fatjdbc/PrivacyConnectionImpl.class
 server/PrivacyMetaFactoryImpl.class
 fatjdbc/PrivacyMetaImpl$9.class
 planner/MetadataSchema.class
+fatjdbc/PrivacyMetaImpl$17.class
 planner/FieldType.class
 fatjdbc/PrivacyMetaImpl$StatementInfo.class
 planner/PrivacySchema.class
@@ -108,13 +113,13 @@ revocation_server/RevocationHandler.class
 catalog/DataSource.class
 fatjdbc/PrivacyMetaImpl$15.class
 catalog/db/RelSchema.class
+sql/PrivacyQuerySelect.class
 fatjdbc/PrivacyJdbcFactory.class
 fatjdbc/PrivacyResultSet.class
 planner/PrivacyTable$1.class
 fatjdbc/PrivacyMetaImpl$10.class
 plugin/Executor.class
 catalog/db/encryption/NoopEncrypt.class
-fatjdbc/PrivacyMetaImpl$10$1.class
 policy_checker/Policy.class
 sql/TestFactory.class
 sql/DDLParser$DDLParserResult.class

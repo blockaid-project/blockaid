@@ -22,12 +22,8 @@ import sql.PrivacyParser;
 import java.sql.SQLException;
 import java.util.Properties;
 
-/**
- * Created by rajatv on 10/27/15.
- */
 public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyConnection {
     public final JavaTypeFactory typeFactory;
-
     public final PrivacyServer server = new PrivacyServer();
     public final ParserFactory parserFactory = new ParserFactory(info);
 
@@ -35,7 +31,8 @@ public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyC
                                   Properties info, CalciteRootSchema rootSchema,
                                   JavaTypeFactory typeFactory) throws SQLException {
         super(driver, factory, url, info);
-
+        System.out.println("initializing parser factory");
+        System.out.println(parserFactory);
         CalciteConnectionConfig cfg = new CalciteConnectionConfigImpl(info);
 
         if (typeFactory != null) {
@@ -102,6 +99,7 @@ public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyC
     }
 
     public PrivacyParser getSqlQueryParser() throws SQLException, PrivacyException {
+        System.out.println(parserFactory);
         return (PrivacyParser) parserFactory.getParser(info);
     }
 

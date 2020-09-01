@@ -65,7 +65,6 @@ public class Connection {
       if (info.containsKey("dsSetId")) {
         this.dsSet = dsSetDAO.find(Integer.parseInt(info.getProperty("dsSetId")));
       } else {
-        System.out.println("in here!");
         List<DSSet> dsSets = dsSetDAO.findAll();
         System.out.println(dsSets);
         this.dsSet = dsSets.get(0);

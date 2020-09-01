@@ -13,6 +13,7 @@
 /Users/michaelchang/privacy_proxy/src/main/java/planner/PrivacyTableScan.java
 /Users/michaelchang/privacy_proxy/src/main/java/server/ServerConfig.java
 /Users/michaelchang/privacy_proxy/src/main/java/fatjdbc/PrivacyJdbcStatement.java
+/Users/michaelchang/privacy_proxy/src/main/java/sql/PrivacyQuerySelect.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/dao/DataSourceDAO.java
 /Users/michaelchang/privacy_proxy/src/main/java/jdbc/ThinClientUtil.java
 /Users/michaelchang/privacy_proxy/src/main/java/plugin/DataSourceFactory.java
@@ -42,6 +43,7 @@
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/pojo/DataSource.java
 /Users/michaelchang/privacy_proxy/src/main/java/fatjdbc/PrivacyMetaImpl.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/json/RelSchema.java
+/Users/michaelchang/privacy_proxy/src/main/java/sql/PrivacyQuery.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/DataSourceSchema.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/mapper/JdbcSourceMapper.java
 /Users/michaelchang/privacy_proxy/src/main/java/plugin/jdbc/JdbcFactory.java
@@ -73,6 +75,7 @@
 /Users/michaelchang/privacy_proxy/src/main/java/planner/FieldType.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/View.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/dao/ViewDAO.java
+/Users/michaelchang/privacy_proxy/src/main/java/sql/PrivacyQueryFactory.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/RelSchema.java
 /Users/michaelchang/privacy_proxy/src/main/java/execution/PrivacyExecutor.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/pojo/DSSet.java

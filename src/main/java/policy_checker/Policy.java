@@ -1,37 +1,55 @@
 package policy_checker;
 
+import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.RelBuilder;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.sql.parser.SqlParser;
+import sql.PrivacyException;
+import sql.QueryContext;
 
 import java.util.ArrayList;
-import java.util.Map;
+import java.util.Properties;
 
 public class Policy {
+    private QueryContext context;
+    private String[] sqlPolicy;
+    private SqlNode[] parsedSql;
 
-    ArrayList<RelNode> sql_policies;
+    public Policy(Properties info, String[] sqlPolicy){
+        this.sqlPolicy = sqlPolicy;
+        try {
+            this.context = new QueryContext(info);
+        }catch (PrivacyException e)
+        {
+            e.printStackTrace();
+        }
 
-    // Temporarily Hard-coded to simple attribute {Name, Attribute, Salary}
-    public Policy(ArrayList<RelNode> sql_policies){
-        this.sql_policies = sql_policies;
+        parsedSql = new SqlNode[sqlPolicy.length];
+        for(int i = 0; i < sqlPolicy.length; i++){
+            parsedSql[i] = parseSql(sqlPolicy[i]);
+        }
     }
 
-    public static void generate_all_relations(String[] attributes) {
-
-    }
-
-    public ArrayList<Map<Integer, Integer>> applicable_relations(){
-
-        return new ArrayList<Map<Integer, Integer>>();
-    }
-
-    public boolean check_policy(String query)
-    {
-        // Generate all versions of the tables
-
-
+    public boolean checkPolicySchema(){
         return true;
     }
 
+    private SqlNode parseSql(String sql){
+        final CalciteConnectionConfig config = context.getCfg();
+        SqlParser parser = SqlParser.create(sql,
+                SqlParser.configBuilder()
+                        .setQuotedCasing(config.quotedCasing())
+                        .setUnquotedCasing(config.unquotedCasing())
+                        .setQuoting(config.quoting())
+                        .build());
+        SqlNode sqlNode;
+        try {
+            sqlNode = parser.parseStmt();
+        } catch (SqlParseException e) {
+            throw new RuntimeException("parse failed: " + e.getMessage(), e);
+        }
+
+        return sqlNode;
+    }
 }

@@ -17,8 +17,10 @@ import java.util.Properties;
  */
 public class ParserFactory {
     private boolean reloadCache;
+    private PrivacyParser privacyParser;
 
     public ParserFactory(Properties info) throws SQLException {
+        privacyParser = (PrivacyParser) getParser(info);
         reloadCache = false;
     }
 
@@ -30,9 +32,13 @@ public class ParserFactory {
         this.reloadCache = false;
     }
 
-    public Parser getParser(Properties info)
-            throws PrivacyException {
-        return new PrivacyParser(info);
+    public Parser getParser(Properties info) throws SQLException{
+        try {
+            return new PrivacyParser(info);
+        }
+        catch (PrivacyException e){
+            throw new SQLException(e.getMessage(), e);
+        }
 
         /*
         try {

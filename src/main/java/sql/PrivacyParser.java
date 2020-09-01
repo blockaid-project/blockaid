@@ -27,20 +27,11 @@ public class PrivacyParser implements Parser {
 
     public PrivacyParser(Properties info) throws PrivacyException
     {
-        System.out.println("inside constructor");
-        this.context = new QueryContext(info);
         System.out.println("in query context");
+        this.context = new QueryContext(info);
     }
 
     public PrivacyParserResult parse(String sql) throws SQLException {
-        //System.out.println("Parsing in privacyparser");
-        //SqlParser parser = SqlParser.create(sql,
-        //        SqlParser.configBuilder()
-        //                .setQuotedCasing(Casing.UNCHANGED)
-        //                .setUnquotedCasing(Casing.UNCHANGED)
-        //                .setQuoting(Quoting.DOUBLE_QUOTE)
-        //                .build());
-
         DataSourceSchema dataSource = this.context.getDefaultDataSource();
 
         final CalciteConnectionConfig config = context.getCfg();

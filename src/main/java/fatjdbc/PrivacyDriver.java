@@ -86,6 +86,9 @@ public class PrivacyDriver extends UnregisteredDriver {
 
     @Override
     public Meta createMeta(AvaticaConnection connection) {
+        System.out.println("inside create meta");
+        System.out.println(connection.toString());
+        System.out.println(connection.properties);
         return new PrivacyMetaImpl((PrivacyConnectionImpl) connection,
                 ((PrivacyConnectionImpl) connection).getProperties());
     }

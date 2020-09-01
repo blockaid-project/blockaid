@@ -1,5 +1,6 @@
 package fatjdbc;
 
+import com.google.common.cache.*;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.avatica.AvaticaParameter;
 import org.apache.calcite.avatica.AvaticaPreparedStatement;
@@ -20,7 +21,6 @@ import org.apache.calcite.linq4j.function.Function1;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.linq4j.function.Predicate1;
 import org.apache.calcite.rel.RelCollation;
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -30,29 +30,23 @@ import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlJdbcFunctionCall;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.Util;
 
 import com.google.common.base.Preconditions;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
+import policy_checker.Policy;
 import sql.ParserResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import policy_checker.Policy;
 import policy_checker.QueryChecker;
 
-import datastore.TableState;
 import sql.PrivacyException;
+import sql.PrivacyQuery;
+import sql.PrivacyQueryFactory;
 
 import java.lang.reflect.Field;
 import java.sql.Connection;
@@ -65,14 +59,8 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -101,10 +89,9 @@ public class PrivacyMetaImpl extends MetaImpl {
     private final Properties info;
     private final Cache<String, Connection> connectionCache;
     private final Cache<Integer, StatementInfo> statementCache;
-
+    private final HashMap<Policy, LoadingCache<PrivacyQuery, Boolean>> policyCache;
+    private final QueryChecker queryChecker;
     private ArrayList<Policy> policy_list;
-    private QueryChecker queryChecker;
-    private TableState tableState;
 
     /**
      * Generates ids for statements. The ids are unique across all connections
@@ -114,14 +101,8 @@ public class PrivacyMetaImpl extends MetaImpl {
 
     public PrivacyMetaImpl(PrivacyConnectionImpl connection, Properties info) {
         super(connection);
-        System.out.println("inside privacy meta impl");
         this.info = info;
         this.url = info.getProperty("url");
-
-        this.policy_list = new ArrayList<Policy>();
-        set_policy();
-        this.queryChecker = new QueryChecker(this.policy_list);
-        this.tableState = new TableState();
 
         int concurrencyLevel = Integer.parseInt(
                 info.getProperty(ConnectionCacheSettings.CONCURRENCY_LEVEL.key,
@@ -129,7 +110,7 @@ public class PrivacyMetaImpl extends MetaImpl {
         int initialCapacity = Integer.parseInt(
                 info.getProperty(ConnectionCacheSettings.INITIAL_CAPACITY.key,
                         ConnectionCacheSettings.INITIAL_CAPACITY.defaultValue));
-        long maxCapacity = Long.parseLong(
+        int maxCapacity = Integer.parseInt(
                 info.getProperty(ConnectionCacheSettings.MAX_CAPACITY.key,
                         ConnectionCacheSettings.MAX_CAPACITY.defaultValue));
         long connectionExpiryDuration = Long.parseLong(
@@ -153,7 +134,7 @@ public class PrivacyMetaImpl extends MetaImpl {
         initialCapacity = Integer.parseInt(
                 info.getProperty(StatementCacheSettings.INITIAL_CAPACITY.key(),
                         StatementCacheSettings.INITIAL_CAPACITY.defaultValue()));
-        maxCapacity = Long.parseLong(
+        maxCapacity = Integer.parseInt(
                 info.getProperty(StatementCacheSettings.MAX_CAPACITY.key(),
                         StatementCacheSettings.MAX_CAPACITY.defaultValue()));
         connectionExpiryDuration = Long.parseLong(
@@ -169,24 +150,42 @@ public class PrivacyMetaImpl extends MetaImpl {
                 .expireAfterAccess(connectionExpiryDuration, connectionExpiryUnit)
                 .removalListener(new StatementExpiryHandler())
                 .build();
+
+        this.policyCache = new HashMap<Policy, LoadingCache<PrivacyQuery, Boolean>>();
+        this.policy_list = new ArrayList<Policy>();
+        set_policy(info);
+        this.queryChecker = new QueryChecker(this.policy_list);
+        initializePolicyCache();
+        System.out.println("end of constructor in privacy meta impl");
     }
 
-    private void set_policy()
-    {
-        FrameworkConfig config = (FrameworkConfig) Frameworks.newConfigBuilder().build();
-        /*final RelBuilder builder = RelBuilder.create(config);
-        final RelNode node = builder
-                .scan("SORDERS")
-                .build();
-        final RelNode node2 = builder
-                .scan("SORDERS")
-                .project(builder.field("PRODUCTID"))
-                .build();
+    private void set_policy(Properties info) {
+        String[] sqlpolicy1 = new String[]{"select * from blah", "select a, b from blah"};
+        Policy p1 = new Policy(info, sqlpolicy1);
+        this.policy_list.add(p1);
+    }
 
-        ArrayList<RelNode> policy_nodes = new ArrayList<RelNode>();
-        policy_nodes.add(node);
-        policy_nodes.add(node2);
-        this.policy_list.add(new Policy(policy_nodes));*/
+    // Initialize each policy with it's own cache.
+    private void initializePolicyCache() {
+        for (Policy p : this.policy_list){
+            // Just some random settings
+            LoadingCache<PrivacyQuery, Boolean> cache = CacheBuilder.newBuilder()
+                    .expireAfterAccess(100000, TimeUnit.SECONDS)
+                    .maximumSize(50)
+                    .build(new CacheLoader<PrivacyQuery, Boolean>() {
+                        @Override
+                        public Boolean load(final PrivacyQuery query) throws Exception {
+                            System.out.println("Cache miss");
+                            return getQueryChecker().check_policy(query, p);
+                        }
+                    });
+            this.policyCache.put(p, cache);
+        }
+    }
+
+    public QueryChecker getQueryChecker()
+    {
+        return this.queryChecker;
     }
 
 
@@ -370,11 +369,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                                                 long maxRowCount,
                                                 Meta.PrepareCallback callback) {
         System.out.println("in prepareandexecute in privacymetaimpl");
-        // Check against policies
-        if (!queryChecker.check_policy(sql))
-            throw new RuntimeException("Policy Violation");
-
-        // Record any new tables potentially created by this call.
 
         // Create callback, execute query
         try {
@@ -382,6 +376,11 @@ public class PrivacyMetaImpl extends MetaImpl {
             synchronized (callback.getMonitor()) {
                 callback.clear();
                 ParserResult result = getConnection().parse(sql);
+                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
+                if(checkQueryCompliance(query) == false) {
+                    System.out.println("Query {} does not comply".format(sql));
+                    return null;
+                }
                 metaResultSet = new PlanExecutor(h, getConnection(),
                         connectionCache, maxRowCount).execute(result);
                 callback.assign(metaResultSet.signature, metaResultSet.firstFrame,
@@ -392,6 +391,26 @@ public class PrivacyMetaImpl extends MetaImpl {
         } catch (Exception e) {
             throw propagate(e);
         }
+
+    }
+
+    public boolean checkQueryCompliance(PrivacyQuery query){
+        System.out.println("Check query compliance");
+        for(Map.Entry<Policy, LoadingCache<PrivacyQuery, Boolean>> policy_cache: policyCache.entrySet()){
+            boolean compliance;
+            try{
+                System.out.println("getting value");
+                compliance = policy_cache.getValue().get(query);
+                System.out.println("got value");
+                if (!compliance) {
+                    return Boolean.FALSE;
+                }
+            } catch (ExecutionException e){
+                throw propagate(e);
+            }
+        }
+        System.out.println("finished looking at policies");
+        return Boolean.TRUE;
     }
 
     @Override
@@ -401,14 +420,26 @@ public class PrivacyMetaImpl extends MetaImpl {
                                            PrepareCallback prepareCallback)
             throws NoSuchStatementException {
         System.out.println("in prepareAndExecute2 in privacymetaimpl");
+        System.out.println("in prepareandexecute2" + sql);
+        set_policy(this.info);
+
         try {
             MetaResultSet metaResultSet;
             synchronized (prepareCallback.getMonitor()) {
-                System.out.println("inside callback");
                 prepareCallback.clear();
-                System.out.println("cleared callback");
                 ParserResult result = getConnection().parse(sql);
-                System.out.println("parsing sql");
+                System.out.println("finishing old code");
+                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
+                System.out.println(query.getClass());
+                System.out.println("factory created query");
+                if(checkQueryCompliance(query) == false) {
+                    System.out.println("Query {} does not comply".format(sql));
+                    return null;
+                }
+                else{
+                    System.out.println("Query does comply");
+                }
+                System.out.println("about to execute plan");
                 metaResultSet = new PlanExecutor(statementHandle, getConnection(),
                         connectionCache, maxRowCount).execute(result);
                 prepareCallback.assign(metaResultSet.signature, metaResultSet.firstFrame,

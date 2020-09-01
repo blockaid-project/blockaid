@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuite tests="1" failures="0" name="fatjdbc.ConnectionTest" time="0.409" errors="0" skipped="0">
+<testsuite tests="1" failures="0" name="fatjdbc.ConnectionTest" time="0.003" errors="1" skipped="0">
   <properties>
     <property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
     <property name="java.vm.version" value="14.0.1+14"/>
@@ -41,7 +41,7 @@
     <property name="java.class.path" value="/usr/local/Cellar/maven/3.6.3_1/libexec/boot/plexus-classworlds-2.6.0.jar"/>
     <property name="java.vm.specification.version" value="14"/>
     <property name="sun.arch.data.model" value="64"/>
-    <property name="sun.java.command" value="org.codehaus.plexus.classworlds.launcher.Launcher install"/>
+    <property name="sun.java.command" value="org.codehaus.plexus.classworlds.launcher.Launcher test"/>
     <property name="java.home" value="/usr/local/Cellar/openjdk/14.0.1/libexec/openjdk.jdk/Contents/Home"/>
     <property name="user.language" value="en"/>
     <property name="java.specification.vendor" value="Oracle Corporation"/>
@@ -57,5 +57,60 @@
     <property name="socksNonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
     <property name="ftp.nonProxyHosts" value="local|*.local|169.254/16|*.169.254/16"/>
   </properties>
-  <testcase classname="fatjdbc.ConnectionTest" name="testValid" time="0.409"/>
+  <testcase classname="fatjdbc.ConnectionTest" name="testValid" time="0.003">
+    <error type="java.lang.NullPointerException">java.lang.NullPointerException
+	at fatjdbc.PrivacyConnectionImpl.getSqlQueryParser(PrivacyConnectionImpl.java:105)
+	at fatjdbc.PrivacyConnectionImpl.getRootSchema(PrivacyConnectionImpl.java:84)
+	at fatjdbc.PrivacyMetaImpl.catalogs(PrivacyMetaImpl.java:628)
+	at fatjdbc.PrivacyMetaImpl.set_policy(PrivacyMetaImpl.java:177)
+	at fatjdbc.PrivacyMetaImpl.&lt;init&gt;(PrivacyMetaImpl.java:122)
+	at fatjdbc.PrivacyDriver.createMeta(PrivacyDriver.java:90)
+	at org.apache.calcite.avatica.AvaticaConnection.&lt;init&gt;(AvaticaConnection.java:121)
+	at fatjdbc.PrivacyConnectionImpl.&lt;init&gt;(PrivacyConnectionImpl.java:37)
+	at fatjdbc.PrivacyJdbc41Factory.newConnection(PrivacyJdbc41Factory.java:49)
+	at fatjdbc.PrivacyJdbcFactory.newConnection(PrivacyJdbcFactory.java:70)
+	at org.apache.calcite.avatica.UnregisteredDriver.connect(UnregisteredDriver.java:138)
+	at fatjdbc.PrivacyDriver.connect(PrivacyDriver.java:133)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:677)
+	at java.sql/java.sql.DriverManager.getConnection(DriverManager.java:189)
+	at fatjdbc.ConnectionTest.testValidImpl(ConnectionTest.java:62)
+	at fatjdbc.ConnectionTest.testValid(ConnectionTest.java:91)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:564)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:271)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:70)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:50)
+	at org.junit.runners.ParentRunner$3.run(ParentRunner.java:238)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:63)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:236)
+	at org.junit.runners.ParentRunner.access$000(ParentRunner.java:53)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:229)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:309)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.execute(JUnit4Provider.java:252)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.executeTestSet(JUnit4Provider.java:141)
+	at org.apache.maven.surefire.junit4.JUnit4Provider.invoke(JUnit4Provider.java:112)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:564)
+	at org.apache.maven.surefire.util.ReflectionUtils.invokeMethodWithArray(ReflectionUtils.java:189)
+	at org.apache.maven.surefire.booter.ProviderFactory$ProviderProxy.invoke(ProviderFactory.java:165)
+	at org.apache.maven.surefire.booter.ProviderFactory.invokeProvider(ProviderFactory.java:85)
+	at org.apache.maven.surefire.booter.ForkedBooter.runSuitesInProcess(ForkedBooter.java:115)
+	at org.apache.maven.surefire.booter.ForkedBooter.main(ForkedBooter.java:75)
+</error>
+    <system-out>Value = file:/Users/michaelchang/privacy_proxy/target/test-classes/tpcds.sql
+Value = file:/Users/michaelchang/privacy_proxy/target/test-classes/tpcds_cubes.sql
+Value = file:/Users/michaelchang/privacy_proxy/target/test-classes/tpcds_views.sql
+establishing connection
+inside privacy meta impl
+</system-out>
+  </testcase>
 </testsuite>

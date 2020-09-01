@@ -1,18 +1,21 @@
 package policy_checker;
 
+import sql.PrivacyQuery;
+
 import java.util.ArrayList;
 
 public class QueryChecker {
 
-    ArrayList<Policy> policy_set = new ArrayList<Policy>();
+    private ArrayList<Policy> policySet;
 
-    public QueryChecker(ArrayList<Policy> policy_set)
+    public QueryChecker(ArrayList<Policy> policySet)
     {
-        this.policy_set = policy_set;
+        this.policySet = policySet;
     }
 
-    public boolean check_policy(String sql_query)
+    public boolean check_policy(PrivacyQuery query, Policy p)
     {
+        assert policySet.contains(p);
         return true;
     }
 

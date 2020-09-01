@@ -27,7 +27,7 @@ public class DbSelectTest extends SelectTest {
 
     @BeforeClass
     public static void setUpDb() throws Exception {
-        org.apache.log4j.BasicConfigurator.configure();
+        //org.apache.log4j.BasicConfigurator.configure();
         SelectTest.setUpClass(dbUrl);
         Flyway flyway = new Flyway();
         flyway.setDataSource(dbSchemaUrl, "sa", "");
