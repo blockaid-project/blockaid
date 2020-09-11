@@ -23,6 +23,7 @@ public class DbSelectTest extends SelectTest {
         props.put("user", "sa");
         props.put("password", "");
         props.put("encryptionKey", "easy");
+        props.put("userRole", "role");
     }
 
     @BeforeClass

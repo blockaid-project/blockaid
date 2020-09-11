@@ -78,7 +78,7 @@ public abstract class CacheTest {
         System.out.println("blahblah");
         Statement statement2 = connection.createStatement();
         ResultSet rows2 =
-                statement2.executeQuery("select * from simple");
+                statement2.executeQuery("select i from simple where i < 10");
         statement2.close();
         System.out.println("executed statement 2");
 

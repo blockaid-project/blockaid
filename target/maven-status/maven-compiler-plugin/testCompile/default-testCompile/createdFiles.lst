@@ -6,5 +6,6 @@ datastore/TableStateTest.class
 fatjdbc/TpcdsIntegTest.class
 fatjdbc/DbSelectTest.class
 fatjdbc/SimpleIntegTest.class
+fatjdbc/HotCrpIntegTest.class
 fatjdbc/ConnectionTest.class
 fatjdbc/utility/SelectTest.class
