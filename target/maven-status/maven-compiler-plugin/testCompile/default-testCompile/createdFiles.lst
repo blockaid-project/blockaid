@@ -1,8 +1,10 @@
+fatjdbc/DbYCSBTest.class
 fatjdbc/DbCacheTest.class
 server/EndToEndTest.class
 fatjdbc/utility/CacheTest.class
 fatjdbc/IntegTest.class
 datastore/TableStateTest.class
+fatjdbc/utility/YCSBTest.class
 fatjdbc/TpcdsIntegTest.class
 fatjdbc/DbSelectTest.class
 fatjdbc/SimpleIntegTest.class

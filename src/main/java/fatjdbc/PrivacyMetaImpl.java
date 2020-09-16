@@ -28,6 +28,7 @@ import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.runtime.FlatLists;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlJdbcFunctionCall;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.Util;
@@ -151,8 +152,8 @@ public class PrivacyMetaImpl extends MetaImpl {
                 .removalListener(new StatementExpiryHandler())
                 .build();
 
-        this.policyCache = new HashMap<Policy, LoadingCache<PrivacyQuery, Boolean>>();
-        this.policy_list = new ArrayList<Policy>();
+        this.policyCache = new HashMap<>();
+        this.policy_list = new ArrayList<>();
         set_policy(info);
         this.queryChecker = new QueryChecker(this.policy_list);
         initializePolicyCache();
@@ -170,11 +171,12 @@ public class PrivacyMetaImpl extends MetaImpl {
                 sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 break;
             default:
-                sqlpolicy = null;
+                sqlpolicy = new String[]{""};
                 System.out.println("No policies set. Invalid user policy");
         }
         Policy p1 = new Policy(info, sqlpolicy);
-        this.policy_list.add(p1);
+        if (p1 != null)
+            this.policy_list.add(p1);
     }
 
     // Initialize each policy with it's own cache.
@@ -260,7 +262,6 @@ public class PrivacyMetaImpl extends MetaImpl {
 
     @Override
     public StatementHandle createStatement(ConnectionHandle ch) {
-        System.out.println("Creating statement in privacymetimpl");
         final StatementHandle h = super.createStatement(ch);
         final PrivacyConnectionImpl privacyConnection = getConnection();
         privacyConnection.server.addStatement(privacyConnection, h);
@@ -376,6 +377,15 @@ public class PrivacyMetaImpl extends MetaImpl {
         return h;
     }
 
+    private boolean shouldApplyPolicy(SqlKind kind)
+    {
+        if (kind.equals(kind.SELECT)){
+            return true;
+        }
+        else
+            return false;
+    }
+
     public Meta.ExecuteResult prepareAndExecute(Meta.StatementHandle h,
                                                 String sql,
                                                 long maxRowCount,
@@ -388,10 +398,13 @@ public class PrivacyMetaImpl extends MetaImpl {
             synchronized (callback.getMonitor()) {
                 callback.clear();
                 ParserResult result = getConnection().parse(sql);
-                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                if(checkQueryCompliance(query) == false) {
-                    System.out.println("Query {} does not comply".format(sql));
-                    return null;
+
+                if (shouldApplyPolicy(result.getSqlNode().getKind())) {
+                    PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
+                    if (checkQueryCompliance(query) == false) {
+                        System.out.println("Query {} does not comply".format(sql));
+                        return null;
+                    }
                 }
                 metaResultSet = new PlanExecutor(h, getConnection(),
                         connectionCache, maxRowCount).execute(result);
@@ -440,18 +453,20 @@ public class PrivacyMetaImpl extends MetaImpl {
             synchronized (prepareCallback.getMonitor()) {
                 prepareCallback.clear();
                 ParserResult result = getConnection().parse(sql);
-                System.out.println("finishing old code");
-                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                System.out.println(query.getClass());
-                System.out.println("factory created query");
-                if(checkQueryCompliance(query) == false) {
-                    System.out.println("Query {} does not comply".format(sql));
-                    return null;
+
+                // DML commands should bypass policy checking
+                System.out.println("The type is wefe " + result.getSqlNode().getKind());
+                if (shouldApplyPolicy(result.getKind())) {
+                    PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
+                    if (checkQueryCompliance(query) == false) {
+                        System.out.println("Query {} does not comply".format(sql));
+                        return null;
+                    }
+                    else{
+                        System.out.println("Query does comply!");
+                    }
                 }
-                else{
-                    System.out.println("Query does comply");
-                }
-                System.out.println("about to execute plan");
+
                 metaResultSet = new PlanExecutor(statementHandle, getConnection(),
                         connectionCache, maxRowCount).execute(result);
                 prepareCallback.assign(metaResultSet.signature, metaResultSet.firstFrame,

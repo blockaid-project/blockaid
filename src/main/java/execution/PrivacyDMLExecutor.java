@@ -19,19 +19,19 @@ import java.sql.Statement;
 /**
  * Created by adeshr on 5/24/16.P
  */
-public class PrivacyQueryExecutor implements PrivacyExecutor {
+public class PrivacyDMLExecutor implements PrivacyExecutor {
     private static final Logger LOG = LoggerFactory.getLogger(PrivacyQueryExecutor.class);
 
     public static final int QUERY_TIMEOUT = 60;
 
     private final Cache<String, Connection> connectionCache;
 
-    public PrivacyQueryExecutor(Cache<String, Connection> connectionCache) {
+    public PrivacyDMLExecutor(Cache<String, Connection> connectionCache) {
         this.connectionCache = connectionCache;
     }
 
     public Object execute(ParserResult parserResult) throws Exception {
-        System.out.println("Executing queries inside PrivacyQueryExecutor");
+        System.out.println("Executing queries inside PrivacyDMLExecutor");
         Object object = null;
         final DataSourceSchema dataSourceSchema =
                 ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource();
@@ -54,10 +54,7 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
                 }
 
                 System.out.println("about to try to execute the insert query");
-                object = statement.executeQuery(parsedSql);
-
-            } else {
-                object = executor.executeQuery(parsedSql);
+                object = statement.executeUpdate(parsedSql);
             }
         }
         return object;
@@ -80,3 +77,4 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
         return conn;
     }
 }
+

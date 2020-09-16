@@ -105,6 +105,7 @@ planner/PrivacyTableScan.class
 planner/PrivacyFactory.class
 policy_checker/QueryChecker.class
 planner/PrivacyView.class
+execution/PrivacyDMLExecutor.class
 jdbc/ThinClientUtil.class
 fatjdbc/PrivacyMetaImpl$5.class
 catalog/db/encryption/AESEncrypt.class

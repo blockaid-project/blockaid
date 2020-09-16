@@ -8,7 +8,6 @@ import org.apache.calcite.sql.parser.SqlParser;
 import sql.PrivacyException;
 import sql.QueryContext;
 
-import java.util.ArrayList;
 import java.util.Properties;
 
 public class Policy {

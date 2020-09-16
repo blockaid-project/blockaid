@@ -24,7 +24,10 @@ public class PrivacyExecutorFactory {
             return null;
         } else if (sqlKind.belongsTo(SqlKind.QUERY)) {
             return new PrivacyQueryExecutor(connectionCache);
-        } else {
+        } else if (sqlKind.belongsTo(SqlKind.DML)){
+            return new PrivacyDMLExecutor(connectionCache);
+        }
+        else {
             throw new UnsupportedOperationException("Cannot execute parsed Sql of kind: "
                     + sqlKind);
         }

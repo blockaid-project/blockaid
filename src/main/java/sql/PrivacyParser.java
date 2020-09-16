@@ -35,21 +35,20 @@ public class PrivacyParser implements Parser {
         DataSourceSchema dataSource = this.context.getDefaultDataSource();
 
         final CalciteConnectionConfig config = context.getCfg();
+        // Changnote: may need to change conformance of the parser when switching to a different data source
         SqlParser parser = SqlParser.create(sql,
                 SqlParser.configBuilder()
                         .setQuotedCasing(config.quotedCasing())
                         .setUnquotedCasing(config.unquotedCasing())
                         .setQuoting(config.quoting())
                         .build());
-        System.out.println("context schema is " + context.getRootSchema().getSubSchemaNames());
         SqlNode sqlNode;
         try {
             sqlNode = parser.parseStmt();
         } catch (SqlParseException e){
-                throw new RuntimeException("parse failed: " + e.getMessage(), e);
-        }
 
-        System.out.println("context default schema is " + this.context.getDefaultDataSource().getSubSchemaNames());
+            throw new RuntimeException("parse failed: " + e.getMessage(), e);
+        }
 
         try{
         return new PrivacyParserResult(stripNamespace(sql, dataSource),

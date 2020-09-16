@@ -39,6 +39,7 @@
 /Users/michaelchang/privacy_proxy/src/main/java/fatjdbc/PlanExecutor.java
 /Users/michaelchang/privacy_proxy/src/main/java/fatjdbc/PrivacyConnection.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/encryption/AESEncrypt.java
+/Users/michaelchang/privacy_proxy/src/main/java/execution/PrivacyDMLExecutor.java
 /Users/michaelchang/privacy_proxy/src/main/java/planner/DataSourceSchema.java
 /Users/michaelchang/privacy_proxy/src/main/java/catalog/db/pojo/DataSource.java
 /Users/michaelchang/privacy_proxy/src/main/java/fatjdbc/PrivacyMetaImpl.java
