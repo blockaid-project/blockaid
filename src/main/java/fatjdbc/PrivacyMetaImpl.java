@@ -162,7 +162,7 @@ public class PrivacyMetaImpl extends MetaImpl {
     private void set_policy(Properties info) {
         String token = info.getProperty("userRole");
         String[] sqlpolicy;
-        switch(token){
+        switch(token != null ? token : "no_policy_set"){
             case "controller":
                 sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 break;
@@ -170,7 +170,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                 sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 break;
             default:
-                sqlpolicy = null;
+                sqlpolicy = new String[]{"select * from blah where false"};
                 System.out.println("No policies set. Invalid user policy");
         }
         Policy p1 = new Policy(info, sqlpolicy);
