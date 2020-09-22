@@ -171,7 +171,8 @@ public class PrivacyMetaImpl extends MetaImpl {
                 sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 break;
             default:
-                sqlpolicy = new String[]{""};
+                //sqlpolicy = new String[]{""};
+                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 System.out.println("No policies set. Invalid user policy");
         }
         Policy p1 = new Policy(info, sqlpolicy);
