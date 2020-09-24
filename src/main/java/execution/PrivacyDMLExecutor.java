@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import sql.PrivacyParser;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -28,6 +29,11 @@ public class PrivacyDMLExecutor implements PrivacyExecutor {
 
     public PrivacyDMLExecutor(Cache<String, Connection> connectionCache) {
         this.connectionCache = connectionCache;
+    }
+
+    // Todo? Can you even prepare a DML statement?
+    public PreparedStatement prepare(ParserResult parserResult) throws Exception {
+        return null;
     }
 
     public Object execute(ParserResult parserResult) throws Exception {

@@ -2,6 +2,7 @@ package execution;
 
 import com.google.common.cache.Cache;
 
+import org.h2.command.Prepared;
 import planner.DataSourceSchema;
 
 import sql.ParserResult;
@@ -10,9 +11,11 @@ import plugin.jdbc.JdbcDB;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sql.PrivacyException;
 import sql.PrivacyParser;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -29,6 +32,27 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
     public PrivacyQueryExecutor(Cache<String, Connection> connectionCache) {
         this.connectionCache = connectionCache;
     }
+
+    public PreparedStatement prepare(ParserResult parserResult) throws Exception {
+        System.out.println("Executing prepare statement");
+        final DataSourceSchema dataSourceSchema =
+                ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource();
+        PreparedStatement p = null;
+        if (dataSourceSchema != null) {
+            Connection conn;
+            final String id = dataSourceSchema.getName();
+            Executor executor = (Executor) dataSourceSchema.getDataSource();
+            String parsedSql = parserResult.getParsedSql();
+
+            if (executor instanceof JdbcDB) {
+                conn = getExecutorConnection(id, executor);
+                p = conn.prepareStatement(parsedSql);
+            }
+        }
+        return p;
+    }
+
+
 
     public Object execute(ParserResult parserResult) throws Exception {
         System.out.println("Executing queries inside PrivacyQueryExecutor");
@@ -55,6 +79,7 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
 
                 System.out.println("about to try to execute the insert query");
                 object = statement.executeQuery(parsedSql);
+
 
             } else {
                 object = executor.executeQuery(parsedSql);
