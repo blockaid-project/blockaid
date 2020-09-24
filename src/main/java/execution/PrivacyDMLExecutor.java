@@ -31,9 +31,24 @@ public class PrivacyDMLExecutor implements PrivacyExecutor {
         this.connectionCache = connectionCache;
     }
 
-    // Todo? Can you even prepare a DML statement?
+
     public PreparedStatement prepare(ParserResult parserResult) throws Exception {
-        return null;
+        final DataSourceSchema dataSourceSchema =
+                ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource();
+        PreparedStatement p = null;
+        if (dataSourceSchema != null) {
+            Connection conn;
+            final String id = dataSourceSchema.getName();
+            Executor executor = (Executor) dataSourceSchema.getDataSource();
+            String parsedSql = parserResult.getParsedSql();
+
+            if (executor instanceof JdbcDB) {
+                conn = getExecutorConnection(id, executor);
+                p = conn.prepareStatement(parsedSql);
+            }
+        }
+        System.out.println("prepare is " + p);
+        return p;
     }
 
     public Object execute(ParserResult parserResult) throws Exception {
