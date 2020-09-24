@@ -1,6 +1,8 @@
 package fatjdbc;
 
 import com.google.common.cache.*;
+import execution.PrivacyExecutor;
+import execution.PrivacyExecutorFactory;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.avatica.AvaticaParameter;
 import org.apache.calcite.avatica.AvaticaPreparedStatement;
@@ -171,7 +173,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                 sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 break;
             default:
-                sqlpolicy = new String[]{""};
+                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
                 System.out.println("No policies set. Invalid user policy");
         }
         Policy p1 = new Policy(info, sqlpolicy);
@@ -369,12 +371,58 @@ public class PrivacyMetaImpl extends MetaImpl {
     public Meta.StatementHandle prepare(Meta.ConnectionHandle ch, String sql,
                                         long maxRowCount) {
         System.out.println("in prepare in privacymetaimpl");
-        final Meta.StatementHandle h = createStatement(ch);
-        final PrivacyConnectionImpl privacyConnection = getConnection();
+        try {
+            final int id = statementIdGenerator.getAndIncrement();
+            ParserResult parserResult = getConnection().parse(sql);
+            PrivacyConnectionImpl connection = getConnection();
 
-        PrivacyJdbcStatement statement = privacyConnection.server.getStatement(h);
-        statement.setSignature(h.signature);
-        return h;
+            PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),
+                    connection.parserFactory, connection.getProperties(), connectionCache);
+            PreparedStatement statement = executor.prepare(parserResult);
+            System.out.println("statement is  "+ statement);
+            Meta.StatementType statementType = null;
+            if (statement.isWrapperFor(AvaticaPreparedStatement.class)) {
+                final AvaticaPreparedStatement avaticaPreparedStatement;
+                avaticaPreparedStatement =
+                        statement.unwrap(AvaticaPreparedStatement.class);
+                statementType = avaticaPreparedStatement.getStatementType();
+            }
+            // Set the maximum number of rows
+            setMaxRows(statement, maxRowCount);
+            statementCache.put(id, new StatementInfo(statement));
+            StatementHandle h = new StatementHandle(ch.id, id,
+                    signature(statement.getMetaData(), statement.getParameterMetaData(),
+                            sql, statementType));
+            LOG.trace("prepared statement {}", h);
+
+            //PrivacyJdbcStatement s2 = connection.server.getStatement(h);
+            //s2.setSignature(h.signature);
+            return h;
+
+        } catch (SQLException e) {
+            throw propagate(e);
+        }
+        catch (PrivacyException e) {
+            throw propagate(e);
+        }
+        catch (Exception e) {
+            throw propagate(e);
+        }
+    }
+
+    /**
+     * Sets the provided maximum number of rows on the given statement.
+     *
+     * @param statement The JDBC Statement to operate on
+     * @param maxRowCount The maximum number of rows which should be returned for the query
+     */
+    void setMaxRows(Statement statement, long maxRowCount) throws SQLException {
+        // Special handling of maxRowCount as JDBC 0 is unlimited, our meta 0 row
+        if (maxRowCount > 0) {
+            AvaticaUtils.setLargeMaxRows(statement, maxRowCount);
+        } else if (maxRowCount < 0) {
+            statement.setMaxRows(0);
+        }
     }
 
     private boolean shouldApplyPolicy(SqlKind kind)
@@ -924,6 +972,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                     preparedStatement.setObject(i + 1, o.toJdbc(calendar));
                 }
             }
+            System.out.println("trying to execute");
 
             if (preparedStatement.execute()) {
                 final Meta.Frame frame;
@@ -963,7 +1012,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                                  List<TypedValue> list,
                                  int i)
             throws NoSuchStatementException {
-        return null;
+        return execute(statementHandle, list, (long)i);
     }
 
 //  @Override

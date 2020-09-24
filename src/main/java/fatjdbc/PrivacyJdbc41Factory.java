@@ -41,42 +41,31 @@ public class PrivacyJdbc41Factory extends PrivacyJdbcFactory {
 
   @Override
   protected PrivacyConnectionImpl newConnection(PrivacyDriver driver,
-                                              PrivacyJdbcFactory factory,
-                                              String url,
-                                              Properties info,
-                                              CalciteRootSchema rootSchema,
-                                              JavaTypeFactory typeFactory) throws SQLException {
+                                                PrivacyJdbcFactory factory,
+                                                String url,
+                                                Properties info,
+                                                CalciteRootSchema rootSchema,
+                                                JavaTypeFactory typeFactory) throws SQLException {
     return new PrivacyConnectionImpl(driver, factory, url, info, rootSchema, typeFactory);
   }
 
   public QuarkJdbc41DatabaseMetaData newDatabaseMetaData(
-      AvaticaConnection connection) {
+          AvaticaConnection connection) {
     return new QuarkJdbc41DatabaseMetaData(
-        (PrivacyConnectionImpl) connection);
+            (PrivacyConnectionImpl) connection);
   }
 
   @Override
   public PrivacyStatement newStatement(AvaticaConnection connection,
-                                     Meta.StatementHandle statementHandle,
-                                     int resultSetType,
-                                     int resultSetConcurrency,
-                                     int resultSetHoldability) {
+                                       Meta.StatementHandle statementHandle,
+                                       int resultSetType,
+                                       int resultSetConcurrency,
+                                       int resultSetHoldability) {
     return new QuarkJdbc41Statement((PrivacyConnectionImpl) connection,
-        statementHandle,
-        resultSetType,
-        resultSetConcurrency,
-        resultSetHoldability);
-  }
-
-  @Override
-  public AvaticaPreparedStatement newPreparedStatement(AvaticaConnection connection,
-                                                       Meta.StatementHandle h,
-                                                       Meta.Signature signature,
-                                                       int resultSetType,
-                                                       int resultSetConcurrency,
-                                                       int resultSetHoldability)
-      throws SQLException {
-    throw new SQLFeatureNotSupportedException();
+            statementHandle,
+            resultSetType,
+            resultSetConcurrency,
+            resultSetHoldability);
   }
 
   @Override
@@ -86,15 +75,40 @@ public class PrivacyJdbc41Factory extends PrivacyJdbcFactory {
                                        TimeZone timeZone,
                                        Meta.Frame firstFrame) throws SQLException {
     final ResultSetMetaData metaData =
-        newResultSetMetaData(statement, signature);
+            newResultSetMetaData(statement, signature);
     return new PrivacyResultSet(statement, signature, metaData, timeZone,
-        firstFrame);
+            firstFrame);
+  }
+
+  @Override
+  public AvaticaPreparedStatement newPreparedStatement(AvaticaConnection connection,
+                                                       Meta.StatementHandle h,
+                                                       Meta.Signature signature,
+                                                       int resultSetType,
+                                                       int resultSetConcurrency,
+                                                       int resultSetHoldability)
+          throws SQLException {
+    System.out.println("Signature details are " + signature.toString());
+    return new PrivacyJdbc41Statement(connection, h, signature, resultSetType,
+            resultSetConcurrency, resultSetHoldability);
+    //throw new SQLFeatureNotSupportedException();
   }
 
   @Override
   public ResultSetMetaData newResultSetMetaData(AvaticaStatement statement,
                                                 Meta.Signature signature) {
     return new AvaticaResultSetMetaData(statement, null, signature);
+  }
+
+  private static class PrivacyJdbc41Statement extends AvaticaPreparedStatement {
+    PrivacyJdbc41Statement(AvaticaConnection connection,
+                           Meta.StatementHandle h,
+                           Meta.Signature signature,
+                           int resultSetType,
+                           int resultSetConcurrency,
+                           int resultSetHoldability) throws SQLException {
+      super(connection, h, signature, resultSetType, resultSetConcurrency, resultSetHoldability);
+    }
   }
 
   /**
@@ -107,7 +121,7 @@ public class PrivacyJdbc41Factory extends PrivacyJdbcFactory {
                          int resultSetConcurrency,
                          int resultSetHoldability) {
       super(connection, h, resultSetType, resultSetConcurrency,
-          resultSetHoldability);
+              resultSetHoldability);
     }
   }
 
@@ -115,7 +129,7 @@ public class PrivacyJdbc41Factory extends PrivacyJdbcFactory {
    * Implementation of database metadata for JDBC 4.1.
    */
   private static class QuarkJdbc41DatabaseMetaData
-      extends AvaticaDatabaseMetaData {
+          extends AvaticaDatabaseMetaData {
     QuarkJdbc41DatabaseMetaData(PrivacyConnectionImpl connection) {
       super(connection);
     }

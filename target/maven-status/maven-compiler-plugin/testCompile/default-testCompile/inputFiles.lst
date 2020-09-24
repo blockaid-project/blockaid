@@ -10,4 +10,6 @@
 /Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/utility/SelectTest.java
 /Users/michaelchang/privacy_proxy/src/test/java/datastore/TableStateTest.java
 /Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/utility/CacheTest.java
+/Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/DbPrepareStatementTest.java
 /Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/SimpleIntegTest.java
+/Users/michaelchang/privacy_proxy/src/test/java/fatjdbc/utility/PrepareStatementTest.java
