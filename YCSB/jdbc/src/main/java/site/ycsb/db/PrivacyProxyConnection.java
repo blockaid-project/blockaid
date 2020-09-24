@@ -7,6 +7,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
 
+@Deprecated
 public class PrivacyProxyConnection {
     private static int RETRIES = 5;
     private static int RETRY_DELAY = 2000;

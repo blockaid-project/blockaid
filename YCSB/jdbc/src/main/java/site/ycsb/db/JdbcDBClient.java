@@ -16,6 +16,8 @@
  */
 package site.ycsb.db;
 
+import jdbc.PrivacyDriver;
+import jdbc.ThinClientUtil;
 import site.ycsb.DB;
 import site.ycsb.DBException;
 import site.ycsb.ByteIterator;
@@ -27,6 +29,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import site.ycsb.db.flavors.DBFlavor;
+import site.ycsb.db.flavors.PrivacyProxyDBFlavor;
 
 /**
  * A class that wraps a JDBC compliant database to allow it to be interfaced
@@ -44,17 +47,17 @@ import site.ycsb.db.flavors.DBFlavor;
  */
 public class JdbcDBClient extends DB {
 
-//  /** The class to use as the jdbc driver. */
-//  public static final String DRIVER_CLASS = "db.driver";
-//
-//  /** The URL to connect to the database. */
-//  public static final String CONNECTION_URL = "db.url";
-//
-//  /** The user name to use to connect to the database. */
-//  public static final String CONNECTION_USER = "db.user";
-//
-//  /** The password to use for establishing the connection. */
-//  public static final String CONNECTION_PASSWD = "db.passwd";
+  /** The class to use as the jdbc driver. */
+  public static final String DRIVER_CLASS = "db.driver";
+
+  /** The URL to connect to the database. */
+  public static final String CONNECTION_URL = "db.url";
+
+  /** The user name to use to connect to the database. */
+  public static final String CONNECTION_USER = "db.user";
+
+  /** The password to use for establishing the connection. */
+  public static final String CONNECTION_PASSWD = "db.passwd";
 
   /** The batch size for batched inserts. Set to >0 to use batching */
   public static final String DB_BATCH_SIZE = "db.batchsize";
@@ -183,10 +186,10 @@ public class JdbcDBClient extends DB {
       return;
     }
     props = getProperties();
-//    String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
-//    String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
-//    String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
-//    String driver = props.getProperty(DRIVER_CLASS);
+    String urls = props.getProperty(CONNECTION_URL, DEFAULT_PROP);
+    String user = props.getProperty(CONNECTION_USER, DEFAULT_PROP);
+    String passwd = props.getProperty(CONNECTION_PASSWD, DEFAULT_PROP);
+    String driver = props.getProperty(DRIVER_CLASS);
 
     this.jdbcFetchSize = getIntProperty(props, JDBC_FETCH_SIZE);
     this.batchSize = getIntProperty(props, DB_BATCH_SIZE);
@@ -195,55 +198,62 @@ public class JdbcDBClient extends DB {
     this.batchUpdates = getBoolProperty(props, JDBC_BATCH_UPDATES, false);
 
     try {
-//  The SQL Syntax for Scan depends on the DB engine
-//  - SQL:2008 standard: FETCH FIRST n ROWS after the ORDER BY
-//  - SQL Server before 2012: TOP n after the SELECT
-//  - others (MySQL,MariaDB, PostgreSQL before 8.4)
+      //  The SQL Syntax for Scan depends on the DB engine
+      //  - SQL:2008 standard: FETCH FIRST n ROWS after the ORDER BY
+      //  - SQL Server before 2012: TOP n after the SELECT
+      //  - others (MySQL,MariaDB, PostgreSQL before 8.4)
 
-//      if (driver != null) {
-//        if (driver.contains("sqlserver")) {
-//          sqlserverScans = true;
-//          sqlansiScans = false;
-//        }
-//        if (driver.contains("oracle")) {
-//          sqlserverScans = false;
-//          sqlansiScans = true;
-//        }
-//        if (driver.contains("postgres")) {
-//          sqlserverScans = false;
-//          sqlansiScans = true;
-//        }
-//        Class.forName(driver);
-//      }
+      Class.forName("jdbc.PrivacyDriver");
+      if (driver != null) {
+        if (driver.contains("sqlserver")) {
+          sqlserverScans = true;
+          sqlansiScans = false;
+        }
+        if (driver.contains("oracle")) {
+          sqlserverScans = false;
+          sqlansiScans = true;
+        }
+        if (driver.contains("postgres")) {
+          sqlserverScans = false;
+          sqlansiScans = true;
+        }
+        Class.forName(driver);
+      }
+
       int shardCount = 0;
       conns = new ArrayList<Connection>(3);
       // for a longer explanation see the README.md
       // semicolons aren't present in JDBC urls, so we use them to delimit
       // multiple JDBC connections to shard across.
-//      final String[] urlArr = urls.split(";");
-//      for (String url : urlArr) {
-//        System.out.println("Adding shard node URL: " + url);
-//        Connection conn = DriverManager.getConnection(url, user, passwd);
-//
-//        // Since there is no explicit commit method in the DB interface, all
-//        // operations should auto commit, except when explicitly told not to
-//        // (this is necessary in cases such as for PostgreSQL when running a
-//        // scan workload with fetchSize)
-//        conn.setAutoCommit(autoCommit);
-//
-//        shardCount++;
-//        conns.add(conn);
-//      }
-      shardCount = 1;
-      conns.add(PrivacyProxyConnection.newConnection("0.0.0.0", 8765));
+      final String[] urlArr = urls.split(";");
+      for (String url : urlArr) {
+        System.out.println("Adding shard node URL: " + url);
+        Connection conn;
+        // todo: this more cleanly
+        if (url.startsWith(PrivacyDriver.CONNECT_STRING_PREFIX)) {
+          String[] parts = url.split(":");
+          String hostname = parts[parts.length - 2];
+          int port = Integer.parseInt(parts[parts.length - 1]);
+
+          conn = DriverManager.getConnection(ThinClientUtil.getConnectionUrl(hostname, port), user, passwd);
+        } else {
+          conn = DriverManager.getConnection(url, user, passwd);
+        }
+
+        // Since there is no explicit commit method in the DB interface, all
+        // operations should auto commit, except when explicitly told not to
+        // (this is necessary in cases such as for PostgreSQL when running a
+        // scan workload with fetchSize)
+        conn.setAutoCommit(autoCommit);
+
+        shardCount++;
+        conns.add(conn);
+      }
 
       System.out.println("Using shards: " + shardCount + ", batchSize:" + batchSize + ", fetchSize: " + jdbcFetchSize);
 
       cachedStatements = new ConcurrentHashMap<StatementType, PreparedStatement>();
-
-//      this.dbFlavor = DBFlavor.fromJdbcUrl(urlArr[0]);
-      // TODO fix
-      this.dbFlavor = DBFlavor.fromJdbcUrl("jdbc:h2:mem:DbName");
+      this.dbFlavor = DBFlavor.fromJdbcUrl(urlArr[0]);
     } catch (ClassNotFoundException e) {
       System.err.println("Error in initializing the JDBS driver: " + e);
       throw new DBException(e);

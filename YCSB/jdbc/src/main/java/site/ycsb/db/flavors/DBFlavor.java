@@ -16,6 +16,7 @@
  */
 package site.ycsb.db.flavors;
 
+import jdbc.PrivacyDriver;
 import site.ycsb.db.StatementType;
 
 /**
@@ -26,7 +27,8 @@ public abstract class DBFlavor {
 
   enum DBName {
     DEFAULT,
-    PHOENIX
+    PHOENIX,
+    PRIVACY_PROXY
   }
 
   private final DBName dbName;
@@ -38,6 +40,8 @@ public abstract class DBFlavor {
   public static DBFlavor fromJdbcUrl(String url) {
     if (url.startsWith("jdbc:phoenix")) {
       return new PhoenixDBFlavor();
+    } else if (url.startsWith(PrivacyDriver.CONNECT_STRING_PREFIX)) {
+      return new PrivacyProxyDBFlavor();
     }
     return new DefaultDBFlavor();
   }
