@@ -17,8 +17,6 @@ public class YCSBSetup {
     public static String dbUrl = "jdbc:h2:mem:DbYCSB;DB_CLOSE_DELAY=-1";
     public static String h2Url = "jdbc:h2:mem:DbServerYCSBTest;DB_CLOSE_DELAY=-1";
 
-    private Main main;
-
     public static void setupTables(String dbUrl, String filename)
             throws ClassNotFoundException, SQLException, IOException, URISyntaxException {
 
@@ -34,12 +32,6 @@ public class YCSBSetup {
         java.nio.file.Path resPath = java.nio.file.Paths.get(url.toURI());
         String sql = new String(java.nio.file.Files.readAllBytes(resPath), "UTF8");
         stmt.execute(sql);
-    }
-
-    public void cleanUp() {
-        if (main.getServer() != null) {
-            main.getServer().stop();
-        }
     }
 
     public static void main(String[] argv) throws Exception {
@@ -67,8 +59,5 @@ public class YCSBSetup {
         }));
 
         Thread.sleep(Long.MAX_VALUE);
-        //
-//        String query = "SELECT * FROM canonical.public.usertable";
-//        ResultSet resultSet = connection.createStatement().executeQuery(query);
     }
 }
