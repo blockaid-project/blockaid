@@ -203,7 +203,10 @@ public class JdbcDBClient extends DB {
       //  - SQL Server before 2012: TOP n after the SELECT
       //  - others (MySQL,MariaDB, PostgreSQL before 8.4)
 
-      Class.forName("jdbc.PrivacyDriver");
+      // todo: cleaner
+      if (urls.contains("privacy")) {
+        Class.forName("jdbc.PrivacyDriver");
+      }
       if (driver != null) {
         if (driver.contains("sqlserver")) {
           sqlserverScans = true;
@@ -230,6 +233,7 @@ public class JdbcDBClient extends DB {
         System.out.println("Adding shard node URL: " + url);
         Connection conn;
         // todo: this more cleanly
+        url = url.replace('!', ';');
         if (url.startsWith(PrivacyDriver.CONNECT_STRING_PREFIX)) {
           String[] parts = url.split(":");
           String hostname = parts[parts.length - 2];
