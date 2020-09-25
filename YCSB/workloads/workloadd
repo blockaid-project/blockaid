@@ -26,8 +26,8 @@
 # which orders items purely by time, and demands the latest, is very different than 
 # workload here (which we believe is more typical of how people build systems.)
 
-recordcount=1000
-operationcount=1000
+recordcount=100000
+operationcount=100000
 workload=site.ycsb.workloads.CoreWorkload
 
 readallfields=true
