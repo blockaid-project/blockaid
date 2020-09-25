@@ -49,9 +49,9 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
                 p = conn.prepareStatement(parsedSql);
             }
         }
+        System.out.println("prepare is " + p);
         return p;
     }
-
 
 
     public Object execute(ParserResult parserResult) throws Exception {

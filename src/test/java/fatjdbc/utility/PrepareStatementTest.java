@@ -50,7 +50,33 @@ public abstract class PrepareStatementTest {
     }
 
     @Test
-    public void testSimpleSelect() throws SQLException, ClassNotFoundException {
+    public void testParametrizedInsert() throws SQLException, ClassNotFoundException {
+        Class.forName("fatjdbc.PrivacyDriver");
+        Connection connection =
+                DriverManager.getConnection(getConnectionUrl(), props);
+
+        //Statement statement = connection.createStatement();
+        //String insertQuery = "insert into simple (i,j) values(?,?)";
+        String insertQuery = "update simple set i = 100 where j = 100";
+        PreparedStatement updateQuery = connection.prepareStatement(insertQuery);
+
+        //updateQuery.setInt(1, 1);
+        //updateQuery.setInt(1, 10);
+        //updateQuery.setInt(2, 12);
+        int rows_affected = updateQuery.executeUpdate();
+        assertThat(rows_affected).isEqualTo(0);
+        updateQuery.close();
+        connection.close();
+
+        /*
+        assertThat(firstColumn).contains(1, 2, 3);
+        assertThat(secondColumn).contains(4, 5, 6);
+        assertThat(totalRows).isEqualTo(3);*/
+
+    }
+
+    //@Test
+    public void testParametrizedSelect() throws SQLException, ClassNotFoundException {
         Class.forName("fatjdbc.PrivacyDriver");
         Connection connection =
                 DriverManager.getConnection(getConnectionUrl(), props);
@@ -59,6 +85,9 @@ public abstract class PrepareStatementTest {
         String query = "select * from simple where i < ?";
         PreparedStatement updateQuery = connection.prepareStatement(query);
         //ResultSet rows = updateQuery.executeQuery();
+
+        String insertQuery = "insert into simple (i,j) values(5,6)";
+        //PreparedStatement updateQuery = connection.prepareStatement(query);
 
         Statement statement = connection.createStatement();
         //ResultSet rows =

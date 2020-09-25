@@ -378,8 +378,9 @@ public class PrivacyMetaImpl extends MetaImpl {
 
             PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),
                     connection.parserFactory, connection.getProperties(), connectionCache);
+            System.out.println("parser result is " + executor);
             PreparedStatement statement = executor.prepare(parserResult);
-            System.out.println("statement is  "+ statement);
+            System.out.println("statement is  " + statement);
             Meta.StatementType statementType = null;
             if (statement.isWrapperFor(AvaticaPreparedStatement.class)) {
                 final AvaticaPreparedStatement avaticaPreparedStatement;
