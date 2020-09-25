@@ -17,6 +17,6 @@ cd "$DIR"
 ./bin/ycsb load jdbc -P "$WORKLOAD" -P jdbc/src/main/conf/db.properties -cp ./h2-latest.jar
 rv=$!
 
-kill -INT $bg_pid
+kill $bg_pid
 exit $rv
 
