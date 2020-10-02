@@ -159,7 +159,6 @@ public class PrivacyMetaImpl extends MetaImpl {
         set_policy(info);
         this.queryChecker = new QueryChecker(this.policy_list);
         initializePolicyCache();
-        System.out.println("end of constructor in privacy meta impl");
     }
 
     private void set_policy(Properties info) {
@@ -370,17 +369,22 @@ public class PrivacyMetaImpl extends MetaImpl {
     @Override
     public Meta.StatementHandle prepare(Meta.ConnectionHandle ch, String sql,
                                         long maxRowCount) {
-        System.out.println("in prepare in privacymetaimpl");
         try {
             final int id = statementIdGenerator.getAndIncrement();
             ParserResult parserResult = getConnection().parse(sql);
             PrivacyConnectionImpl connection = getConnection();
 
+            if (shouldApplyPolicy(parserResult.getSqlNode().getKind())) {
+                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(parserResult);
+                if (checkQueryCompliance(query) == false) {
+                    System.out.println("Query {} does not comply".format(sql));
+                    throw new PrivacyException("Policy did not pass");
+                }
+            }
             PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),
                     connection.parserFactory, connection.getProperties(), connectionCache);
-            System.out.println("parser result is " + executor);
             PreparedStatement statement = executor.prepare(parserResult);
-            System.out.println("statement is  " + statement);
+
             Meta.StatementType statementType = null;
             if (statement.isWrapperFor(AvaticaPreparedStatement.class)) {
                 final AvaticaPreparedStatement avaticaPreparedStatement;
@@ -439,8 +443,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                                                 String sql,
                                                 long maxRowCount,
                                                 Meta.PrepareCallback callback) {
-        System.out.println("in prepareandexecute in privacymetaimpl");
-
         // Create callback, execute query
         try {
             MetaResultSet metaResultSet = null;
@@ -451,8 +453,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
                     if (checkQueryCompliance(query) == false) {
-                        System.out.println("Query {} does not comply".format(sql));
-                        return null;
+                        throw new PrivacyException("Privacy compliance was not met");
                     }
                 }
                 metaResultSet = new PlanExecutor(h, getConnection(),
@@ -469,13 +470,10 @@ public class PrivacyMetaImpl extends MetaImpl {
     }
 
     public boolean checkQueryCompliance(PrivacyQuery query){
-        System.out.println("Check query compliance");
         for(Map.Entry<Policy, LoadingCache<PrivacyQuery, Boolean>> policy_cache: policyCache.entrySet()){
             boolean compliance;
             try{
-                System.out.println("getting value");
                 compliance = policy_cache.getValue().get(query);
-                System.out.println("got value");
                 if (!compliance) {
                     return Boolean.FALSE;
                 }
@@ -483,7 +481,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                 throw propagate(e);
             }
         }
-        System.out.println("finished looking at policies");
         return Boolean.TRUE;
     }
 
@@ -493,8 +490,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                                            int maxRowsInFirstFrame,
                                            PrepareCallback prepareCallback)
             throws NoSuchStatementException {
-        System.out.println("in prepareAndExecute2 in privacymetaimpl");
-        System.out.println("in prepareandexecute2" + sql);
         set_policy(this.info);
 
         try {
@@ -508,11 +503,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                 if (shouldApplyPolicy(result.getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
                     if (checkQueryCompliance(query) == false) {
-                        System.out.println("Query {} does not comply".format(sql));
-                        return null;
-                    }
-                    else{
-                        System.out.println("Query does comply!");
+                        throw new PrivacyException("Query " + sql + " is not compliant");
                     }
                 }
 
@@ -521,7 +512,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                 prepareCallback.assign(metaResultSet.signature, metaResultSet.firstFrame,
                         metaResultSet.updateCount);
             }
-            System.out.println("about to execute callback");
             prepareCallback.execute();
             return new ExecuteResult(ImmutableList.of(metaResultSet));
         } catch (Exception e) {
@@ -953,6 +943,8 @@ public class PrivacyMetaImpl extends MetaImpl {
     }
 
     @Override
+    // Query not checked against policy because statements executed here have already been
+    // checked for compliance in the prepare part of the execution
     public ExecuteResult execute(StatementHandle h,
                                  List<TypedValue> parameterValues, long maxRowCount) {
         try {
@@ -967,13 +959,24 @@ public class PrivacyMetaImpl extends MetaImpl {
             final PreparedStatement preparedStatement =
                     (PreparedStatement) statementInfo.statement;
 
+            String pStatement_str = preparedStatement.toString();
+            ParserResult result = getConnection().parse(pStatement_str
+                    .substring(pStatement_str.indexOf( ": " ) + 2 ));
+
+            if (shouldApplyPolicy(result.getSqlNode().getKind())) {
+                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
+                if (checkQueryCompliance(query) == false) {
+                    throw new PrivacyException("Privacy compliance was not met");
+                }
+            }
+
             if (parameterValues != null) {
                 for (int i = 0; i < parameterValues.size(); i++) {
                     TypedValue o = parameterValues.get(i);
                     preparedStatement.setObject(i + 1, o.toJdbc(calendar));
                 }
             }
-            System.out.println("trying to execute");
+
 
             if (preparedStatement.execute()) {
                 final Meta.Frame frame;
@@ -1005,7 +1008,10 @@ public class PrivacyMetaImpl extends MetaImpl {
             return new ExecuteResult(resultSets);
         } catch (SQLException e) {
             throw propagate(e);
+        } catch (PrivacyException e) {
+            throw propagate(e);
         }
+
     }
 
     @Override
