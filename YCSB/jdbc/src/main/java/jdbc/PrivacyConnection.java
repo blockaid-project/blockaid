@@ -3,7 +3,13 @@ package jdbc;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableList;
+import fatjdbc.PlanExecutor;
+import org.apache.calcite.avatica.Meta;
+import org.apache.calcite.sql.SqlKind;
+import sql.ParserResult;
 import sql.PrivacyQuery;
+import sql.PrivacyQueryFactory;
 
 import java.sql.*;
 import java.util.HashMap;
@@ -36,14 +42,29 @@ class PrivacyConnection implements Connection {
 
   private boolean checkQueryCompliance(PrivacyQuery query){
       try{
+          // TODO maybe change from "direct if in cache and true, proxy otherwise"?
           return policy_decision_cache.get(query);
       } catch (ExecutionException e){
           throw propagate(e);
       }
   }
 
+  private boolean shouldApplyPolicy(SqlKind kind)
+  {
+    if (kind.equals(kind.SELECT)){
+      return true;
+    }
+    else
+      return false;
+  }
+
   private Connection pickConnection(String query) {
-//      if (checkQueryCompliance(query)) {
+//      ParserResult result = ???;
+//      if (!shouldApplyPolicy(result.getSqlNode().getKind())) {
+//          return this.direct_connection;
+//      }
+//      PrivacyQuery pquery = PrivacyQueryFactory.createPrivacyQuery(result);
+//      if (checkQueryCompliance(pquery)) {
 //      if (Math.random() < 0.8) { // -- doesn't work, prepareStatement only called once/query type
       if (false) {
           return this.direct_connection;

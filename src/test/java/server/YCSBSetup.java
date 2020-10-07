@@ -14,8 +14,8 @@ import java.sql.*;
 import java.util.Properties;
 
 public class YCSBSetup {
-    public static String dbUrl = "jdbc:h2:mem:DbYCSB;DB_CLOSE_DELAY=-1";
-    public static String h2Url = "jdbc:h2:mem:DbServerYCSBTest;DB_CLOSE_DELAY=-1";
+    public static String dbUrl = "jdbc:h2:/tmp/DbYCSB;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1";
+    public static String h2Url = "jdbc:h2:/tmp/DbServerYCSBTest;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1";
 
     public static void setupTables(String dbUrl, String filename)
             throws ClassNotFoundException, SQLException, IOException, URISyntaxException {
