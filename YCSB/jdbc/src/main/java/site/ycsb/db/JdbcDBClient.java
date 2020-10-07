@@ -203,10 +203,7 @@ public class JdbcDBClient extends DB {
       //  - SQL Server before 2012: TOP n after the SELECT
       //  - others (MySQL,MariaDB, PostgreSQL before 8.4)
 
-      // todo: cleaner
-      if (urls.contains("privacy")) {
-        Class.forName("jdbc.PrivacyDriver");
-      }
+      Class.forName("jdbc.PrivacyDriver");
       if (driver != null) {
         if (driver.contains("sqlserver")) {
           sqlserverScans = true;
@@ -231,18 +228,7 @@ public class JdbcDBClient extends DB {
       final String[] urlArr = urls.split(";");
       for (String url : urlArr) {
         System.out.println("Adding shard node URL: " + url);
-        Connection conn;
-        // todo: this more cleanly
-        url = url.replace('!', ';');
-        if (url.startsWith(PrivacyDriver.CONNECT_STRING_PREFIX)) {
-          String[] parts = url.split(":");
-          String hostname = parts[parts.length - 2];
-          int port = Integer.parseInt(parts[parts.length - 1]);
-
-          conn = DriverManager.getConnection(ThinClientUtil.getConnectionUrl(hostname, port), user, passwd);
-        } else {
-          conn = DriverManager.getConnection(url, user, passwd);
-        }
+        Connection conn = DriverManager.getConnection(url.replace('!', ';'), user, passwd);
 
         // Since there is no explicit commit method in the DB interface, all
         // operations should auto commit, except when explicitly told not to

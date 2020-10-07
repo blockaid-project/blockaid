@@ -7,16 +7,26 @@ if [ $# -ne 2 ]; then
     exit 1
 fi
 
+rm -f /tmp/DbYCSB.mv.db
+rm -f /tmp/DbServerYCSBTest.mv.db
+
 WORKLOAD="$(realpath "$1")"
 CONF="$2"
 
 cd "$DIR/.."
 mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
+MAVEN_OPTS='-server' mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
 bg_pid=$!
 
+echo 'SERVER UP'
+read
+
 cd "$DIR"
-./bin/ycsb load jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp ./h2-latest.jar
+./bin/ycsb load jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp ./h2-latest.jar # -threads 12
 rv=$!
+
+echo 'DONE'
+read
 
 kill $bg_pid
 rm -f /tmp/DbYCSB.mv.db
