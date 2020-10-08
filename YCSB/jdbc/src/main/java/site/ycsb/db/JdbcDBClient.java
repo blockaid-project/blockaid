@@ -18,6 +18,7 @@ package site.ycsb.db;
 
 import jdbc.PrivacyDriver;
 import jdbc.ThinClientUtil;
+import org.apache.calcite.avatica.AvaticaSqlException;
 import site.ycsb.DB;
 import site.ycsb.DBException;
 import site.ycsb.ByteIterator;
@@ -350,6 +351,7 @@ public class JdbcDBClient extends DB {
       }
       readStatement.setString(1, key);
       ResultSet resultSet = readStatement.executeQuery();
+
       if (!resultSet.next()) {
         resultSet.close();
         return Status.NOT_FOUND;
@@ -362,6 +364,13 @@ public class JdbcDBClient extends DB {
       }
       resultSet.close();
       return Status.OK;
+    } catch (AvaticaSqlException e) {
+      if (e.getMessage().contains("Privacy compliance was not met")) {
+        System.err.println("bleh");
+      } else {
+        System.err.println("Error in processing read of table " + tableName + ": " + e);
+      }
+      return Status.ERROR;
     } catch (SQLException e) {
       System.err.println("Error in processing read of table " + tableName + ": " + e);
       return Status.ERROR;

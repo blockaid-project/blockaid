@@ -43,15 +43,18 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
         if (!this.acceptsURL(url)) {
             return null;
         }
-        String[] urls = url.split(";", 2);
+        String[] urls = url.split(",", 3);
 
         String[] parts = urls[0].split(":");
         String hostname = parts[parts.length - 2];
         int port = Integer.parseInt(parts[parts.length - 1]);
         String proxy_url = ThinClientUtil.getConnectionUrl(hostname, port);
-        String direct_url = urls[1];
+        String direct_schema_url = urls[1];
+        String direct_access_url = urls[2];
 
-        Connection direct_connection = DriverManager.getConnection(direct_url, info.getProperty("user"), info.getProperty("password"));
-        return new PrivacyConnection(super.connect(proxy_url, info), direct_connection);
+        Connection direct_connection = DriverManager.getConnection(direct_access_url, info.getProperty("user"), info.getProperty("password"));
+        Properties info_ = new Properties(info);
+        info_.setProperty("url", direct_schema_url);
+        return new PrivacyConnection(super.connect(proxy_url, info), direct_connection, info_);
     }
 }

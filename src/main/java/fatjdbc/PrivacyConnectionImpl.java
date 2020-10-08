@@ -31,8 +31,6 @@ public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyC
                                   Properties info, CalciteRootSchema rootSchema,
                                   JavaTypeFactory typeFactory) throws SQLException {
         super(driver, factory, url, info);
-        System.out.println("initializing parser factory");
-        System.out.println(parserFactory);
         CalciteConnectionConfig cfg = new CalciteConnectionConfigImpl(info);
 
         if (typeFactory != null) {
@@ -99,7 +97,6 @@ public class PrivacyConnectionImpl extends AvaticaConnection implements PrivacyC
     }
 
     public PrivacyParser getSqlQueryParser() throws SQLException, PrivacyException {
-        System.out.println(parserFactory);
         return (PrivacyParser) parserFactory.getParser(info);
     }
 

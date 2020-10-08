@@ -59,14 +59,12 @@ public class Connection {
   }
 
   public DSSet getDSSet() {
-    System.out.println(info);
     if (this.dsSet == null) {
       DSSetDAO dsSetDAO = dbi.onDemand(DSSetDAO.class);
       if (info.containsKey("dsSetId")) {
         this.dsSet = dsSetDAO.find(Integer.parseInt(info.getProperty("dsSetId")));
       } else {
         List<DSSet> dsSets = dsSetDAO.findAll();
-        System.out.println(dsSets);
         this.dsSet = dsSets.get(0);
       }
       dbi.define("dsSetId", dsSet.getId());

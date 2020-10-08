@@ -31,9 +31,6 @@ public class PrivacyQuerySelect extends PrivacyQuery{
 
     @Override
     public int hashCode() {
-        System.out.println("inside the hash code");
-        System.out.println(parsedSql.parsedSql);
-
         int result = 1;
         if (where != null) {
             result = 31 * result + where.toString().hashCode();
@@ -44,7 +41,6 @@ public class PrivacyQuerySelect extends PrivacyQuery{
         if (selectAttributes != null) {
             result = 31 * result + selectAttributes.toString().hashCode();
         }
-        System.out.println("finishe hashing: " + result);
         return result;
     }
 

@@ -88,7 +88,6 @@ public class PrivacyJdbc41Factory extends PrivacyJdbcFactory {
                                                        int resultSetConcurrency,
                                                        int resultSetHoldability)
           throws SQLException {
-    System.out.println("Signature details are " + signature.toString());
     return new PrivacyJdbc41Statement(connection, h, signature, resultSetType,
             resultSetConcurrency, resultSetHoldability);
     //throw new SQLFeatureNotSupportedException();

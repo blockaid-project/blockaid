@@ -34,7 +34,6 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
     }
 
     public PreparedStatement prepare(ParserResult parserResult) throws Exception {
-        System.out.println("Executing prepare statement");
         final DataSourceSchema dataSourceSchema =
                 ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource();
         PreparedStatement p = null;
@@ -49,13 +48,11 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
                 p = conn.prepareStatement(parsedSql);
             }
         }
-        System.out.println("prepare is " + p);
         return p;
     }
 
 
     public Object execute(ParserResult parserResult) throws Exception {
-        System.out.println("Executing queries inside PrivacyQueryExecutor");
         Object object = null;
         final DataSourceSchema dataSourceSchema =
                 ((PrivacyParser.PrivacyParserResult) parserResult).getDataSource();
@@ -77,7 +74,6 @@ public class PrivacyQueryExecutor implements PrivacyExecutor {
                     LOG.warn("Could not set Query Timeout to " + QUERY_TIMEOUT + " seconds", e);
                 }
 
-                System.out.println("about to try to execute the insert query");
                 object = statement.executeQuery(parsedSql);
 
 

@@ -5,13 +5,17 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import fatjdbc.PlanExecutor;
+import org.apache.calcite.avatica.AvaticaSqlException;
 import org.apache.calcite.avatica.Meta;
 import org.apache.calcite.sql.SqlKind;
-import sql.ParserResult;
-import sql.PrivacyQuery;
-import sql.PrivacyQueryFactory;
+import sql.*;
 
+import java.io.InputStream;
+import java.io.Reader;
+import java.math.BigDecimal;
+import java.net.URL;
 import java.sql.*;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -24,8 +28,9 @@ class PrivacyConnection implements Connection {
   private Connection direct_connection;
 //  private HashMap<Policy, LoadingCache<PrivacyQuery ,Boolean>> policy_decision_cache;
   private LoadingCache<PrivacyQuery, Boolean> policy_decision_cache;
+  private Parser parser;
 
-  PrivacyConnection(Connection proxy_connection, Connection direct_connection) {
+  PrivacyConnection(Connection proxy_connection, Connection direct_connection, Properties direct_info) throws SQLException {
     this.proxy_connection = proxy_connection;
     this.direct_connection = direct_connection;
     this.policy_decision_cache = CacheBuilder.newBuilder()
@@ -38,6 +43,9 @@ class PrivacyConnection implements Connection {
             return false;
           }
         });
+    Properties info = direct_info;
+    info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
+    this.parser = new ParserFactory(info).getParser(info);
   }
 
   private boolean checkQueryCompliance(PrivacyQuery query){
@@ -58,21 +66,6 @@ class PrivacyConnection implements Connection {
       return false;
   }
 
-  private Connection pickConnection(String query) {
-//      ParserResult result = ???;
-//      if (!shouldApplyPolicy(result.getSqlNode().getKind())) {
-//          return this.direct_connection;
-//      }
-//      PrivacyQuery pquery = PrivacyQueryFactory.createPrivacyQuery(result);
-//      if (checkQueryCompliance(pquery)) {
-//      if (Math.random() < 0.8) { // -- doesn't work, prepareStatement only called once/query type
-      if (false) {
-          return this.direct_connection;
-      } else {
-          return this.proxy_connection;
-      }
-  }
-
   private RuntimeException propagate(Throwable e) {
       if (e instanceof RuntimeException) {
           throw (RuntimeException) e;
@@ -90,7 +83,7 @@ class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s) throws SQLException {
-    return pickConnection(s).prepareStatement(s);
+    return new PrivacyPreparedStatement(s);
   }
 
   @Override
@@ -352,6 +345,602 @@ class PrivacyConnection implements Connection {
   @Override
   public boolean isWrapperFor(Class<?> aClass) throws SQLException {
     return proxy_connection.isWrapperFor(aClass);
+  }
+
+  private class PrivacyPreparedStatement implements PreparedStatement {
+    private PreparedStatement proxy_statement;
+    private PreparedStatement direct_statement;
+    private PreparedStatement active_statement;
+    private ParserResult parser_result;
+
+    PrivacyPreparedStatement(String sql) throws SQLException {
+      // todo parameters?
+      this.parser_result = parser.parse(sql);
+      // big hack
+      String direct_sql = sql.replace("canonical.", "");
+      System.out.println(sql);
+      System.out.println(direct_sql);
+      System.out.println("foo");
+      if (!sql.contains("SELECT")) {
+        proxy_statement = null;
+        direct_statement = direct_connection.prepareStatement(direct_sql);
+        active_statement = direct_statement;
+      } else {
+        proxy_statement = proxy_connection.prepareStatement(sql);
+        direct_statement = direct_connection.prepareStatement(direct_sql);
+        active_statement = proxy_statement;
+      }
+    }
+
+    @Override
+    public ResultSet executeQuery() throws SQLException {
+      boolean allowed = true;
+
+      if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
+        if (checkQueryCompliance(PrivacyQueryFactory.createPrivacyQuery(parser_result))) {
+          active_statement = direct_statement;
+        } else {
+          active_statement = proxy_statement;
+        }
+      }
+
+      try {
+        return active_statement.executeQuery();
+      } catch (AvaticaSqlException e) {
+        if (e.getMessage().contains("Privacy compliance was not met")) {
+          allowed = false;
+        }
+        throw e;
+      } finally {
+        System.out.println("compliance: " + allowed); // todo
+      }
+    }
+
+    @Override
+    public int executeUpdate() throws SQLException {
+      return active_statement.executeUpdate();
+    }
+
+    @Override
+    public void setNull(int i, int i1) throws SQLException {
+      active_statement.setNull(i, i1);
+    }
+
+    @Override
+    public void setBoolean(int i, boolean b) throws SQLException {
+      active_statement.setBoolean(i, b);
+    }
+
+    @Override
+    public void setByte(int i, byte b) throws SQLException {
+      active_statement.setByte(i, b);
+    }
+
+    @Override
+    public void setShort(int i, short i1) throws SQLException {
+      active_statement.setShort(i, i1);
+    }
+
+    @Override
+    public void setInt(int i, int i1) throws SQLException {
+      active_statement.setInt(i, i1);
+    }
+
+    @Override
+    public void setLong(int i, long l) throws SQLException {
+      active_statement.setLong(i, l);
+    }
+
+    @Override
+    public void setFloat(int i, float v) throws SQLException {
+      active_statement.setFloat(i, v);
+    }
+
+    @Override
+    public void setDouble(int i, double v) throws SQLException {
+      active_statement.setDouble(i, v);
+    }
+
+    @Override
+    public void setBigDecimal(int i, BigDecimal bigDecimal) throws SQLException {
+      active_statement.setBigDecimal(i, bigDecimal);
+    }
+
+    @Override
+    public void setString(int i, String s) throws SQLException {
+      active_statement.setString(i, s);
+    }
+
+    @Override
+    public void setBytes(int i, byte[] bytes) throws SQLException {
+      active_statement.setBytes(i, bytes);
+    }
+
+    @Override
+    public void setDate(int i, Date date) throws SQLException {
+      active_statement.setDate(i, date);
+    }
+
+    @Override
+    public void setTime(int i, Time time) throws SQLException {
+      active_statement.setTime(i, time);
+    }
+
+    @Override
+    public void setTimestamp(int i, Timestamp timestamp) throws SQLException {
+      active_statement.setTimestamp(i, timestamp);
+    }
+
+    @Override
+    public void setAsciiStream(int i, InputStream inputStream, int i1) throws SQLException {
+      active_statement.setAsciiStream(i, inputStream, i1);
+    }
+
+    @Override
+    @Deprecated
+    public void setUnicodeStream(int i, InputStream inputStream, int i1) throws SQLException {
+      active_statement.setUnicodeStream(i, inputStream, i1);
+    }
+
+    @Override
+    public void setBinaryStream(int i, InputStream inputStream, int i1) throws SQLException {
+      active_statement.setBinaryStream(i, inputStream, i1);
+    }
+
+    @Override
+    public void clearParameters() throws SQLException {
+      active_statement.clearParameters();
+    }
+
+    @Override
+    public void setObject(int i, Object o, int i1) throws SQLException {
+      active_statement.setObject(i, o, i1);
+    }
+
+    @Override
+    public void setObject(int i, Object o) throws SQLException {
+      active_statement.setObject(i, o);
+    }
+
+    @Override
+    public boolean execute() throws SQLException {
+      return active_statement.execute();
+    }
+
+    @Override
+    public void addBatch() throws SQLException {
+      active_statement.addBatch();
+    }
+
+    @Override
+    public void setCharacterStream(int i, Reader reader, int i1) throws SQLException {
+      active_statement.setCharacterStream(i, reader, i1);
+    }
+
+    @Override
+    public void setRef(int i, Ref ref) throws SQLException {
+      active_statement.setRef(i, ref);
+    }
+
+    @Override
+    public void setBlob(int i, Blob blob) throws SQLException {
+      active_statement.setBlob(i, blob);
+    }
+
+    @Override
+    public void setClob(int i, Clob clob) throws SQLException {
+      active_statement.setClob(i, clob);
+    }
+
+    @Override
+    public void setArray(int i, Array array) throws SQLException {
+      active_statement.setArray(i, array);
+    }
+
+    @Override
+    public ResultSetMetaData getMetaData() throws SQLException {
+      return active_statement.getMetaData();
+    }
+
+    @Override
+    public void setDate(int i, Date date, Calendar calendar) throws SQLException {
+      active_statement.setDate(i, date, calendar);
+    }
+
+    @Override
+    public void setTime(int i, Time time, Calendar calendar) throws SQLException {
+      active_statement.setTime(i, time, calendar);
+    }
+
+    @Override
+    public void setTimestamp(int i, Timestamp timestamp, Calendar calendar) throws SQLException {
+      active_statement.setTimestamp(i, timestamp, calendar);
+    }
+
+    @Override
+    public void setNull(int i, int i1, String s) throws SQLException {
+      active_statement.setNull(i, i1, s);
+    }
+
+    @Override
+    public void setURL(int i, URL url) throws SQLException {
+      active_statement.setURL(i, url);
+    }
+
+    @Override
+    public ParameterMetaData getParameterMetaData() throws SQLException {
+      return active_statement.getParameterMetaData();
+    }
+
+    @Override
+    public void setRowId(int i, RowId rowId) throws SQLException {
+      active_statement.setRowId(i, rowId);
+    }
+
+    @Override
+    public void setNString(int i, String s) throws SQLException {
+      active_statement.setNString(i, s);
+    }
+
+    @Override
+    public void setNCharacterStream(int i, Reader reader, long l) throws SQLException {
+      active_statement.setNCharacterStream(i, reader, l);
+    }
+
+    @Override
+    public void setNClob(int i, NClob nClob) throws SQLException {
+      active_statement.setNClob(i, nClob);
+    }
+
+    @Override
+    public void setClob(int i, Reader reader, long l) throws SQLException {
+      active_statement.setClob(i, reader, l);
+    }
+
+    @Override
+    public void setBlob(int i, InputStream inputStream, long l) throws SQLException {
+      active_statement.setBlob(i, inputStream, l);
+    }
+
+    @Override
+    public void setNClob(int i, Reader reader, long l) throws SQLException {
+      active_statement.setNClob(i, reader, l);
+    }
+
+    @Override
+    public void setSQLXML(int i, SQLXML sqlxml) throws SQLException {
+      active_statement.setSQLXML(i, sqlxml);
+    }
+
+    @Override
+    public void setObject(int i, Object o, int i1, int i2) throws SQLException {
+      active_statement.setObject(i, o, i1, i2);
+    }
+
+    @Override
+    public void setAsciiStream(int i, InputStream inputStream, long l) throws SQLException {
+      active_statement.setAsciiStream(i, inputStream, l);
+    }
+
+    @Override
+    public void setBinaryStream(int i, InputStream inputStream, long l) throws SQLException {
+      active_statement.setBinaryStream(i, inputStream, l);
+    }
+
+    @Override
+    public void setCharacterStream(int i, Reader reader, long l) throws SQLException {
+      active_statement.setCharacterStream(i, reader, l);
+    }
+
+    @Override
+    public void setAsciiStream(int i, InputStream inputStream) throws SQLException {
+      active_statement.setAsciiStream(i, inputStream);
+    }
+
+    @Override
+    public void setBinaryStream(int i, InputStream inputStream) throws SQLException {
+      active_statement.setBinaryStream(i, inputStream);
+    }
+
+    @Override
+    public void setCharacterStream(int i, Reader reader) throws SQLException {
+      active_statement.setCharacterStream(i, reader);
+    }
+
+    @Override
+    public void setNCharacterStream(int i, Reader reader) throws SQLException {
+      active_statement.setNCharacterStream(i, reader);
+    }
+
+    @Override
+    public void setClob(int i, Reader reader) throws SQLException {
+      active_statement.setClob(i, reader);
+    }
+
+    @Override
+    public void setBlob(int i, InputStream inputStream) throws SQLException {
+      active_statement.setBlob(i, inputStream);
+    }
+
+    @Override
+    public void setNClob(int i, Reader reader) throws SQLException {
+      active_statement.setNClob(i, reader);
+    }
+
+    @Override
+    public void setObject(int i, Object o, SQLType sqlType, int i1) throws SQLException {
+      active_statement.setObject(i, o, sqlType, i1);
+    }
+
+    @Override
+    public void setObject(int i, Object o, SQLType sqlType) throws SQLException {
+      active_statement.setObject(i, o, sqlType);
+    }
+
+    @Override
+    public long executeLargeUpdate() throws SQLException {
+      return active_statement.executeLargeUpdate();
+    }
+
+    @Override
+    public ResultSet executeQuery(String s) throws SQLException {
+      return active_statement.executeQuery(s);
+    }
+
+    @Override
+    public int executeUpdate(String s) throws SQLException {
+      return active_statement.executeUpdate(s);
+    }
+
+    @Override
+    public void close() throws SQLException {
+      active_statement.close();
+    }
+
+    @Override
+    public int getMaxFieldSize() throws SQLException {
+      return active_statement.getMaxFieldSize();
+    }
+
+    @Override
+    public void setMaxFieldSize(int i) throws SQLException {
+      active_statement.setMaxFieldSize(i);
+    }
+
+    @Override
+    public int getMaxRows() throws SQLException {
+      return active_statement.getMaxRows();
+    }
+
+    @Override
+    public void setMaxRows(int i) throws SQLException {
+      active_statement.setMaxRows(i);
+    }
+
+    @Override
+    public void setEscapeProcessing(boolean b) throws SQLException {
+      active_statement.setEscapeProcessing(b);
+    }
+
+    @Override
+    public int getQueryTimeout() throws SQLException {
+      return active_statement.getQueryTimeout();
+    }
+
+    @Override
+    public void setQueryTimeout(int i) throws SQLException {
+      active_statement.setQueryTimeout(i);
+    }
+
+    @Override
+    public void cancel() throws SQLException {
+      active_statement.cancel();
+    }
+
+    @Override
+    public SQLWarning getWarnings() throws SQLException {
+      return active_statement.getWarnings();
+    }
+
+    @Override
+    public void clearWarnings() throws SQLException {
+      active_statement.clearWarnings();
+    }
+
+    @Override
+    public void setCursorName(String s) throws SQLException {
+      active_statement.setCursorName(s);
+    }
+
+    @Override
+    public boolean execute(String s) throws SQLException {
+      return active_statement.execute(s);
+    }
+
+    @Override
+    public ResultSet getResultSet() throws SQLException {
+      return active_statement.getResultSet();
+    }
+
+    @Override
+    public int getUpdateCount() throws SQLException {
+      return active_statement.getUpdateCount();
+    }
+
+    @Override
+    public boolean getMoreResults() throws SQLException {
+      return active_statement.getMoreResults();
+    }
+
+    @Override
+    public void setFetchDirection(int i) throws SQLException {
+      active_statement.setFetchDirection(i);
+    }
+
+    @Override
+    public int getFetchDirection() throws SQLException {
+      return active_statement.getFetchDirection();
+    }
+
+    @Override
+    public void setFetchSize(int i) throws SQLException {
+      active_statement.setFetchSize(i);
+    }
+
+    @Override
+    public int getFetchSize() throws SQLException {
+      return active_statement.getFetchSize();
+    }
+
+    @Override
+    public int getResultSetConcurrency() throws SQLException {
+      return active_statement.getResultSetConcurrency();
+    }
+
+    @Override
+    public int getResultSetType() throws SQLException {
+      return active_statement.getResultSetType();
+    }
+
+    @Override
+    public void addBatch(String s) throws SQLException {
+      active_statement.addBatch(s);
+    }
+
+    @Override
+    public void clearBatch() throws SQLException {
+      active_statement.clearBatch();
+    }
+
+    @Override
+    public int[] executeBatch() throws SQLException {
+      return active_statement.executeBatch();
+    }
+
+    @Override
+    public Connection getConnection() throws SQLException {
+      return active_statement.getConnection();
+    }
+
+    @Override
+    public boolean getMoreResults(int i) throws SQLException {
+      return active_statement.getMoreResults(i);
+    }
+
+    @Override
+    public ResultSet getGeneratedKeys() throws SQLException {
+      return active_statement.getGeneratedKeys();
+    }
+
+    @Override
+    public int executeUpdate(String s, int i) throws SQLException {
+      return active_statement.executeUpdate(s, i);
+    }
+
+    @Override
+    public int executeUpdate(String s, int[] ints) throws SQLException {
+      return active_statement.executeUpdate(s, ints);
+    }
+
+    @Override
+    public int executeUpdate(String s, String[] strings) throws SQLException {
+      return active_statement.executeUpdate(s, strings);
+    }
+
+    @Override
+    public boolean execute(String s, int i) throws SQLException {
+      return active_statement.execute(s, i);
+    }
+
+    @Override
+    public boolean execute(String s, int[] ints) throws SQLException {
+      return active_statement.execute(s, ints);
+    }
+
+    @Override
+    public boolean execute(String s, String[] strings) throws SQLException {
+      return active_statement.execute(s, strings);
+    }
+
+    @Override
+    public int getResultSetHoldability() throws SQLException {
+      return active_statement.getResultSetHoldability();
+    }
+
+    @Override
+    public boolean isClosed() throws SQLException {
+      return active_statement.isClosed();
+    }
+
+    @Override
+    public void setPoolable(boolean b) throws SQLException {
+      active_statement.setPoolable(b);
+    }
+
+    @Override
+    public boolean isPoolable() throws SQLException {
+      return active_statement.isPoolable();
+    }
+
+    @Override
+    public void closeOnCompletion() throws SQLException {
+      active_statement.closeOnCompletion();
+    }
+
+    @Override
+    public boolean isCloseOnCompletion() throws SQLException {
+      return active_statement.isCloseOnCompletion();
+    }
+
+    @Override
+    public long getLargeUpdateCount() throws SQLException {
+      return active_statement.getLargeUpdateCount();
+    }
+
+    @Override
+    public void setLargeMaxRows(long l) throws SQLException {
+      active_statement.setLargeMaxRows(l);
+    }
+
+    @Override
+    public long getLargeMaxRows() throws SQLException {
+      return active_statement.getLargeMaxRows();
+    }
+
+    @Override
+    public long[] executeLargeBatch() throws SQLException {
+      return active_statement.executeLargeBatch();
+    }
+
+    @Override
+    public long executeLargeUpdate(String s) throws SQLException {
+      return active_statement.executeLargeUpdate(s);
+    }
+
+    @Override
+    public long executeLargeUpdate(String s, int i) throws SQLException {
+      return active_statement.executeLargeUpdate(s, i);
+    }
+
+    @Override
+    public long executeLargeUpdate(String s, int[] ints) throws SQLException {
+      return active_statement.executeLargeUpdate(s, ints);
+    }
+
+    @Override
+    public long executeLargeUpdate(String s, String[] strings) throws SQLException {
+      return active_statement.executeLargeUpdate(s, strings);
+    }
+
+    @Override
+    public <T> T unwrap(Class<T> aClass) throws SQLException {
+      return active_statement.unwrap(aClass);
+    }
+
+    @Override
+    public boolean isWrapperFor(Class<?> aClass) throws SQLException {
+      return active_statement.isWrapperFor(aClass);
+    }
   }
 
   private class PrivacyStatement implements Statement {

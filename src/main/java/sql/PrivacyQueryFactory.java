@@ -7,7 +7,6 @@ public class PrivacyQueryFactory {
         if (result == null){
             return null;
         }
-        System.out.println("result type is " + result.getKind());
         switch(result.getKind()) {
             case SELECT:
                 return new PrivacyQuerySelect(result);

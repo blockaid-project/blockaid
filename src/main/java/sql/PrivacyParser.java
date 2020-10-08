@@ -27,7 +27,6 @@ public class PrivacyParser implements Parser {
 
     public PrivacyParser(Properties info) throws PrivacyException
     {
-        System.out.println("in query context");
         this.context = new QueryContext(info);
     }
 

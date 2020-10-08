@@ -60,7 +60,6 @@ public class PlanExecutor {
     }
 
     public PrivacyMetaResultSet execute(ParserResult parserResult) throws Exception {
-        System.out.println("Executing inside Plan Executor");
         PrivacyJdbcStatement stmt = connection.server.getStatement(h);
 
         PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),

@@ -22,7 +22,7 @@ echo 'SERVER UP'
 read
 
 cd "$DIR"
-./bin/ycsb load jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp ./h2-latest.jar # -threads 12
+./bin/ycsb run jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp ./h2-latest.jar # -threads 12
 rv=$!
 
 echo 'DONE'
