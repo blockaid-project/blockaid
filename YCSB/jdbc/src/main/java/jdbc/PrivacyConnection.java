@@ -39,7 +39,7 @@ class PrivacyConnection implements Connection {
         .build(new CacheLoader<PrivacyQuery, Boolean>() {
           @Override
           public Boolean load(final PrivacyQuery query) throws Exception {
-            // todo
+            // todo?
             return false;
           }
         });
@@ -51,10 +51,17 @@ class PrivacyConnection implements Connection {
   private boolean checkQueryCompliance(PrivacyQuery query){
       try{
           // TODO maybe change from "direct if in cache and true, proxy otherwise"?
-          return policy_decision_cache.get(query);
+          boolean decision = policy_decision_cache.get(query);
+          System.out.println(query + ": " + decision);
+          return decision;
       } catch (ExecutionException e){
           throw propagate(e);
       }
+  }
+
+  private void setQueryCompliance(PrivacyQuery query, boolean compliance) {
+      this.policy_decision_cache.put(query, compliance);
+    System.out.println(query + " = " + compliance);
   }
 
   private boolean shouldApplyPolicy(SqlKind kind)
@@ -350,596 +357,649 @@ class PrivacyConnection implements Connection {
   private class PrivacyPreparedStatement implements PreparedStatement {
     private PreparedStatement proxy_statement;
     private PreparedStatement direct_statement;
-    private PreparedStatement active_statement;
-    private ParserResult parser_result;
+    private String query;
+    private String[] values;
 
     PrivacyPreparedStatement(String sql) throws SQLException {
-      // todo parameters?
-      this.parser_result = parser.parse(sql);
-      // big hack
-      String direct_sql = sql.replace("canonical.", "");
-      System.out.println(sql);
-      System.out.println(direct_sql);
-      System.out.println("foo");
-      if (!sql.contains("SELECT")) {
-        proxy_statement = null;
-        direct_statement = direct_connection.prepareStatement(direct_sql);
-        active_statement = direct_statement;
-      } else {
+      query = sql;
+      values = new String[sql.split("\\?").length];
+
+      if (shouldApplyPolicy(parser.parse(sql).getSqlNode().getKind())) {
+        // big hack
+        String direct_sql = sql.replace("canonical.", "");
         proxy_statement = proxy_connection.prepareStatement(sql);
         direct_statement = direct_connection.prepareStatement(direct_sql);
-        active_statement = proxy_statement;
+      } else {
+        proxy_statement = null;
+        direct_statement = direct_connection.prepareStatement(sql);
       }
+    }
+
+    private String prepare() {
+      StringBuilder preparedQuery = new StringBuilder();
+      String q = query;
+      for (String value : values) {
+        int i = q.indexOf("?");
+        preparedQuery.append(q.substring(0, i));
+        preparedQuery.append(value == null ? "null" : value);
+        q = q.substring(i + 1);
+      }
+      preparedQuery.append(q);
+      return preparedQuery.toString();
     }
 
     @Override
     public ResultSet executeQuery() throws SQLException {
-      boolean allowed = true;
-
-      if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (checkQueryCompliance(PrivacyQueryFactory.createPrivacyQuery(parser_result))) {
-          active_statement = direct_statement;
-        } else {
-          active_statement = proxy_statement;
+      PreparedStatement active_statement = direct_statement;
+      PrivacyQuery privacy_query = null;
+      if (proxy_statement != null) {
+        ParserResult parser_result = parser.parse(prepare());
+        privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result);
+        if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
+          if (checkQueryCompliance(privacy_query)) {
+            active_statement = direct_statement;
+          } else {
+            active_statement = proxy_statement;
+          }
         }
       }
 
       try {
         return active_statement.executeQuery();
       } catch (AvaticaSqlException e) {
-        if (e.getMessage().contains("Privacy compliance was not met")) {
-          allowed = false;
+        if (e.getMessage().contains("Privacy compliance was not met") && privacy_query != null) {
+          setQueryCompliance(privacy_query, false);
         }
         throw e;
-      } finally {
-        System.out.println("compliance: " + allowed); // todo
       }
     }
 
     @Override
     public int executeUpdate() throws SQLException {
-      return active_statement.executeUpdate();
+      return direct_statement.executeUpdate();
     }
 
     @Override
     public void setNull(int i, int i1) throws SQLException {
-      active_statement.setNull(i, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBoolean(int i, boolean b) throws SQLException {
-      active_statement.setBoolean(i, b);
+      if (proxy_statement != null) {
+        proxy_statement.setBoolean(i, b);
+      }
+      direct_statement.setBoolean(i, b);
+      values[i - 1] = Boolean.toString(b);
     }
 
     @Override
     public void setByte(int i, byte b) throws SQLException {
-      active_statement.setByte(i, b);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setShort(int i, short i1) throws SQLException {
-      active_statement.setShort(i, i1);
+      if (proxy_statement != null) {
+        proxy_statement.setShort(i, i1);
+      }
+      direct_statement.setShort(i, i1);
     }
 
     @Override
     public void setInt(int i, int i1) throws SQLException {
-      active_statement.setInt(i, i1);
+      if (proxy_statement != null) {
+        proxy_statement.setInt(i, i1);
+      }
+      direct_statement.setInt(i, i1);
+      values[i - 1] = Integer.toString(i1);
     }
 
     @Override
     public void setLong(int i, long l) throws SQLException {
-      active_statement.setLong(i, l);
+      if (proxy_statement != null) {
+        proxy_statement.setLong(i, l);
+      }
+      direct_statement.setLong(i, l);
+      values[i - 1] = Long.toString(l);
     }
 
     @Override
     public void setFloat(int i, float v) throws SQLException {
-      active_statement.setFloat(i, v);
+      if (proxy_statement != null) {
+        proxy_statement.setFloat(i, v);
+      }
+      direct_statement.setFloat(i, v);
+      values[i - 1] = Float.toString(v);
     }
 
     @Override
     public void setDouble(int i, double v) throws SQLException {
-      active_statement.setDouble(i, v);
+      if (proxy_statement != null) {
+        proxy_statement.setDouble(i, v);
+      }
+      direct_statement.setDouble(i, v);
+      values[i - 1] = Double.toString(v);
     }
 
     @Override
     public void setBigDecimal(int i, BigDecimal bigDecimal) throws SQLException {
-      active_statement.setBigDecimal(i, bigDecimal);
+      if (proxy_statement != null) {
+        proxy_statement.setBigDecimal(i, bigDecimal);
+      }
+      direct_statement.setBigDecimal(i, bigDecimal);
+      values[i - 1] = bigDecimal.toString();
     }
 
     @Override
     public void setString(int i, String s) throws SQLException {
-      active_statement.setString(i, s);
+      if (proxy_statement != null) {
+        proxy_statement.setString(i, s);
+      }
+      direct_statement.setString(i, s);
+      // not really properly escaped todo fix
+      values[i - 1] = "'" + s.replace("'", "''") + "'";
     }
 
     @Override
     public void setBytes(int i, byte[] bytes) throws SQLException {
-      active_statement.setBytes(i, bytes);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setDate(int i, Date date) throws SQLException {
-      active_statement.setDate(i, date);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setTime(int i, Time time) throws SQLException {
-      active_statement.setTime(i, time);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setTimestamp(int i, Timestamp timestamp) throws SQLException {
-      active_statement.setTimestamp(i, timestamp);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setAsciiStream(int i, InputStream inputStream, int i1) throws SQLException {
-      active_statement.setAsciiStream(i, inputStream, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     @Deprecated
     public void setUnicodeStream(int i, InputStream inputStream, int i1) throws SQLException {
-      active_statement.setUnicodeStream(i, inputStream, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBinaryStream(int i, InputStream inputStream, int i1) throws SQLException {
-      active_statement.setBinaryStream(i, inputStream, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void clearParameters() throws SQLException {
-      active_statement.clearParameters();
+      proxy_statement.clearParameters();
+      direct_statement.clearParameters();
+      for (int i = 0; i < values.length; ++i) {
+          values[i] = null;
+      }
     }
 
     @Override
     public void setObject(int i, Object o, int i1) throws SQLException {
-      active_statement.setObject(i, o, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setObject(int i, Object o) throws SQLException {
-      active_statement.setObject(i, o);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean execute() throws SQLException {
-      return active_statement.execute();
+      return direct_statement.execute();
     }
 
     @Override
     public void addBatch() throws SQLException {
-      active_statement.addBatch();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setCharacterStream(int i, Reader reader, int i1) throws SQLException {
-      active_statement.setCharacterStream(i, reader, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setRef(int i, Ref ref) throws SQLException {
-      active_statement.setRef(i, ref);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBlob(int i, Blob blob) throws SQLException {
-      active_statement.setBlob(i, blob);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setClob(int i, Clob clob) throws SQLException {
-      active_statement.setClob(i, clob);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setArray(int i, Array array) throws SQLException {
-      active_statement.setArray(i, array);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
-      return active_statement.getMetaData();
+      return direct_statement.getMetaData();
     }
 
     @Override
     public void setDate(int i, Date date, Calendar calendar) throws SQLException {
-      active_statement.setDate(i, date, calendar);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setTime(int i, Time time, Calendar calendar) throws SQLException {
-      active_statement.setTime(i, time, calendar);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setTimestamp(int i, Timestamp timestamp, Calendar calendar) throws SQLException {
-      active_statement.setTimestamp(i, timestamp, calendar);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNull(int i, int i1, String s) throws SQLException {
-      active_statement.setNull(i, i1, s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setURL(int i, URL url) throws SQLException {
-      active_statement.setURL(i, url);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public ParameterMetaData getParameterMetaData() throws SQLException {
-      return active_statement.getParameterMetaData();
+      return direct_statement.getParameterMetaData();
     }
 
     @Override
     public void setRowId(int i, RowId rowId) throws SQLException {
-      active_statement.setRowId(i, rowId);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNString(int i, String s) throws SQLException {
-      active_statement.setNString(i, s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNCharacterStream(int i, Reader reader, long l) throws SQLException {
-      active_statement.setNCharacterStream(i, reader, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNClob(int i, NClob nClob) throws SQLException {
-      active_statement.setNClob(i, nClob);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setClob(int i, Reader reader, long l) throws SQLException {
-      active_statement.setClob(i, reader, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBlob(int i, InputStream inputStream, long l) throws SQLException {
-      active_statement.setBlob(i, inputStream, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNClob(int i, Reader reader, long l) throws SQLException {
-      active_statement.setNClob(i, reader, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setSQLXML(int i, SQLXML sqlxml) throws SQLException {
-      active_statement.setSQLXML(i, sqlxml);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setObject(int i, Object o, int i1, int i2) throws SQLException {
-      active_statement.setObject(i, o, i1, i2);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setAsciiStream(int i, InputStream inputStream, long l) throws SQLException {
-      active_statement.setAsciiStream(i, inputStream, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBinaryStream(int i, InputStream inputStream, long l) throws SQLException {
-      active_statement.setBinaryStream(i, inputStream, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setCharacterStream(int i, Reader reader, long l) throws SQLException {
-      active_statement.setCharacterStream(i, reader, l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setAsciiStream(int i, InputStream inputStream) throws SQLException {
-      active_statement.setAsciiStream(i, inputStream);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBinaryStream(int i, InputStream inputStream) throws SQLException {
-      active_statement.setBinaryStream(i, inputStream);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setCharacterStream(int i, Reader reader) throws SQLException {
-      active_statement.setCharacterStream(i, reader);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNCharacterStream(int i, Reader reader) throws SQLException {
-      active_statement.setNCharacterStream(i, reader);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setClob(int i, Reader reader) throws SQLException {
-      active_statement.setClob(i, reader);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setBlob(int i, InputStream inputStream) throws SQLException {
-      active_statement.setBlob(i, inputStream);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setNClob(int i, Reader reader) throws SQLException {
-      active_statement.setNClob(i, reader);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setObject(int i, Object o, SQLType sqlType, int i1) throws SQLException {
-      active_statement.setObject(i, o, sqlType, i1);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setObject(int i, Object o, SQLType sqlType) throws SQLException {
-      active_statement.setObject(i, o, sqlType);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long executeLargeUpdate() throws SQLException {
-      return active_statement.executeLargeUpdate();
+      return direct_statement.executeLargeUpdate();
     }
 
     @Override
     public ResultSet executeQuery(String s) throws SQLException {
-      return active_statement.executeQuery(s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int executeUpdate(String s) throws SQLException {
-      return active_statement.executeUpdate(s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void close() throws SQLException {
-      active_statement.close();
+      proxy_statement.close();
+      direct_statement.close();
     }
 
     @Override
     public int getMaxFieldSize() throws SQLException {
-      return active_statement.getMaxFieldSize();
+      return direct_statement.getMaxFieldSize();
     }
 
     @Override
     public void setMaxFieldSize(int i) throws SQLException {
-      active_statement.setMaxFieldSize(i);
+      proxy_statement.setMaxFieldSize(i);
+      direct_statement.setMaxFieldSize(i);
     }
 
     @Override
     public int getMaxRows() throws SQLException {
-      return active_statement.getMaxRows();
+      return direct_statement.getMaxRows();
     }
 
     @Override
     public void setMaxRows(int i) throws SQLException {
-      active_statement.setMaxRows(i);
+      proxy_statement.setMaxRows(i);
+      direct_statement.setMaxRows(i);
     }
 
     @Override
     public void setEscapeProcessing(boolean b) throws SQLException {
-      active_statement.setEscapeProcessing(b);
+      proxy_statement.setEscapeProcessing(b);
+      direct_statement.setEscapeProcessing(b);
     }
 
     @Override
     public int getQueryTimeout() throws SQLException {
-      return active_statement.getQueryTimeout();
+      return direct_statement.getQueryTimeout();
     }
 
     @Override
     public void setQueryTimeout(int i) throws SQLException {
-      active_statement.setQueryTimeout(i);
+      proxy_statement.setQueryTimeout(i);
+      direct_statement.setQueryTimeout(i);
     }
 
     @Override
     public void cancel() throws SQLException {
-      active_statement.cancel();
+      proxy_statement.cancel();
+      direct_statement.cancel();
     }
 
     @Override
     public SQLWarning getWarnings() throws SQLException {
-      return active_statement.getWarnings();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void clearWarnings() throws SQLException {
-      active_statement.clearWarnings();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setCursorName(String s) throws SQLException {
-      active_statement.setCursorName(s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean execute(String s) throws SQLException {
-      return active_statement.execute(s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public ResultSet getResultSet() throws SQLException {
-      return active_statement.getResultSet();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int getUpdateCount() throws SQLException {
-      return active_statement.getUpdateCount();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean getMoreResults() throws SQLException {
-      return active_statement.getMoreResults();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setFetchDirection(int i) throws SQLException {
-      active_statement.setFetchDirection(i);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int getFetchDirection() throws SQLException {
-      return active_statement.getFetchDirection();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setFetchSize(int i) throws SQLException {
-      active_statement.setFetchSize(i);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int getFetchSize() throws SQLException {
-      return active_statement.getFetchSize();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int getResultSetConcurrency() throws SQLException {
-      return active_statement.getResultSetConcurrency();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int getResultSetType() throws SQLException {
-      return active_statement.getResultSetType();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void addBatch(String s) throws SQLException {
-      active_statement.addBatch(s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void clearBatch() throws SQLException {
-      active_statement.clearBatch();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int[] executeBatch() throws SQLException {
-      return active_statement.executeBatch();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public Connection getConnection() throws SQLException {
-      return active_statement.getConnection();
+      return PrivacyConnection.this;
     }
 
     @Override
     public boolean getMoreResults(int i) throws SQLException {
-      return active_statement.getMoreResults(i);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public ResultSet getGeneratedKeys() throws SQLException {
-      return active_statement.getGeneratedKeys();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int executeUpdate(String s, int i) throws SQLException {
-      return active_statement.executeUpdate(s, i);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int executeUpdate(String s, int[] ints) throws SQLException {
-      return active_statement.executeUpdate(s, ints);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int executeUpdate(String s, String[] strings) throws SQLException {
-      return active_statement.executeUpdate(s, strings);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean execute(String s, int i) throws SQLException {
-      return active_statement.execute(s, i);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean execute(String s, int[] ints) throws SQLException {
-      return active_statement.execute(s, ints);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean execute(String s, String[] strings) throws SQLException {
-      return active_statement.execute(s, strings);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public int getResultSetHoldability() throws SQLException {
-      return active_statement.getResultSetHoldability();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean isClosed() throws SQLException {
-      return active_statement.isClosed();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setPoolable(boolean b) throws SQLException {
-      active_statement.setPoolable(b);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean isPoolable() throws SQLException {
-      return active_statement.isPoolable();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void closeOnCompletion() throws SQLException {
-      active_statement.closeOnCompletion();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean isCloseOnCompletion() throws SQLException {
-      return active_statement.isCloseOnCompletion();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long getLargeUpdateCount() throws SQLException {
-      return active_statement.getLargeUpdateCount();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public void setLargeMaxRows(long l) throws SQLException {
-      active_statement.setLargeMaxRows(l);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long getLargeMaxRows() throws SQLException {
-      return active_statement.getLargeMaxRows();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long[] executeLargeBatch() throws SQLException {
-      return active_statement.executeLargeBatch();
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long executeLargeUpdate(String s) throws SQLException {
-      return active_statement.executeLargeUpdate(s);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long executeLargeUpdate(String s, int i) throws SQLException {
-      return active_statement.executeLargeUpdate(s, i);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long executeLargeUpdate(String s, int[] ints) throws SQLException {
-      return active_statement.executeLargeUpdate(s, ints);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public long executeLargeUpdate(String s, String[] strings) throws SQLException {
-      return active_statement.executeLargeUpdate(s, strings);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public <T> T unwrap(Class<T> aClass) throws SQLException {
-      return active_statement.unwrap(aClass);
+      throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean isWrapperFor(Class<?> aClass) throws SQLException {
-      return active_statement.isWrapperFor(aClass);
+      throw new UnsupportedOperationException();
     }
   }
 

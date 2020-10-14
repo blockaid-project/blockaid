@@ -953,6 +953,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                         (PreparedStatement) statementInfo.statement;
 
                 String pStatement_str = preparedStatement.toString();
+                System.out.println(pStatement_str);
                 ParserResult result = getConnection().parse(pStatement_str
                         .substring(pStatement_str.indexOf( ": " ) + 2 ));
 
