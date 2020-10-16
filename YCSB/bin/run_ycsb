@@ -14,6 +14,7 @@ WORKLOAD="$(realpath "$1")"
 CONF="$2"
 
 cd "$DIR/.."
+mvn -DskipTests package
 mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
 MAVEN_OPTS='-server' mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
 bg_pid=$!

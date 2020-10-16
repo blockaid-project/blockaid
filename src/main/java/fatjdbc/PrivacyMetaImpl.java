@@ -5,6 +5,7 @@ import execution.PrivacyExecutor;
 import execution.PrivacyExecutorFactory;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.avatica.*;
+import org.apache.calcite.avatica.proto.Common;
 import org.apache.calcite.avatica.remote.AvaticaRuntimeException;
 import org.apache.calcite.avatica.remote.TypedValue;
 import org.apache.calcite.jdbc.CalcitePrepare;
@@ -891,25 +892,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                 "TABLE_TYPE");
     }
 
-//  @Override
-//  public Iterable<Object> createIterable(StatementHandle handle, QueryState state,
-//      Signature signature, List<TypedValue> parameterValues, Frame firstFrame) {
-//    // Drop QueryState
-//    return _createIterable(handle, signature, parameterValues, firstFrame);
-//  }
-//
-//  Iterable<Object> _createIterable(StatementHandle handle,
-//      Signature signature, List<TypedValue> parameterValues, Frame firstFrame) {
-//    try {
-//      //noinspection unchecked
-//      final CalcitePrepare.CalciteSignature<Object> calciteSignature =
-//          (CalcitePrepare.CalciteSignature<Object>) signature;
-//      return getConnection().enumerable(handle, calciteSignature);
-//    } catch (SQLException e) {
-//      throw new RuntimeException(e.getMessage());
-//    }
-//  }
-
     @Override
     public Frame fetch(StatementHandle h, long offset, int fetchMaxRowCount) {
         final PrivacyConnectionImpl calciteConnection = getConnection();
@@ -932,14 +914,27 @@ public class PrivacyMetaImpl extends MetaImpl {
         return new Meta.Frame(offset, done, (List<Object>) (List) rows);
     }
 
+
+    private String prepareQuery(String query, List<TypedValue> values) {
+        StringBuilder preparedQuery = new StringBuilder();
+        String q = query;
+        for (TypedValue value : values) {
+            int i = q.indexOf("?");
+            preparedQuery.append(q.substring(0, i));
+            assert value.type.equals("STRING");
+            // not really properly escaped todo fix
+            String v = "'" + ((String) value.value).replace("'", "''") + "'";
+
+            preparedQuery.append(v);
+            q = q.substring(i + 1);
+        }
+        preparedQuery.append(q);
+        return preparedQuery.toString();
+    }
+
     @Override
-    // Query not checked against policy because statements executed here have already been
-    // checked for compliance in the prepare part of the execution
     public ExecuteResult execute(StatementHandle h,
                                  List<TypedValue> parameterValues, long maxRowCount) {
-//        long[] times = new long[4];
-//        times[0] = System.nanoTime();
-//        try {
             try {
                 if (MetaImpl.checkParameterValueHasNull(parameterValues)) {
                     throw new SQLException("exception while executing query: unbound parameter");
@@ -952,10 +947,8 @@ public class PrivacyMetaImpl extends MetaImpl {
                 final PreparedStatement preparedStatement =
                         (PreparedStatement) statementInfo.statement;
 
-                String pStatement_str = preparedStatement.toString();
-                System.out.println(pStatement_str);
-                ParserResult result = getConnection().parse(pStatement_str
-                        .substring(pStatement_str.indexOf( ": " ) + 2 ));
+                String pStatement_str = prepareQuery(h.signature.sql, parameterValues);
+                ParserResult result = getConnection().parse(pStatement_str);
 
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
@@ -971,9 +964,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                     }
                 }
 
-//                times[1] = System.nanoTime();
                 if (preparedStatement.execute()) {
-//                    times[2] = System.nanoTime();
                     final Meta.Frame frame;
                     final Signature signature2;
                     if (preparedStatement.isWrapperFor(AvaticaPreparedStatement.class)) {
@@ -995,7 +986,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                                         statementInfo.resultSet, maxRowCount, signature2));
                     }
                 } else {
-//                    times[2] = System.nanoTime();
                     resultSets.add(
                             PrivacyMetaResultSet.count(
                                     h.connectionId, h.id, preparedStatement.getUpdateCount()));
@@ -1016,33 +1006,6 @@ public class PrivacyMetaImpl extends MetaImpl {
             throws NoSuchStatementException {
         return execute(statementHandle, list, (long)i);
     }
-
-//  @Override
-//  public ExecuteResult execute(StatementHandle h,
-//      List<TypedValue> parameterValues, long maxRowCount) {
-//    final QuarkConnectionImpl calciteConnection = getConnection();
-//    QuarkJdbcStatement stmt = calciteConnection.server.getStatement(h);
-//    final Signature signature = stmt.getSignature();
-//
-//    MetaResultSet metaResultSet;
-//    if (signature.statementType.canUpdate()) {
-//      final Iterable<Object> iterable =
-//          _createIterable(h, signature, parameterValues, null);
-//      final Iterator<Object> iterator = iterable.iterator();
-//      stmt.setResultSet(iterator);
-//      metaResultSet = MetaResultSet.count(h.connectionId, h.id,
-//          ((Number) iterator.next()).intValue());
-//    } else {
-//      // Don't populate the first frame.
-//      // It's not worth saving a round-trip, since we're local.
-//      final Meta.Frame frame =
-//          new Meta.Frame(0, false, Collections.emptyList());
-//      metaResultSet =
-//          MetaResultSet.create(h.connectionId, h.id, false, signature, frame);
-//    }
-//
-//    return new ExecuteResult(ImmutableList.of(metaResultSet));
-//  }
 
     public boolean syncResults(StatementHandle h, QueryState state, long offset)
             throws NoSuchStatementException {

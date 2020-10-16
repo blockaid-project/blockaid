@@ -405,7 +405,11 @@ class PrivacyConnection implements Connection {
       }
 
       try {
-        return active_statement.executeQuery();
+        ResultSet set = active_statement.executeQuery();
+        if (privacy_query != null) {
+          setQueryCompliance(privacy_query, true);
+        }
+        return set;
       } catch (AvaticaSqlException e) {
         if (e.getMessage().contains("Privacy compliance was not met") && privacy_query != null) {
           setQueryCompliance(privacy_query, false);
