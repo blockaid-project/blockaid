@@ -23,7 +23,8 @@ import site.ycsb.db.StatementType;
  * A default flavor for relational databases.
  */
 public class PrivacyProxyDBFlavor extends DBFlavor {
-  private static final String schema = "canonical.";
+//  private static final String schema = "canonical.";
+  private static final String schema = "";
   private static final String db = "public.";
 
   public PrivacyProxyDBFlavor() {

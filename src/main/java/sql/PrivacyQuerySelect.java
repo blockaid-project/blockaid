@@ -4,15 +4,19 @@ import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlSelect;
 
-public class PrivacyQuerySelect extends PrivacyQuery{
-    private ParserResult parsedSql;
+import java.util.Objects;
+
+public class PrivacyQuerySelect extends PrivacyQuery {
     private SqlNode where;
     private SqlNode from;
     private SqlNodeList selectAttributes;
 
-    public PrivacyQuerySelect(ParserResult parsedSql){
-        super(parsedSql);
-        this.parsedSql = parsedSql;
+    public PrivacyQuerySelect(ParserResult parsedSql) {
+        this(parsedSql, new Object[0]);
+    }
+
+    public PrivacyQuerySelect(ParserResult parsedSql, Object[] parameters) {
+        super(parsedSql, parameters);
         reduceQuery();
     }
 
@@ -30,26 +34,18 @@ public class PrivacyQuerySelect extends PrivacyQuery{
     public SqlNodeList getSelectAttributes() {return selectAttributes;}
 
     @Override
-    public int hashCode() {
-        int result = 1;
-        if (where != null) {
-            result = 31 * result + where.toString().hashCode();
-        }
-        if (from != null) {
-            result = 31 * result + from.toString().hashCode();
-        }
-        if (selectAttributes != null) {
-            result = 31 * result + selectAttributes.toString().hashCode();
-        }
-        return result;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        PrivacyQuerySelect that = (PrivacyQuerySelect) o;
+        return Objects.equals(where, that.where) &&
+                Objects.equals(from, that.from) &&
+                Objects.equals(selectAttributes, that.selectAttributes);
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (obj instanceof PrivacyQuerySelect) {
-            PrivacyQuerySelect other = (PrivacyQuerySelect) obj;
-            return hashCode() == other.hashCode();
-        }
-        return false;
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), where, from, selectAttributes);
     }
 }
