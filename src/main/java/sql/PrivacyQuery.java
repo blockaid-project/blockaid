@@ -2,16 +2,15 @@ package sql;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Set;
 
 public abstract class PrivacyQuery {
-
     protected ParserResult parsedSql;
     protected Object[] parameters;
 
     public PrivacyQuery(ParserResult parsedSql)
     {
-        this.parsedSql = parsedSql;
-        this.parameters = new Object[0];
+        this(parsedSql, new Object[0]);
     }
 
     public PrivacyQuery(ParserResult parsedSql, Object[] parameters)
@@ -40,6 +39,6 @@ public abstract class PrivacyQuery {
     }
 
     abstract public void reduceQuery();
-
+    abstract public Set<String> getProjectColumns();
 }
 

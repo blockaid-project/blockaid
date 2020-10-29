@@ -156,17 +156,17 @@ public class PrivacyMetaImpl extends MetaImpl {
         String[] sqlpolicy;
         switch(token != null ? token : "no_policy_set"){
             case "controller":
-                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+                this.policy_list.add(new Policy(info, "select * from blah"));
+                this.policy_list.add(new Policy(info, "select a, b from blah"));
                 break;
             case "processor":
-                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+                this.policy_list.add(new Policy(info, "select * from blah"));
+                this.policy_list.add(new Policy(info, "select a, b from blah"));
                 break;
             default:
-                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+                this.policy_list.add(new Policy(info, "select * from blah"));
+                this.policy_list.add(new Policy(info, "select a, b from blah"));
         }
-        Policy p1 = new Policy(info, sqlpolicy);
-        if (p1 != null)
-            this.policy_list.add(p1);
     }
 
     public QueryChecker getQueryChecker()

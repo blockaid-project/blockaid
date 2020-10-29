@@ -8,16 +8,19 @@ import org.apache.calcite.sql.parser.SqlParser;
 import sql.PrivacyException;
 import sql.QueryContext;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
 public class Policy {
     private QueryContext context;
-    private String[] sqlPolicy;
-    public SqlNode[] parsedSql;
-    public Set<String> thetaRelations;
+    private String sqlPolicy;
+    private SqlNode parsedSql;
+    private Set<String> projectColumns;
+    private Set<String> thetaRelations;
 
-    public Policy(Properties info, String[] sqlPolicy){
+    public Policy(Properties info, String sqlPolicy){
         this.sqlPolicy = sqlPolicy;
         try {
             this.context = new QueryContext(info);
@@ -26,10 +29,12 @@ public class Policy {
             e.printStackTrace();
         }
 
-        parsedSql = new SqlNode[sqlPolicy.length];
-        for(int i = 0; i < sqlPolicy.length; i++){
-            parsedSql[i] = parseSql(sqlPolicy[i]);
-        }
+        parsedSql = parseSql(sqlPolicy);
+
+        // todo
+
+        projectColumns = new HashSet<>();
+        thetaRelations = new HashSet<>();
     }
 
     public boolean checkPolicySchema(){
@@ -52,5 +57,17 @@ public class Policy {
         }
 
         return sqlNode;
+    }
+
+    public Set<String> getProjectColumns() {
+        return projectColumns;
+    }
+
+    public Set<String> getThetaRelations() {
+        return thetaRelations;
+    }
+
+    public Object getPredicate() {
+        throw new UnsupportedOperationException("todo");
     }
 }

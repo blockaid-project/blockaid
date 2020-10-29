@@ -4,7 +4,9 @@ import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlSelect;
 
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 
 public class PrivacyQuerySelect extends PrivacyQuery {
     private SqlNode where;
@@ -20,6 +22,12 @@ public class PrivacyQuerySelect extends PrivacyQuery {
         reduceQuery();
     }
 
+    @Override
+    public Set<String> getProjectColumns() {
+        return new HashSet<>();
+    }
+
+    @Override
     public void reduceQuery(){
         SqlSelect select = (SqlSelect) parsedSql.sqlNode;
         where = select.getWhere();

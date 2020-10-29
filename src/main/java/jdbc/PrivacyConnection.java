@@ -46,16 +46,17 @@ class PrivacyConnection implements Connection {
     String[] sqlpolicy;
     switch(token != null ? token : "no_policy_set"){
       case "controller":
-        sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+        this.policy_list.add(new Policy(info, "select * from blah"));
+        this.policy_list.add(new Policy(info, "select a, b from blah"));
         break;
       case "processor":
-        sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+        this.policy_list.add(new Policy(info, "select * from blah"));
+        this.policy_list.add(new Policy(info, "select a, b from blah"));
         break;
       default:
-        sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+        this.policy_list.add(new Policy(info, "select * from blah"));
+        this.policy_list.add(new Policy(info, "select a, b from blah"));
     }
-
-    this.policy_list.add(new Policy(info, sqlpolicy));
   }
 
   private boolean shouldApplyPolicy(SqlKind kind) {
