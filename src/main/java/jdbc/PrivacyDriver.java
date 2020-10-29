@@ -2,6 +2,11 @@ package jdbc;
 
 import org.apache.calcite.avatica.DriverVersion;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.Properties;
+
 /**
  * Privacy Driver for thin client
  */
@@ -31,5 +36,21 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
     @Override
     protected String getConnectStringPrefix() {
         return CONNECT_STRING_PREFIX;
+    }
+
+    @Override
+    public Connection connect(String url, Properties info) throws SQLException {
+        if (!this.acceptsURL(url)) {
+            return null;
+        }
+
+        String[] urls = url.split(",", 3);
+        String direct_schema_url = urls[1];
+        String direct_access_url = urls[2];
+
+        Connection direct_connection = DriverManager.getConnection(direct_access_url, info.getProperty("user"), info.getProperty("password"));
+        Properties info_ = new Properties(info);
+        info_.setProperty("url", direct_schema_url);
+        return new PrivacyConnection(direct_connection, info_);
     }
 }

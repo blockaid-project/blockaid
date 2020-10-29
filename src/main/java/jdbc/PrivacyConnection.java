@@ -25,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 
 class PrivacyConnection implements Connection {
   private Connection direct_connection;
-  private HashMap<Policy, LoadingCache<PrivacyQuery ,Boolean>> policy_decision_cache;
   private Parser parser;
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
@@ -37,22 +36,9 @@ class PrivacyConnection implements Connection {
     this.parser = new ParserFactory(info).getParser(info);
 
     this.policy_list = new ArrayList<>();
-    set_policy(info);
     this.query_checker = new QueryChecker(this.policy_list);
-    this.policy_decision_cache = new HashMap<>();
-    for (Policy p : this.policy_list){
-      // Just some random settings
-      LoadingCache<PrivacyQuery, Boolean> cache = CacheBuilder.newBuilder()
-          .expireAfterAccess(100000, TimeUnit.SECONDS)
-          .maximumSize(50)
-          .build(new CacheLoader<PrivacyQuery, Boolean>() {
-            @Override
-            public Boolean load(final PrivacyQuery query) throws Exception {
-              return query_checker.check_policy(query, p);
-            }
-          });
-      this.policy_decision_cache.put(p, cache);
-    }
+
+    set_policy(info);
   }
 
   private void set_policy(Properties info) {
@@ -68,43 +54,12 @@ class PrivacyConnection implements Connection {
       default:
         sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
     }
-    Policy p1 = new Policy(info, sqlpolicy);
-    if (p1 != null)
-      this.policy_list.add(p1);
+
+    this.policy_list.add(new Policy(info, sqlpolicy));
   }
 
-  private boolean checkQueryCompliance(PrivacyQuery query){
-    for(Map.Entry<Policy, LoadingCache<PrivacyQuery, Boolean>> policy_cache: policy_decision_cache.entrySet()){
-      boolean compliance;
-      try{
-        compliance = policy_cache.getValue().get(query);
-        if (!compliance) {
-          return false;
-        }
-      } catch (ExecutionException e){
-        throw propagate(e);
-      }
-    }
-    return true;
-  }
-
-  private boolean shouldApplyPolicy(SqlKind kind)
-  {
-    if (kind.equals(kind.SELECT)){
-      return true;
-    }
-    else
-      return false;
-  }
-
-  private RuntimeException propagate(Throwable e) {
-      if (e instanceof RuntimeException) {
-          throw (RuntimeException) e;
-      } else if (e instanceof Error) {
-          throw (Error) e;
-      } else {
-          throw new RuntimeException(e.getMessage());
-      }
+  private boolean shouldApplyPolicy(SqlKind kind) {
+    return kind.equals(SqlKind.SELECT);
   }
 
   @Override
@@ -396,7 +351,7 @@ class PrivacyConnection implements Connection {
     public ResultSet executeQuery() throws SQLException {
       PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, values);
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (!checkQueryCompliance(privacy_query)) {
+        if (!query_checker.check_policy(privacy_query)) {
             throw new SQLException("Privacy compliance was not met");
         }
       }

@@ -9,11 +9,13 @@ import sql.PrivacyException;
 import sql.QueryContext;
 
 import java.util.Properties;
+import java.util.Set;
 
 public class Policy {
     private QueryContext context;
     private String[] sqlPolicy;
-    private SqlNode[] parsedSql;
+    public SqlNode[] parsedSql;
+    public Set<String> thetaRelations;
 
     public Policy(Properties info, String[] sqlPolicy){
         this.sqlPolicy = sqlPolicy;

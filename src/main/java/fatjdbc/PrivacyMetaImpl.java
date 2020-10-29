@@ -85,7 +85,6 @@ public class PrivacyMetaImpl extends MetaImpl {
     private final Properties info;
     private final Cache<String, Connection> connectionCache;
     private final Cache<Integer, StatementInfo> statementCache;
-    private final HashMap<Policy, LoadingCache<PrivacyQuery, Boolean>> policyCache;
     private final QueryChecker queryChecker;
     private ArrayList<Policy> policy_list;
 
@@ -147,11 +146,9 @@ public class PrivacyMetaImpl extends MetaImpl {
                 .removalListener(new StatementExpiryHandler())
                 .build();
 
-        this.policyCache = new HashMap<>();
         this.policy_list = new ArrayList<>();
         set_policy(info);
         this.queryChecker = new QueryChecker(this.policy_list);
-        initializePolicyCache();
     }
 
     private void set_policy(Properties info) {
@@ -172,28 +169,10 @@ public class PrivacyMetaImpl extends MetaImpl {
             this.policy_list.add(p1);
     }
 
-    // Initialize each policy with it's own cache.
-    private void initializePolicyCache() {
-        for (Policy p : this.policy_list){
-            // Just some random settings
-            LoadingCache<PrivacyQuery, Boolean> cache = CacheBuilder.newBuilder()
-                    .expireAfterAccess(100000, TimeUnit.SECONDS)
-                    .maximumSize(50)
-                    .build(new CacheLoader<PrivacyQuery, Boolean>() {
-                        @Override
-                        public Boolean load(final PrivacyQuery query) throws Exception {
-                            return getQueryChecker().check_policy(query, p);
-                        }
-                    });
-            this.policyCache.put(p, cache);
-        }
-    }
-
     public QueryChecker getQueryChecker()
     {
         return this.queryChecker;
     }
-
 
     static <T extends Named> Predicate1<T> namedMatcher(final Pat pattern) {
         if (pattern.s == null || pattern.s.equals("%")) {
@@ -367,7 +346,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
             if (shouldApplyPolicy(parserResult.getSqlNode().getKind())) {
                 PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(parserResult);
-                if (checkQueryCompliance(query) == false) {
+                if (!queryChecker.check_policy(query)) {
                     System.out.println("Query {} does not comply".format(sql));
                     throw new PrivacyException("Policy did not pass");
                 }
@@ -443,7 +422,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (checkQueryCompliance(query) == false) {
+                    if (!queryChecker.check_policy(query)) {
                         throw new PrivacyException("Privacy compliance was not met");
                     }
                 }
@@ -460,23 +439,6 @@ public class PrivacyMetaImpl extends MetaImpl {
 
     }
 
-    public boolean checkQueryCompliance(PrivacyQuery query){
-        for(Map.Entry<Policy, LoadingCache<PrivacyQuery, Boolean>> policy_cache: policyCache.entrySet()){
-            boolean compliance;
-            try{
-                compliance = policy_cache.getValue().get(query);
-                if (!compliance) {
-                    return Boolean.FALSE;
-                }
-            } catch (ExecutionException e){
-                throw propagate(e);
-            }
-        }
-        return Boolean.TRUE;
-//        return false;
-    }
-
-    @Override
     public ExecuteResult prepareAndExecute(StatementHandle statementHandle, String sql,
                                            long maxRowCount,
                                            int maxRowsInFirstFrame,
@@ -493,7 +455,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                 // DML commands should bypass policy checking
                 if (shouldApplyPolicy(result.getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (checkQueryCompliance(query) == false) {
+                    if (!queryChecker.check_policy(query)) {
                         throw new PrivacyException("Query " + sql + " is not compliant");
                     }
                 }
@@ -952,7 +914,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (checkQueryCompliance(query) == false) {
+                    if (!queryChecker.check_policy(query)) {
                         throw new PrivacyException("Privacy compliance was not met");
                     }
                 }
