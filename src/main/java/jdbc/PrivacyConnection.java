@@ -1,12 +1,5 @@
 package jdbc;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ImmutableList;
-import fatjdbc.PlanExecutor;
-import org.apache.calcite.avatica.AvaticaSqlException;
-import org.apache.calcite.avatica.Meta;
 import org.apache.calcite.sql.SqlKind;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
@@ -19,9 +12,7 @@ import java.net.URL;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 class PrivacyConnection implements Connection {
   private Connection direct_connection;
@@ -46,16 +37,13 @@ class PrivacyConnection implements Connection {
     String[] sqlpolicy;
     switch(token != null ? token : "no_policy_set"){
       case "controller":
-        this.policy_list.add(new Policy(info, "select * from blah"));
-        this.policy_list.add(new Policy(info, "select a, b from blah"));
+        this.policy_list.add(new Policy(info, "select ycsb_key, field0, field1, field2, field3, field4, field5, field6, field7, field8, field9 from usertable"));
         break;
       case "processor":
-        this.policy_list.add(new Policy(info, "select * from blah"));
-        this.policy_list.add(new Policy(info, "select a, b from blah"));
+        this.policy_list.add(new Policy(info, "select ycsb_key, field0, field1, field2, field3, field4, field5, field6, field7, field8, field9 from usertable"));
         break;
       default:
-        this.policy_list.add(new Policy(info, "select * from blah"));
-        this.policy_list.add(new Policy(info, "select a, b from blah"));
+        this.policy_list.add(new Policy(info, "select ycsb_key, field0, field1, field2, field3, field4, field5, field6, field7, field8, field9 from usertable"));
     }
   }
 
@@ -352,7 +340,7 @@ class PrivacyConnection implements Connection {
     public ResultSet executeQuery() throws SQLException {
       PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, values);
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (!query_checker.check_policy(privacy_query)) {
+        if (!query_checker.checkPolicy(privacy_query)) {
             throw new SQLException("Privacy compliance was not met");
         }
       }

@@ -40,5 +40,6 @@ public abstract class PrivacyQuery {
 
     abstract public void reduceQuery();
     abstract public Set<String> getProjectColumns();
+    abstract public Set<String> getThetaColumns();
 }
 

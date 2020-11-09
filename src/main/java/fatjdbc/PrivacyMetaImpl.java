@@ -5,8 +5,6 @@ import execution.PrivacyExecutor;
 import execution.PrivacyExecutorFactory;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.avatica.*;
-import org.apache.calcite.avatica.proto.Common;
-import org.apache.calcite.avatica.remote.AvaticaRuntimeException;
 import org.apache.calcite.avatica.remote.TypedValue;
 import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
@@ -56,7 +54,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -346,7 +343,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
             if (shouldApplyPolicy(parserResult.getSqlNode().getKind())) {
                 PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(parserResult);
-                if (!queryChecker.check_policy(query)) {
+                if (!queryChecker.checkPolicy(query)) {
                     System.out.println("Query {} does not comply".format(sql));
                     throw new PrivacyException("Policy did not pass");
                 }
@@ -422,7 +419,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (!queryChecker.check_policy(query)) {
+                    if (!queryChecker.checkPolicy(query)) {
                         throw new PrivacyException("Privacy compliance was not met");
                     }
                 }
@@ -455,7 +452,7 @@ public class PrivacyMetaImpl extends MetaImpl {
                 // DML commands should bypass policy checking
                 if (shouldApplyPolicy(result.getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (!queryChecker.check_policy(query)) {
+                    if (!queryChecker.checkPolicy(query)) {
                         throw new PrivacyException("Query " + sql + " is not compliant");
                     }
                 }
@@ -914,7 +911,7 @@ public class PrivacyMetaImpl extends MetaImpl {
 
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (!queryChecker.check_policy(query)) {
+                    if (!queryChecker.checkPolicy(query)) {
                         throw new PrivacyException("Privacy compliance was not met");
                     }
                 }

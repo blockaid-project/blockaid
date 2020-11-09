@@ -19,15 +19,15 @@ mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathSco
 MAVEN_OPTS='-server' mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
 bg_pid=$!
 
-echo 'SERVER UP'
-read
+#echo 'SERVER UP'
+#read
 
 cd "$DIR"
-./bin/ycsb run jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp ./h2-latest.jar # -threads 12
+./bin/ycsb run jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp "./h2-latest.jar:$Z3_DIR/bin/com.microsoft.z3.jar" # -threads 12
 rv=$!
 
-echo 'DONE'
-read
+#echo 'DONE'
+#read
 
 kill $bg_pid
 rm -f /tmp/DbYCSB.mv.db

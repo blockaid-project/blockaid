@@ -3,6 +3,10 @@ package policy_checker;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.microsoft.z3.BoolExpr;
+import com.microsoft.z3.Context;
+import com.microsoft.z3.Solver;
+import com.microsoft.z3.Status;
 import sql.PrivacyQuery;
 
 import java.util.*;
@@ -16,9 +20,6 @@ public class QueryChecker {
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
-    // todo: this
-    class Predicate {}
-
     public QueryChecker(ArrayList<Policy> policySet)
     {
         this.policySet = policySet;
@@ -31,7 +32,7 @@ public class QueryChecker {
                     .build(new CacheLoader<PrivacyQuery, Boolean>() {
                         @Override
                         public Boolean load(final PrivacyQuery query) {
-                            return check_policy(query, policy);
+                            return checkPolicy(query, policy);
                         }
                     });
             this.policyDecisionCache.put(policy, cache);
@@ -44,17 +45,19 @@ public class QueryChecker {
     private void buildPreapprovedSets() {
         // somewhat similar to QO join order DP algorithm in iteration order)
         class Entry {
-            private Predicate predicate;
+            private BoolExpr predicate;
             private Set<String> columns;
 
-            public Entry(Predicate predicate, Set<String> columns) {
+            public Entry(BoolExpr predicate, Set<String> columns) {
                 this.predicate = predicate;
                 this.columns = columns;
             }
         }
 
+        Context context = new Context();
+
         Map<Set<Integer>, Entry> previousPass = new HashMap<>();
-        previousPass.put(Collections.emptySet(), new Entry(new Predicate(), getAllColumns())); // todo: object -> false predicate
+        previousPass.put(Collections.emptySet(), new Entry(context.mkBool(false), getAllColumns()));
 
         Map<Set<Integer>, Entry> currentPass;
 
@@ -65,7 +68,7 @@ public class QueryChecker {
             for (Map.Entry<Set<Integer>, Entry> e : previousPass.entrySet()) {
                 Set<Integer> prevSet = e.getKey();
                 Entry entry = e.getValue();
-                Predicate prevPredicate = entry.predicate;
+                BoolExpr prevPredicate = entry.predicate;
                 Set<String> prevColumns = entry.columns;
 
                 for (int j = 0; j < policySet.size(); ++j) {
@@ -83,8 +86,13 @@ public class QueryChecker {
                         Set<String> nextColumns = setIntersection(prevColumns, policySet.get(i).getProjectColumns());
 
                         if (!nextColumns.isEmpty()) {
-                            Predicate nextPredicate = prevPredicate; // todo OR
-                            boolean predicateResult = false; // todo: evaluate (predicate OR policy[j].predicate)
+                            BoolExpr nextPredicate = context.mkOr(prevPredicate, policySet.get(j).getPredicate(context));
+
+                            Solver solver = context.mkSolver();
+                            solver.add(context.mkNot(nextPredicate));
+                            Status q = solver.check();
+                            boolean predicateResult = (q == Status.UNSATISFIABLE);
+                            System.out.println(predicateResult);
                             currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
                         }
                     }
@@ -123,16 +131,7 @@ public class QueryChecker {
         return set.containsAll(query);
     }
 
-    private boolean containsAny(Collection<String> set, Collection<String> query) {
-        for (String s : query) {
-            if (set.contains(s)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean precheck_policy_approval(PrivacyQuery query) {
+    private boolean precheckPolicyApproval(PrivacyQuery query) {
         Set<String> projectColumns = query.getProjectColumns();
         for (Set<String> s : preapprovedSets) {
             if (containsAll(s, projectColumns)) {
@@ -142,22 +141,21 @@ public class QueryChecker {
         return false;
     }
 
-    private boolean precheck_policy_denial(PrivacyQuery query, Policy policy) {
-        Set<String> projectColumns = query.getProjectColumns();
-        return containsAll(policy.getProjectColumns(), projectColumns) && containsAny(policy.getThetaRelations(), projectColumns);
+    private boolean precheckPolicyDenial(PrivacyQuery query, Policy policy) {
+        return policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
     }
 
-    private boolean check_policy(PrivacyQuery query, Policy policy) {
-        if (precheck_policy_denial(query, policy)) {
+    private boolean checkPolicy(PrivacyQuery query, Policy policy) {
+        if (precheckPolicyDenial(query, policy)) {
             return false;
         }
         // todo - full policy check here
         return true;
     }
 
-    public boolean check_policy(PrivacyQuery query) {
+    public boolean checkPolicy(PrivacyQuery query) {
         // todo: maybe a cache on precheck?
-        if (precheck_policy_approval(query)) {
+        if (precheckPolicyApproval(query)) {
             return true;
         }
 
