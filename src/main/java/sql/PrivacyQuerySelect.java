@@ -5,9 +5,7 @@ import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public class PrivacyQuerySelect extends PrivacyQuery {
     private SqlNode where;
@@ -29,10 +27,16 @@ public class PrivacyQuerySelect extends PrivacyQuery {
         thetaColumns = new HashSet<>();
 
         SqlSelect sqlSelect = (SqlSelect) parsedSql.getSqlNode();
-        String relation = ((SqlIdentifier) sqlSelect.getFrom()).names.get(0);
+        String relation = ((SqlIdentifier) sqlSelect.getFrom()).names.get(1); // public.table_name, fix this
         for (SqlNode sn : sqlSelect.getSelectList()) {
-            String column = ((SqlIdentifier) sn).names.get(0);
-            projectColumns.add(relation + "." + column);
+            List<String> names = ((SqlIdentifier) sn).names;
+            if (names.size() == 1) {
+                // assumes that columns are always fully specified (with tablename) if a join is used
+                String column = names.get(0);
+                projectColumns.add((relation + "." + column).toUpperCase());
+            } else {
+                projectColumns.add((names.get(0) + "." + names.get(1)).toUpperCase());
+            }
         }
 
         SqlBasicCall theta = (SqlBasicCall) sqlSelect.getWhere();
@@ -53,10 +57,10 @@ public class PrivacyQuerySelect extends PrivacyQuery {
             addThetaColumns(relation, (SqlBasicCall) right);
         } else {
             if (left instanceof SqlIdentifier) {
-                thetaColumns.add(relation + "." + ((SqlIdentifier) left).names.get(0));
+                thetaColumns.add((relation + "." + ((SqlIdentifier) left).names.get(0)).toUpperCase());
             }
             if (right instanceof SqlIdentifier) {
-                thetaColumns.add(relation + "." + ((SqlIdentifier) right).names.get(0));
+                thetaColumns.add((relation + "." + ((SqlIdentifier) right).names.get(0)).toUpperCase());
             }
         }
     }

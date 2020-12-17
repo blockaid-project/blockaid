@@ -49,7 +49,7 @@ public class PrivacyProxyDBFlavor extends DBFlavor {
 
   @Override
   public String createReadStatement(StatementType readType, String key) {
-    StringBuilder read = new StringBuilder("SELECT * FROM ");
+    StringBuilder read = new StringBuilder("SELECT YCSB_KEY, FIELD0, FIELD1, FIELD2, FIELD3, FIELD4, FIELD5, FIELD6, FIELD7, FIELD8, FIELD9 FROM ");
     read.append(schema).append(db).append(readType.getTableName());
     read.append(" WHERE ");
     read.append(JdbcDBClient.PRIMARY_KEY);

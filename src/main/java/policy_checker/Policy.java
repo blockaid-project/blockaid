@@ -37,7 +37,7 @@ public class Policy {
         relation = ((SqlIdentifier) sqlSelect.getFrom()).names.get(0);
         for (SqlNode sn : sqlSelect.getSelectList()) {
             String column = ((SqlIdentifier) sn).names.get(0);
-            projectColumns.add(relation + "." + column);
+            projectColumns.add((relation + "." + column).toUpperCase());
         }
 
         theta = (SqlBasicCall) sqlSelect.getWhere();
@@ -78,10 +78,10 @@ public class Policy {
             addThetaColumns((SqlBasicCall) right);
         } else {
             if (left instanceof SqlIdentifier) {
-                thetaColumns.add(relation + "." + ((SqlIdentifier) left).names.get(0));
+                thetaColumns.add((relation + "." + ((SqlIdentifier) left).names.get(0)).toUpperCase());
             }
             if (right instanceof SqlIdentifier) {
-                thetaColumns.add(relation + "." + ((SqlIdentifier) right).names.get(0));
+                thetaColumns.add((relation + "." + ((SqlIdentifier) right).names.get(0)).toUpperCase());
             }
         }
     }

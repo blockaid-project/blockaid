@@ -43,7 +43,6 @@ public class QueryChecker {
     }
 
     private void buildPreapprovedSets() {
-        // somewhat similar to QO join order DP algorithm in iteration order)
         class Entry {
             private BoolExpr predicate;
             private Set<String> columns;
@@ -83,7 +82,7 @@ public class QueryChecker {
                         // previous set was added to preapprovedSet
                         remove.add(nextSet);
                     } else if (!currentPass.containsKey(nextSet)) {
-                        Set<String> nextColumns = setIntersection(prevColumns, policySet.get(i).getProjectColumns());
+                        Set<String> nextColumns = setIntersection(prevColumns, policySet.get(j).getProjectColumns());
 
                         if (!nextColumns.isEmpty()) {
                             BoolExpr nextPredicate = context.mkOr(prevPredicate, policySet.get(j).getPredicate(context));
@@ -92,7 +91,6 @@ public class QueryChecker {
                             solver.add(context.mkNot(nextPredicate));
                             Status q = solver.check();
                             boolean predicateResult = (q == Status.UNSATISFIABLE);
-                            System.out.println(predicateResult);
                             currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
                         }
                     }
@@ -123,7 +121,12 @@ public class QueryChecker {
 
     private <T> Set<T> setIntersection(Set<T> s1, Set<T> s2) {
         Set<T> sr = new HashSet<>(s1);
-        sr.removeAll(s2);
+        for (T x : s1) {
+            if (!s2.contains(x)) {
+                sr.remove(x);
+            }
+        }
+
         return sr;
     }
 
@@ -150,7 +153,7 @@ public class QueryChecker {
             return false;
         }
         // todo - full policy check here
-        return true;
+        return false;
     }
 
     public boolean checkPolicy(PrivacyQuery query) {

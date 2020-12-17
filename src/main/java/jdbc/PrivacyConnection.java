@@ -27,9 +27,8 @@ class PrivacyConnection implements Connection {
     this.parser = new ParserFactory(info).getParser(info);
 
     this.policy_list = new ArrayList<>();
-    this.query_checker = new QueryChecker(this.policy_list);
-
     set_policy(info);
+    this.query_checker = new QueryChecker(this.policy_list);
   }
 
   private void set_policy(Properties info) {
