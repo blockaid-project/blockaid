@@ -1,17 +1,10 @@
 package fatjdbc;
 
 import com.google.common.cache.*;
+import execution.PrivacyExecutor;
+import execution.PrivacyExecutorFactory;
 import org.apache.calcite.DataContext;
-import org.apache.calcite.avatica.AvaticaParameter;
-import org.apache.calcite.avatica.AvaticaPreparedStatement;
-import org.apache.calcite.avatica.AvaticaStatement;
-import org.apache.calcite.avatica.AvaticaUtils;
-import org.apache.calcite.avatica.ColumnMetaData;
-import org.apache.calcite.avatica.Meta;
-import org.apache.calcite.avatica.MetaImpl;
-import org.apache.calcite.avatica.NoSuchStatementException;
-import org.apache.calcite.avatica.QueryState;
-import org.apache.calcite.avatica.SqlType;
+import org.apache.calcite.avatica.*;
 import org.apache.calcite.avatica.remote.TypedValue;
 import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
@@ -61,7 +54,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -90,7 +82,6 @@ public class PrivacyMetaImpl extends MetaImpl {
     private final Properties info;
     private final Cache<String, Connection> connectionCache;
     private final Cache<Integer, StatementInfo> statementCache;
-    private final HashMap<Policy, LoadingCache<PrivacyQuery, Boolean>> policyCache;
     private final QueryChecker queryChecker;
     private ArrayList<Policy> policy_list;
 
@@ -152,12 +143,9 @@ public class PrivacyMetaImpl extends MetaImpl {
                 .removalListener(new StatementExpiryHandler())
                 .build();
 
-        this.policyCache = new HashMap<>();
         this.policy_list = new ArrayList<>();
         set_policy(info);
         this.queryChecker = new QueryChecker(this.policy_list);
-        initializePolicyCache();
-        System.out.println("end of constructor in privacy meta impl");
     }
 
     private void set_policy(Properties info) {
@@ -165,35 +153,16 @@ public class PrivacyMetaImpl extends MetaImpl {
         String[] sqlpolicy;
         switch(token != null ? token : "no_policy_set"){
             case "controller":
-                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+                this.policy_list.add(new Policy(info, "select * from blah"));
+                this.policy_list.add(new Policy(info, "select a, b from blah"));
                 break;
             case "processor":
-                sqlpolicy = new String[]{"select * from blah", "select a, b from blah"};
+                this.policy_list.add(new Policy(info, "select * from blah"));
+                this.policy_list.add(new Policy(info, "select a, b from blah"));
                 break;
             default:
-                sqlpolicy = new String[]{""};
-                System.out.println("No policies set. Invalid user policy");
-        }
-        Policy p1 = new Policy(info, sqlpolicy);
-        if (p1 != null)
-            this.policy_list.add(p1);
-    }
-
-    // Initialize each policy with it's own cache.
-    private void initializePolicyCache() {
-        for (Policy p : this.policy_list){
-            // Just some random settings
-            LoadingCache<PrivacyQuery, Boolean> cache = CacheBuilder.newBuilder()
-                    .expireAfterAccess(100000, TimeUnit.SECONDS)
-                    .maximumSize(50)
-                    .build(new CacheLoader<PrivacyQuery, Boolean>() {
-                        @Override
-                        public Boolean load(final PrivacyQuery query) throws Exception {
-                            System.out.println("Cache miss");
-                            return getQueryChecker().check_policy(query, p);
-                        }
-                    });
-            this.policyCache.put(p, cache);
+                this.policy_list.add(new Policy(info, "select * from blah"));
+                this.policy_list.add(new Policy(info, "select a, b from blah"));
         }
     }
 
@@ -201,7 +170,6 @@ public class PrivacyMetaImpl extends MetaImpl {
     {
         return this.queryChecker;
     }
-
 
     static <T extends Named> Predicate1<T> namedMatcher(final Pat pattern) {
         if (pattern.s == null || pattern.s.equals("%")) {
@@ -368,13 +336,65 @@ public class PrivacyMetaImpl extends MetaImpl {
     @Override
     public Meta.StatementHandle prepare(Meta.ConnectionHandle ch, String sql,
                                         long maxRowCount) {
-        System.out.println("in prepare in privacymetaimpl");
-        final Meta.StatementHandle h = createStatement(ch);
-        final PrivacyConnectionImpl privacyConnection = getConnection();
+        try {
+            final int id = statementIdGenerator.getAndIncrement();
+            ParserResult parserResult = getConnection().parse(sql);
+            PrivacyConnectionImpl connection = getConnection();
 
-        PrivacyJdbcStatement statement = privacyConnection.server.getStatement(h);
-        statement.setSignature(h.signature);
-        return h;
+            if (shouldApplyPolicy(parserResult.getSqlNode().getKind())) {
+                PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(parserResult);
+                if (!queryChecker.checkPolicy(query)) {
+                    System.out.println("Query {} does not comply".format(sql));
+                    throw new PrivacyException("Policy did not pass");
+                }
+            }
+            PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),
+                    connection.parserFactory, connection.getProperties(), connectionCache);
+            PreparedStatement statement = executor.prepare(parserResult);
+
+            Meta.StatementType statementType = null;
+            if (statement.isWrapperFor(AvaticaPreparedStatement.class)) {
+                final AvaticaPreparedStatement avaticaPreparedStatement;
+                avaticaPreparedStatement =
+                        statement.unwrap(AvaticaPreparedStatement.class);
+                statementType = avaticaPreparedStatement.getStatementType();
+            }
+            // Set the maximum number of rows
+            setMaxRows(statement, maxRowCount);
+            statementCache.put(id, new StatementInfo(statement));
+            StatementHandle h = new StatementHandle(ch.id, id,
+                    signature(statement.getMetaData(), statement.getParameterMetaData(),
+                            sql, statementType));
+            LOG.trace("prepared statement {}", h);
+
+            //PrivacyJdbcStatement s2 = connection.server.getStatement(h);
+            //s2.setSignature(h.signature);
+            return h;
+
+        } catch (SQLException e) {
+            throw propagate(e);
+        }
+        catch (PrivacyException e) {
+            throw propagate(e);
+        }
+        catch (Exception e) {
+            throw propagate(e);
+        }
+    }
+
+    /**
+     * Sets the provided maximum number of rows on the given statement.
+     *
+     * @param statement The JDBC Statement to operate on
+     * @param maxRowCount The maximum number of rows which should be returned for the query
+     */
+    void setMaxRows(Statement statement, long maxRowCount) throws SQLException {
+        // Special handling of maxRowCount as JDBC 0 is unlimited, our meta 0 row
+        if (maxRowCount > 0) {
+            AvaticaUtils.setLargeMaxRows(statement, maxRowCount);
+        } else if (maxRowCount < 0) {
+            statement.setMaxRows(0);
+        }
     }
 
     private boolean shouldApplyPolicy(SqlKind kind)
@@ -390,8 +410,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                                                 String sql,
                                                 long maxRowCount,
                                                 Meta.PrepareCallback callback) {
-        System.out.println("in prepareandexecute in privacymetaimpl");
-
         // Create callback, execute query
         try {
             MetaResultSet metaResultSet = null;
@@ -401,9 +419,8 @@ public class PrivacyMetaImpl extends MetaImpl {
 
                 if (shouldApplyPolicy(result.getSqlNode().getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (checkQueryCompliance(query) == false) {
-                        System.out.println("Query {} does not comply".format(sql));
-                        return null;
+                    if (!queryChecker.checkPolicy(query)) {
+                        throw new PrivacyException("Privacy compliance was not met");
                     }
                 }
                 metaResultSet = new PlanExecutor(h, getConnection(),
@@ -419,33 +436,11 @@ public class PrivacyMetaImpl extends MetaImpl {
 
     }
 
-    public boolean checkQueryCompliance(PrivacyQuery query){
-        System.out.println("Check query compliance");
-        for(Map.Entry<Policy, LoadingCache<PrivacyQuery, Boolean>> policy_cache: policyCache.entrySet()){
-            boolean compliance;
-            try{
-                System.out.println("getting value");
-                compliance = policy_cache.getValue().get(query);
-                System.out.println("got value");
-                if (!compliance) {
-                    return Boolean.FALSE;
-                }
-            } catch (ExecutionException e){
-                throw propagate(e);
-            }
-        }
-        System.out.println("finished looking at policies");
-        return Boolean.TRUE;
-    }
-
-    @Override
     public ExecuteResult prepareAndExecute(StatementHandle statementHandle, String sql,
                                            long maxRowCount,
                                            int maxRowsInFirstFrame,
                                            PrepareCallback prepareCallback)
             throws NoSuchStatementException {
-        System.out.println("in prepareAndExecute2 in privacymetaimpl");
-        System.out.println("in prepareandexecute2" + sql);
         set_policy(this.info);
 
         try {
@@ -455,15 +450,10 @@ public class PrivacyMetaImpl extends MetaImpl {
                 ParserResult result = getConnection().parse(sql);
 
                 // DML commands should bypass policy checking
-                System.out.println("The type is wefe " + result.getSqlNode().getKind());
                 if (shouldApplyPolicy(result.getKind())) {
                     PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
-                    if (checkQueryCompliance(query) == false) {
-                        System.out.println("Query {} does not comply".format(sql));
-                        return null;
-                    }
-                    else{
-                        System.out.println("Query does comply!");
+                    if (!queryChecker.checkPolicy(query)) {
+                        throw new PrivacyException("Query " + sql + " is not compliant");
                     }
                 }
 
@@ -472,7 +462,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                 prepareCallback.assign(metaResultSet.signature, metaResultSet.firstFrame,
                         metaResultSet.updateCount);
             }
-            System.out.println("about to execute callback");
             prepareCallback.execute();
             return new ExecuteResult(ImmutableList.of(metaResultSet));
         } catch (Exception e) {
@@ -862,25 +851,6 @@ public class PrivacyMetaImpl extends MetaImpl {
                 "TABLE_TYPE");
     }
 
-//  @Override
-//  public Iterable<Object> createIterable(StatementHandle handle, QueryState state,
-//      Signature signature, List<TypedValue> parameterValues, Frame firstFrame) {
-//    // Drop QueryState
-//    return _createIterable(handle, signature, parameterValues, firstFrame);
-//  }
-//
-//  Iterable<Object> _createIterable(StatementHandle handle,
-//      Signature signature, List<TypedValue> parameterValues, Frame firstFrame) {
-//    try {
-//      //noinspection unchecked
-//      final CalcitePrepare.CalciteSignature<Object> calciteSignature =
-//          (CalcitePrepare.CalciteSignature<Object>) signature;
-//      return getConnection().enumerable(handle, calciteSignature);
-//    } catch (SQLException e) {
-//      throw new RuntimeException(e.getMessage());
-//    }
-//  }
-
     @Override
     public Frame fetch(StatementHandle h, long offset, int fetchMaxRowCount) {
         final PrivacyConnectionImpl calciteConnection = getConnection();
@@ -903,57 +873,87 @@ public class PrivacyMetaImpl extends MetaImpl {
         return new Meta.Frame(offset, done, (List<Object>) (List) rows);
     }
 
+
+    private String prepareQuery(String query, List<TypedValue> values) {
+        StringBuilder preparedQuery = new StringBuilder();
+        String q = query;
+        for (TypedValue value : values) {
+            int i = q.indexOf("?");
+            preparedQuery.append(q.substring(0, i));
+            assert value.type.equals("STRING");
+            // not really properly escaped todo fix
+            String v = "'" + ((String) value.value).replace("'", "''") + "'";
+
+            preparedQuery.append(v);
+            q = q.substring(i + 1);
+        }
+        preparedQuery.append(q);
+        return preparedQuery.toString();
+    }
+
     @Override
     public ExecuteResult execute(StatementHandle h,
                                  List<TypedValue> parameterValues, long maxRowCount) {
-        try {
-            if (MetaImpl.checkParameterValueHasNull(parameterValues)) {
-                throw new SQLException("exception while executing query: unbound parameter");
-            }
-
-            final StatementInfo statementInfo = Objects.requireNonNull(
-                    statementCache.getIfPresent(h.id),
-                    "Statement not found, potentially expired. " + h);
-            final List<MetaResultSet> resultSets = new ArrayList<>();
-            final PreparedStatement preparedStatement =
-                    (PreparedStatement) statementInfo.statement;
-
-            if (parameterValues != null) {
-                for (int i = 0; i < parameterValues.size(); i++) {
-                    TypedValue o = parameterValues.get(i);
-                    preparedStatement.setObject(i + 1, o.toJdbc(calendar));
-                }
-            }
-
-            if (preparedStatement.execute()) {
-                final Meta.Frame frame;
-                final Signature signature2;
-                if (preparedStatement.isWrapperFor(AvaticaPreparedStatement.class)) {
-                    signature2 = h.signature;
-                } else {
-                    h.signature = signature(preparedStatement.getMetaData(),
-                            preparedStatement.getParameterMetaData(), h.signature.sql,
-                            Meta.StatementType.SELECT);
-                    signature2 = h.signature;
+            try {
+                if (MetaImpl.checkParameterValueHasNull(parameterValues)) {
+                    throw new SQLException("exception while executing query: unbound parameter");
                 }
 
-                statementInfo.resultSet = preparedStatement.getResultSet();
-                if (statementInfo.resultSet == null) {
-                    frame = Frame.EMPTY;
-                    resultSets.add(PrivacyMetaResultSet.empty(h.connectionId, h.id, signature2));
+                final StatementInfo statementInfo = Objects.requireNonNull(
+                        statementCache.getIfPresent(h.id),
+                        "Statement not found, potentially expired. " + h);
+                final List<MetaResultSet> resultSets = new ArrayList<>();
+                final PreparedStatement preparedStatement =
+                        (PreparedStatement) statementInfo.statement;
+
+                String pStatement_str = prepareQuery(h.signature.sql, parameterValues);
+                ParserResult result = getConnection().parse(pStatement_str);
+
+                if (shouldApplyPolicy(result.getSqlNode().getKind())) {
+                    PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(result);
+                    if (!queryChecker.checkPolicy(query)) {
+                        throw new PrivacyException("Privacy compliance was not met");
+                    }
+                }
+
+                if (parameterValues != null) {
+                    for (int i = 0; i < parameterValues.size(); i++) {
+                        TypedValue o = parameterValues.get(i);
+                        preparedStatement.setObject(i + 1, o.toJdbc(calendar));
+                    }
+                }
+
+                if (preparedStatement.execute()) {
+                    final Meta.Frame frame;
+                    final Signature signature2;
+                    if (preparedStatement.isWrapperFor(AvaticaPreparedStatement.class)) {
+                        signature2 = h.signature;
+                    } else {
+                        h.signature = signature(preparedStatement.getMetaData(),
+                                preparedStatement.getParameterMetaData(), h.signature.sql,
+                                Meta.StatementType.SELECT);
+                        signature2 = h.signature;
+                    }
+
+                    statementInfo.resultSet = preparedStatement.getResultSet();
+                    if (statementInfo.resultSet == null) {
+                        frame = Frame.EMPTY;
+                        resultSets.add(PrivacyMetaResultSet.empty(h.connectionId, h.id, signature2));
+                    } else {
+                        resultSets.add(
+                                PrivacyMetaResultSet.create(h.connectionId, h.id,
+                                        statementInfo.resultSet, maxRowCount, signature2));
+                    }
                 } else {
                     resultSets.add(
-                            PrivacyMetaResultSet.create(h.connectionId, h.id,
-                                    statementInfo.resultSet, maxRowCount, signature2));
+                            PrivacyMetaResultSet.count(
+                                    h.connectionId, h.id, preparedStatement.getUpdateCount()));
                 }
-            } else {
-                resultSets.add(
-                        PrivacyMetaResultSet.count(
-                                h.connectionId, h.id, preparedStatement.getUpdateCount()));
-            }
 
             return new ExecuteResult(resultSets);
         } catch (SQLException e) {
+            throw propagate(e);
+        } catch (PrivacyException e) {
             throw propagate(e);
         }
     }
@@ -963,35 +963,8 @@ public class PrivacyMetaImpl extends MetaImpl {
                                  List<TypedValue> list,
                                  int i)
             throws NoSuchStatementException {
-        return null;
+        return execute(statementHandle, list, (long)i);
     }
-
-//  @Override
-//  public ExecuteResult execute(StatementHandle h,
-//      List<TypedValue> parameterValues, long maxRowCount) {
-//    final QuarkConnectionImpl calciteConnection = getConnection();
-//    QuarkJdbcStatement stmt = calciteConnection.server.getStatement(h);
-//    final Signature signature = stmt.getSignature();
-//
-//    MetaResultSet metaResultSet;
-//    if (signature.statementType.canUpdate()) {
-//      final Iterable<Object> iterable =
-//          _createIterable(h, signature, parameterValues, null);
-//      final Iterator<Object> iterator = iterable.iterator();
-//      stmt.setResultSet(iterator);
-//      metaResultSet = MetaResultSet.count(h.connectionId, h.id,
-//          ((Number) iterator.next()).intValue());
-//    } else {
-//      // Don't populate the first frame.
-//      // It's not worth saving a round-trip, since we're local.
-//      final Meta.Frame frame =
-//          new Meta.Frame(0, false, Collections.emptyList());
-//      metaResultSet =
-//          MetaResultSet.create(h.connectionId, h.id, false, signature, frame);
-//    }
-//
-//    return new ExecuteResult(ImmutableList.of(metaResultSet));
-//  }
 
     public boolean syncResults(StatementHandle h, QueryState state, long offset)
             throws NoSuchStatementException {

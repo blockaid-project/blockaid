@@ -56,20 +56,14 @@ public abstract class JdbcDB implements Executor {
     }
 
     public ImmutableMap<String, Schema> getSchemas() throws PrivacyException {
-        System.out.println("get schemas");
         Connection conn = null;
         Statement stmt = null;
         try {
-            System.out.println("getting connections");
             conn = this.getConnection();
-            System.out.println("Creating statement");
             stmt = conn.createStatement();
-            System.out.println("executing query");
             ResultSet rs = stmt.executeQuery(this.getCatalogSql());
-            System.out.println("getting schema from result set query");
             //This is the problem!
             ImmutableMap<String, Schema> schemaMap = getSchemaFromResultSet(rs, this.getTypes(conn));
-            System.out.println("get schema fromm result set");
 
             rs.close();
             return schemaMap;
@@ -113,12 +107,9 @@ public abstract class JdbcDB implements Executor {
             return ImmutableMap.of();
         }
         ImmutableMap.Builder<String, Schema> schemaBuilder = new ImmutableMap.Builder<>();
-        System.out.println("finished building");
 
         while (!rs.isAfterLast()) {
-            System.out.println("iterating through rs");
             String currentSchema = rs.getString(1);
-            System.out.println(currentSchema);
             String schemaKey = currentSchema;
             if (!this.isCaseSensitive()) {
                 schemaKey = currentSchema.toUpperCase();
@@ -127,13 +118,11 @@ public abstract class JdbcDB implements Executor {
             schemaBuilder.put(schemaKey, new JdbcSchema(currentSchema,
                     rs, this.isCaseSensitive(), dataTypes));
         }
-        System.out.println("about to finish building");
         return schemaBuilder.build();
     }
 
     public Iterator<Object> executeQuery(final String sql)
             throws Exception {
-        System.out.println("in execute query in plugins/JdbcDB");
         cleanup();
         return execute(this.getConnection(), sql);
     }

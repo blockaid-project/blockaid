@@ -1,0 +1,36 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/.."
+
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 workload_file [proxy|h2]"
+    exit 1
+fi
+
+rm -f /tmp/DbYCSB.mv.db
+rm -f /tmp/DbServerYCSBTest.mv.db
+
+WORKLOAD="$(realpath "$1")"
+CONF="$2"
+
+cd "$DIR/.."
+mvn -DskipTests package
+mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
+MAVEN_OPTS='-server' mvn test-compile exec:java -Dexec.mainClass=server.YCSBSetup -Dexec.classpathScope=test > "$DIR/proxy.log" &
+bg_pid=$!
+
+#echo 'SERVER UP'
+#read
+
+cd "$DIR"
+./bin/ycsb run jdbc -P "$WORKLOAD" -P "jdbc/src/main/conf/$2.properties" -cp "./h2-latest.jar:$Z3_DIR/bin/com.microsoft.z3.jar" # -threads 12
+rv=$!
+
+#echo 'DONE'
+#read
+
+kill $bg_pid
+rm -f /tmp/DbYCSB.mv.db
+rm -f /tmp/DbServerYCSBTest.mv.db
+exit $rv
+

@@ -28,11 +28,7 @@ import sql.ParserResult;
 import sql.PrivacyException;
 
 import java.lang.reflect.Type;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -57,8 +53,13 @@ public class PlanExecutor {
         this.maxRowCount = maxRowCount;
     }
 
+    public PreparedStatement prepare(ParserResult parserResult) throws Exception {
+        PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),
+                connection.parserFactory, connection.getProperties(), connectionCache);
+        return executor.prepare(parserResult);
+    }
+
     public PrivacyMetaResultSet execute(ParserResult parserResult) throws Exception {
-        System.out.println("Executing inside Plan Executor");
         PrivacyJdbcStatement stmt = connection.server.getStatement(h);
 
         PrivacyExecutor executor = PrivacyExecutorFactory.getPrivacyExecutor(parserResult.getKind(),

@@ -1,0 +1,10 @@
+{
+  "dbCredentials" : {
+    "url" : "jdbc:h2:/tmp/DbYCSB;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1",
+    "username" : "sa",
+    "password" : "",
+    "encrypt_key" : "",
+    "encrypt":false
+  },
+  "schemaFactory" : "catalog.db.SchemaFactory"
+}

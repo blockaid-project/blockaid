@@ -86,8 +86,6 @@ public class PrivacyDriver extends UnregisteredDriver {
 
     @Override
     public Meta createMeta(AvaticaConnection connection) {
-        System.out.println(connection.toString());
-        System.out.println(connection.properties);
         return new PrivacyMetaImpl((PrivacyConnectionImpl) connection,
                 ((PrivacyConnectionImpl) connection).getProperties());
     }
@@ -96,8 +94,6 @@ public class PrivacyDriver extends UnregisteredDriver {
         if (!acceptsURL(url)) {
             return null;
         }
-
-        System.out.println("in privacy driver connect " + info);
 
         final String prefix = getConnectStringPrefix();
         final String urlSuffix = url.substring(prefix.length());
