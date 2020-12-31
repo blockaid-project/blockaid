@@ -153,7 +153,7 @@ public class QueryChecker {
             return false;
         }
         // todo - full policy check here
-        return false;
+        return true;
     }
 
     public boolean checkPolicy(PrivacyQuery query) {

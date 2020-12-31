@@ -27,16 +27,13 @@ public class PrivacyQuerySelect extends PrivacyQuery {
         thetaColumns = new HashSet<>();
 
         SqlSelect sqlSelect = (SqlSelect) parsedSql.getSqlNode();
-        String relation = ((SqlIdentifier) sqlSelect.getFrom()).names.get(1); // public.table_name, fix this
+        SqlNode fromClause = sqlSelect.getFrom();
+        String relation = null;
+        if (fromClause.getKind() != SqlKind.JOIN) {
+            relation = ((SqlIdentifier) sqlSelect.getFrom()).names.get(1);
+        }
         for (SqlNode sn : sqlSelect.getSelectList()) {
-            List<String> names = ((SqlIdentifier) sn).names;
-            if (names.size() == 1) {
-                // assumes that columns are always fully specified (with tablename) if a join is used
-                String column = names.get(0);
-                projectColumns.add((relation + "." + column).toUpperCase());
-            } else {
-                projectColumns.add((names.get(0) + "." + names.get(1)).toUpperCase());
-            }
+            addQualifiedColumnName(projectColumns, relation, (SqlIdentifier) sn);
         }
 
         SqlBasicCall theta = (SqlBasicCall) sqlSelect.getWhere();
@@ -57,11 +54,23 @@ public class PrivacyQuerySelect extends PrivacyQuery {
             addThetaColumns(relation, (SqlBasicCall) right);
         } else {
             if (left instanceof SqlIdentifier) {
-                thetaColumns.add((relation + "." + ((SqlIdentifier) left).names.get(0)).toUpperCase());
+                addQualifiedColumnName(thetaColumns, relation, (SqlIdentifier) left);
             }
             if (right instanceof SqlIdentifier) {
-                thetaColumns.add((relation + "." + ((SqlIdentifier) right).names.get(0)).toUpperCase());
+                addQualifiedColumnName(thetaColumns, relation, (SqlIdentifier) right);
             }
+        }
+    }
+
+    private void addQualifiedColumnName(Set<String> set, String relation, SqlIdentifier identifier) {
+        List<String> names = identifier.names;
+        if (names.size() == 1) {
+            if (relation == null) {
+                throw new UnsupportedOperationException("joins must only use fully-specified column names");
+            }
+            set.add((relation + "." + ((SqlIdentifier) identifier).names.get(0)).toUpperCase());
+        } else {
+            set.add((names.get(0) + "." + names.get(1)).toUpperCase());
         }
     }
 
