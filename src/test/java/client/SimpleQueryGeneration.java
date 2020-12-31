@@ -1,24 +1,19 @@
 package client;
 
 import org.flywaydb.core.Flyway;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
 import java.sql.*;
 import java.util.*;
 
 public class SimpleQueryGeneration {
-    private static final String dbFile = "/tmp/DbSimpleQueryGeneration";
-    private static final String dbUrl = "jdbc:h2:" + dbFile;
-    private static final String h2File = "/tmp/DbServerSimpleQueryGeneration";
-    private static final String h2Url = "jdbc:h2:" + h2File;
-    private static final String dbUsername = "sa";
-    private static final String dbPassword = "";
-    private static final String proxyUrl = "jdbc:privacy:thin:," + dbUrl + "," + h2Url;
+    private static final int ITERATIONS = 10;
+
+    private static String dbUsername = "sa";
+    private static String dbPassword = "";
 
     private static final List<String> TABLES = Arrays.asList(
         "table1", "table2", "table3"
@@ -53,6 +48,15 @@ public class SimpleQueryGeneration {
             FK_RIGHT.add(parts[1].split("\\.")[0]);
         }
     }
+
+    private String dbFile;
+    private String dbUrl;
+    private String h2File;
+    private String h2Url;
+    private String proxyUrl;
+
+    @Rule
+    public TemporaryFolder tempFolder = new TemporaryFolder();
 
     private static int randomInt(int n) {
         return (int) (Math.random() * n);
@@ -167,8 +171,39 @@ public class SimpleQueryGeneration {
         return query.toString();
     }
 
-    private static void setupTables(String dbUrl, String filename)
-            throws ClassNotFoundException, SQLException, IOException, URISyntaxException {
+    private String generateDBSQL() {
+        StringBuilder sql = new StringBuilder();
+        // not escaped but oh well
+        sql.append("INSERT INTO data_sources VALUES(1, 'H2', '").append(h2Url).append("',1,0,'CANONICAL','JDBC',NULL,NULL,NULL);\n");
+        sql.append("INSERT INTO jdbc_sources VALUES(1, '").append(dbUsername).append("','").append(dbPassword).append("');\n");
+        sql.append("UPDATE ds_sets SET default_datasource_id = 1 WHERE id = 1;\n");
+        System.out.println(sql);
+        return sql.toString();
+    }
+
+    private String generateSchemaSQL() {
+        StringBuilder sql = new StringBuilder();
+        for (String s : TABLES) {
+            sql.append("CREATE TABLE ").append(s).append("(");
+
+            boolean first = true;
+            for (int i = 0; i < COLUMNS.size(); ++i) {
+                if (COLUMN_TABLE.get(i).equals(s)) {
+                    if (!first) {
+                        sql.append(",");
+                    }
+                    sql.append(COLUMNS.get(i).split("\\.")[1]).append(" INTEGER NOT NULL");
+                    first = false;
+                }
+            }
+
+            sql.append(");\n");
+        }
+        System.out.println(sql);
+        return sql.toString();
+    }
+
+    private void setupTables(String dbUrl, String sql) throws ClassNotFoundException, SQLException {
         Class.forName("org.h2.Driver");
 
         Properties props = new Properties();
@@ -178,30 +213,23 @@ public class SimpleQueryGeneration {
         Connection connection = DriverManager.getConnection(dbUrl, props);
 
         Statement stmt = connection.createStatement();
-        java.net.URL url = SimpleQueryGeneration.class.getResource("/SimpleQueryGeneration/" + filename);
-        java.nio.file.Path resPath = java.nio.file.Paths.get(url.toURI());
-        String sql = new String(java.nio.file.Files.readAllBytes(resPath), "UTF8");
         stmt.execute(sql);
     }
 
     @Before
     public void setupDb() throws Exception {
-        cleanupDb();
+        dbFile = tempFolder.newFile("Db").getPath();
+        h2File = tempFolder.newFile("DbServer").getPath();
+        dbUrl = "jdbc:h2:" + dbFile;
+        h2Url = "jdbc:h2:" + h2File;
+        proxyUrl = "jdbc:privacy:thin:," + dbUrl + "," + h2Url;
 
         Flyway flyway = new Flyway();
         flyway.setDataSource(dbUrl, dbUsername, dbPassword);
         flyway.migrate();
 
-        setupTables(dbUrl, "SimpleQueryGeneration_db.sql");
-        setupTables(h2Url, "SimpleQueryGeneration.sql");
-    }
-
-    @After
-    public void cleanupDb() throws Exception {
-        new File(dbFile + ".mv.db").delete();
-        new File(h2File + ".mv.db").delete();
-        new File(dbFile + ".mv.trace.db").delete();
-        new File(h2File + ".mv.trace.db").delete();
+        setupTables(dbUrl, generateDBSQL());
+        setupTables(h2Url, generateSchemaSQL());
     }
 
     @Test
@@ -214,7 +242,7 @@ public class SimpleQueryGeneration {
 
         // todo: data needs to be generated or we're querying an empty database
 
-        for (int i = 0; i < 10000; ++i) {
+        for (int i = 0; i < ITERATIONS; ++i) {
             PreparedStatement stmt = conn.prepareStatement(generateQuery());
             ResultSet s = stmt.executeQuery();
             s.close();
