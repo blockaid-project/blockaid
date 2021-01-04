@@ -19,7 +19,7 @@ public class Policy {
     private Set<String> projectColumns;
     private Set<String> thetaColumns;
     private SqlBasicCall theta;
-    private boolean usesSupserset;
+    private boolean useSuperset;
 
     public Policy(Properties info, String sqlPolicy) {
         try {
@@ -45,7 +45,7 @@ public class Policy {
             addThetaColumns(theta);
         }
 
-        usesSupserset = false;
+        useSuperset = false;
     }
 
     public boolean checkPolicySchema(){
@@ -134,11 +134,11 @@ public class Policy {
             return false;
         }
 
-        if (usesSupserset && !containsAll(thetaColumns, this.thetaColumns)) {
+        if (useSuperset && !containsAll(thetaColumns, this.thetaColumns)) {
             return false;
         }
 
-        if (!usesSupserset && !containsAny(thetaColumns, this.thetaColumns)) {
+        if (!useSuperset && !containsAny(thetaColumns, this.thetaColumns)) {
             return false;
         }
 

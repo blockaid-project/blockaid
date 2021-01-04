@@ -145,7 +145,7 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyDenial(PrivacyQuery query, Policy policy) {
-        return policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
+        return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
     }
 
     private boolean checkPolicy(PrivacyQuery query, Policy policy) {
