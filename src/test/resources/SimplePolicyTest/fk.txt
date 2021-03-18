@@ -1,0 +1,5 @@
+-- foreign key listing, until fetching constraints from schema works
+-- fromRel.fromCol:toRel.toCol
+table2.a:table1.a;
+table3.a:table1.a;
+table3.b:table2.b;

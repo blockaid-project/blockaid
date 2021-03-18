@@ -32,7 +32,7 @@ public class ParserFactory {
         this.reloadCache = false;
     }
 
-    public Parser getParser(Properties info) throws SQLException{
+    public PrivacyParser getParser(Properties info) throws SQLException{
         try {
             return new PrivacyParser(info);
         }

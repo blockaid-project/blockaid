@@ -1,8 +1,12 @@
 package jdbc;
 
+import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlKind;
+import planner.PrivacyTable;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
+import solver.Schema;
 import sql.*;
 
 import java.io.InputStream;
@@ -13,12 +17,15 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-class PrivacyConnection implements Connection {
+public class PrivacyConnection implements Connection {
   private Connection direct_connection;
-  private Parser parser;
+  private PrivacyParser parser;
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
+  private QuerySequence current_sequence;
 
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
     this.direct_connection = direct_connection;
@@ -26,28 +33,29 @@ class PrivacyConnection implements Connection {
     info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
     this.parser = new ParserFactory(info).getParser(info);
 
+    SchemaPlus schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
+
     this.policy_list = new ArrayList<>();
     set_policy(info);
-    this.query_checker = new QueryChecker(this.policy_list);
+    String deps = info.getProperty("deps");
+    String pks = info.getProperty("pk");
+    String fks = info.getProperty("fk");
+    this.query_checker = new QueryChecker(this.policy_list, schema, deps.isEmpty() ? new String[0] : deps.split("\n"), pks.isEmpty() ? new String[0] : pks.split("\n"), fks.isEmpty() ? new String[0] : fks.split("\n"));
+    current_sequence = new QuerySequence();
   }
 
   private void set_policy(Properties info) {
-    String token = info.getProperty("userRole");
-    String[] sqlpolicy;
-    switch(token != null ? token : "no_policy_set"){
-      case "controller":
-        this.policy_list.add(new Policy(info, "select ycsb_key, field0, field1, field2, field3, field4, field5, field6, field7, field8, field9 from usertable"));
-        break;
-      case "processor":
-        this.policy_list.add(new Policy(info, "select ycsb_key, field0, field1, field2, field3, field4, field5, field6, field7, field8, field9 from usertable"));
-        break;
-      default:
-        this.policy_list.add(new Policy(info, "select ycsb_key, field0, field1, field2, field3, field4, field5, field6, field7, field8, field9 from usertable"));
+    for (String sql : info.getProperty("policy").split("\n")) {
+      this.policy_list.add(new Policy(info, sql));
     }
   }
 
   private boolean shouldApplyPolicy(SqlKind kind) {
     return kind.equals(SqlKind.SELECT);
+  }
+
+  public void resetSequence() {
+    current_sequence = new QuerySequence();
   }
 
   @Override
@@ -57,8 +65,17 @@ class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s) throws SQLException {
+    Pattern pattern = Pattern.compile("(.*?\\?)(\\?|[A-Za-z0-9_]+)");
+    Matcher matcher = pattern.matcher(s);
+    List<String> parameters = new ArrayList<>();
+    while (matcher.find()) {
+      parameters.add(matcher.group(2));
+    }
+    s = matcher.replaceAll("$1");
+
+
     if (shouldApplyPolicy(parser.parse(s).getSqlNode().getKind())) {
-      return new PrivacyPreparedStatement(s);
+      return new PrivacyPreparedStatement(s, parameters);
     } else {
       return direct_connection.prepareStatement(s);
     }
@@ -324,27 +341,44 @@ class PrivacyConnection implements Connection {
     return direct_connection.isWrapperFor(aClass);
   }
 
-  private class PrivacyPreparedStatement implements PreparedStatement {
+  public class PrivacyPreparedStatement implements PreparedStatement {
     private PreparedStatement direct_statement;
     private ParserResult parser_result;
+    private List<String> paramNames;
     private Object[] values;
 
-    PrivacyPreparedStatement(String sql) throws SQLException {
+    PrivacyPreparedStatement(String sql, List<String> paramNames) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
       parser_result = parser.parse(sql);
       direct_statement = direct_connection.prepareStatement(sql);
+      this.paramNames = paramNames;
     }
 
     @Override
     public ResultSet executeQuery() throws SQLException {
-      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, values);
+      if (!checkPolicy()) {
+        throw new SQLException("Privacy compliance was not met");
+      }
+      return direct_statement.executeQuery();
+    }
+
+    public boolean checkPolicy() throws SQLException {
+      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, values, paramNames);
+      current_sequence.add(new QueryWithResult(privacy_query));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (!query_checker.checkPolicy(privacy_query)) {
-            throw new SQLException("Privacy compliance was not met");
+        if (!query_checker.checkPolicy(current_sequence)) {
+          return false;
         }
       }
+      return true;
+    }
 
-      return direct_statement.executeQuery();
+    // temporary for testing TODO remove
+    public void addFakeRow(List<Object> row) {
+      if (current_sequence.get(current_sequence.size() - 1).tuples == null) {
+        current_sequence.get(current_sequence.size() - 1).tuples = new ArrayList<>();
+      }
+      current_sequence.get(current_sequence.size() - 1).tuples.add(row);
     }
 
     @Override

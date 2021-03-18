@@ -1,0 +1,6 @@
+-- foreign key listing, until fetching constraints from schema works
+-- fromRel.fromCol:toRel.toCol
+friends.uid1:users.uid;
+photos.owner:users.uid;
+photo_tags.subject:users.uid;
+photo_tags.pid:photos.pid;

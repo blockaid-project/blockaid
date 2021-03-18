@@ -1,5 +1,6 @@
 package client;
 
+import jdbc.PrivacyConnection;
 import org.flywaydb.core.Flyway;
 import org.junit.Before;
 import org.junit.Rule;
@@ -11,38 +12,31 @@ import java.io.FileWriter;
 import java.sql.*;
 import java.util.*;
 
-public class SimpleQueryGeneration {
-    private static final int ITERATIONS = 100000;
+public class FacebookPolicyQueryGeneration {
+    private static final int ITERATIONS = 1700;
 
     private static String dbUsername = "sa";
     private static String dbPassword = "";
 
     private static final List<String> TABLES = Arrays.asList(
-        "table1", "table2", "table3"
+        "users", "friends", "photos", "photo_tags"
     );
 
     private static final List<String> COLUMNS = Arrays.asList(
-        "table1.a", "table1.b", "table1.c",
-        "table2.a", "table2.b", "table2.c",
-        "table3.a", "table3.b", "table3.c"
-    );
-
-    private static final List<String> PK_CONSTRAINTS = Arrays.asList(
-            "table1:a",
-            "table2:b",
-            "table3:c"
+            "users.uid", "users.about_me", "users.activities", "users.allowed_restrictions", "users.name", "users.sex",
+            "users.books", "users.movies", "users.music", "users.birthday", "users.birthday_date", "users.contact_email",
+            "users.can_message", "users.can_post", "users.first_name", "users.has_timeline", "users.install_type",
+            "users.interests", "users.is_app_user", "users.is_blocked", "users.is_minor", "users.last_name",
+            "users.middle_name", "users.name_format", "friends.uid1", "friends.uid2", "photos.pid", "photos.src",
+            "photos.owner", "photos.modified", "photo_tags.subject", "photo_tags.pid", "photo_tags.created",
+            "photo_tags.xcoord", "photo_tags.ycoord"
     );
 
     private static final List<String> FK_CONSTRAINTS = Arrays.asList(
-            "table2.a = table1.a",
-            "table3.a = table1.a",
-            "table3.b = table2.b"
-    );
-
-    private static final List<String> POLICIES = Arrays.asList(
-            "SELECT a, b, c FROM table1",
-            "SELECT a, b, c FROM table2",
-            "SELECT a, b, c FROM table3"
+            "friends.uid1 = users.uid",
+            "photos.owner = users.uid",
+            "photo_tags.subject = users.uid",
+            "photo_tags.pid = photos.pid"
     );
 
     private static final int MAX_NUM_PREDICATES = 3;
@@ -143,7 +137,8 @@ public class SimpleQueryGeneration {
         }
 
         for (String table : tables) {
-            qualifiedTables.add("public." + table);
+            qualifiedTables.add(table);
+//            qualifiedTables.add("public." + table);
         }
 
         List<String> validColumns = new ArrayList<>();
@@ -228,15 +223,21 @@ public class SimpleQueryGeneration {
 
     @Before
     public void setupDb() throws Exception {
+        java.net.URL url = FacebookPolicyQueryGeneration.class.getResource("/FacebookPolicyTest/policies_allow_all.sql");
+//        java.net.URL url = FacebookPolicyQueryGeneration.class.getResource("/FacebookPolicyTest/policies.sql");
+        java.nio.file.Path resPath = java.nio.file.Paths.get(url.toURI());
+        java.net.URL pk_url = FacebookPolicyQueryGeneration.class.getResource("/FacebookPolicyTest/pk.txt");
+        java.nio.file.Path pk_resPath = java.nio.file.Paths.get(pk_url.toURI());
+        java.net.URL fk_url = FacebookPolicyQueryGeneration.class.getResource("/FacebookPolicyTest/fk.txt");
+        java.nio.file.Path fk_resPath = java.nio.file.Paths.get(fk_url.toURI());
+        java.net.URL deps_url = FacebookPolicyQueryGeneration.class.getResource("/FacebookPolicyTest/deps.txt");
+        java.nio.file.Path deps_resPath = java.nio.file.Paths.get(deps_url.toURI());
+
         String dbFile = tempFolder.newFile("Db").getPath();
         String h2File = tempFolder.newFile("DbServer").getPath();
-        String policyFile = tempFolder.newFile("policies.sql").getPath();
-        String depsFile = tempFolder.newFile("deps.txt").getPath();
-        String pkFile = tempFolder.newFile("pk.txt").getPath();
-        String fkFile = tempFolder.newFile("fk.txt").getPath();
         String dbUrl = "jdbc:h2:" + dbFile;
         String h2Url = "jdbc:h2:" + h2File;
-        proxyUrl = "jdbc:privacy:thin:" + policyFile + "," + depsFile + "," + dbUrl + "," + h2Url + "," + pkFile + "," + fkFile;
+        proxyUrl = "jdbc:privacy:thin:" + resPath.toString() + "," + deps_resPath.toString() + "," + dbUrl + "," + h2Url + "," + pk_resPath.toString()+ "," + fk_resPath.toString();
 
         Flyway flyway = new Flyway();
         flyway.setDataSource(dbUrl, dbUsername, dbPassword);
@@ -244,27 +245,6 @@ public class SimpleQueryGeneration {
 
         setupTables(dbUrl, generateDBSQL(h2Url));
         setupTables(h2Url, generateSchemaSQL());
-
-        BufferedWriter writer = new BufferedWriter(new FileWriter(policyFile));
-        for (String sql : POLICIES) {
-            writer.write(sql);
-            writer.write(";\n");
-        }
-        writer.close();
-        writer = new BufferedWriter(new FileWriter(depsFile));
-        writer.close();
-        writer = new BufferedWriter(new FileWriter(pkFile));
-        for (String constraint : PK_CONSTRAINTS) {
-            writer.write(constraint);
-            writer.write(";\n");
-        }
-        writer.close();
-        writer = new BufferedWriter(new FileWriter(fkFile));
-        for (String constraint : FK_CONSTRAINTS) {
-            writer.write(constraint.replace(" = ", ":"));
-            writer.write(";\n");
-        }
-        writer.close();
     }
 
     @Test
@@ -279,11 +259,17 @@ public class SimpleQueryGeneration {
 
         for (int i = 0; i < ITERATIONS; ++i) {
             String query = generateQuery();
-//            System.out.println(query);
-            PreparedStatement stmt = conn.prepareStatement(query);
-            ResultSet s = stmt.executeQuery();
-            s.close();
-            stmt.close();
+//            System.err.println(query);
+            PrivacyConnection.PrivacyPreparedStatement stmt = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+            long startTime = System.nanoTime();
+            stmt.checkPolicy();
+//            System.err.println("decision: " + stmt.checkPolicy());
+            long endTime = System.nanoTime();
+            System.err.println((endTime - startTime) / 1e6);
+//            PreparedStatement stmt = conn.prepareStatement(query);
+//            ResultSet s = stmt.executeQuery();
+//            s.close();
+//            stmt.close();
         }
     }
 }

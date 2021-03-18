@@ -1,0 +1,5 @@
+-- primary key listing, until fetching constraints from schema works
+-- rel:col1,col2,col3
+table1:a;
+table2:b;
+table3:c;

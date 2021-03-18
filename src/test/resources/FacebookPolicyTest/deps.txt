@@ -1,0 +1,5 @@
+-- additional dependencies, one per line
+-- there should be a better way to do this..
+-- _MY_UID in USERS
+_MY_UID|(assert (exists ((_v!2 String) (_v!3 String) (_v!4 String) (_v!5 String) (_v!6 String) (_v!7 String) (_v!8 String) (_v!9 String) (_v!10 String) (_v!11 String) (_v!12 String) (_v!13 Bool) (_v!14 Bool) (_v!15 String) (_v!16 Bool) (_v!17 String) (_v!18 String) (_v!19 Bool) (_v!20 Bool) (_v!21 Bool) (_v!22 String) (_v!23 String) (_v!24 String)) (@USERS @_MY_UID _v!2 _v!3 _v!4 _v!5 _v!6 _v!7 _v!8 _v!9 _v!10 _v!11 _v!12 _v!13 _v!14 _v!15 _v!16 _v!17 _v!18 _v!19 _v!20 _v!21 _v!22 _v!23 _v!24)));
+|(assert (forall ((_v!1 Int) (_v!2 Int)) (= (@FRIENDS _v!1 _v!2) (@FRIENDS _v!2 _v!1))));

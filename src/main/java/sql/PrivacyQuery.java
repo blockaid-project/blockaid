@@ -1,25 +1,28 @@
 package sql;
 
-import java.util.Arrays;
-import java.util.Objects;
-import java.util.Set;
+import solver.Query;
+import solver.Schema;
+
+import java.util.*;
 
 public abstract class PrivacyQuery {
-    protected ParserResult parsedSql;
-    protected Object[] parameters;
+    public ParserResult parsedSql;
+    public Object[] parameters;
+    public List<String> paramNames;
 
     public PrivacyQuery(ParserResult parsedSql)
     {
-        this(parsedSql, new Object[0]);
+        this(parsedSql, new Object[0], Collections.emptyList());
     }
 
-    public PrivacyQuery(ParserResult parsedSql, Object[] parameters)
+    public PrivacyQuery(ParserResult parsedSql, Object[] parameters, List<String> paramNames)
     {
         this.parsedSql = parsedSql;
         this.parameters = new Object[parameters.length];
         for (int i = 0; i < parameters.length; ++i) {
             this.parameters[i] = parameters[i];
         }
+        this.paramNames = paramNames;
     }
 
     @Override
@@ -27,19 +30,28 @@ public abstract class PrivacyQuery {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PrivacyQuery query = (PrivacyQuery) o;
-        return parsedSql.equals(query.parsedSql) &&
-                Arrays.equals(parameters, query.parameters);
+        if (!parsedSql.equals(query.parsedSql)) return false;
+        if (parameters.length != query.parameters.length) return false;
+        for (int i = 0; i < parameters.length; ++i) {
+            if (paramNames.get(i).equals("?") && !parameters[i].equals(query.parameters[i])) return false;
+        }
+        return true;
     }
 
     @Override
     public int hashCode() {
         int result = Objects.hash(parsedSql);
-        result = 31 * result + Arrays.hashCode(parameters);
+        for (int i = 0; i < parameters.length; ++i) {
+            if (paramNames.get(i).equals("?")) {
+                result = 31 * result + Objects.hash(parameters[i]);
+            }
+        }
         return result;
     }
 
     abstract public void reduceQuery();
     abstract public Set<String> getProjectColumns();
     abstract public Set<String> getThetaColumns();
+    abstract public Query getSolverQuery(Schema schema);
 }
 

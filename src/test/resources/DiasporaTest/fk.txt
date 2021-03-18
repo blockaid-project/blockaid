@@ -1,0 +1,28 @@
+-- foreign key listing, until fetching constraints from schema works
+-- fromRel.fromCol:toRel.toCol
+users.invited_by_id:users.id;
+people.owner_id:users.id;
+posts.author_id:people.id;
+share_visibilities.user_id:users.id;
+mentions.person_id:people.id;
+comments.author_id:people.id;
+profiles.person_id:people.id;
+photos.status_message_guid:posts.guid;
+locations.status_message_id:posts.id;
+polls.status_message_id:posts.id;
+participations.author_id:people.id;
+participations.target_id:posts.id;
+likes.author_id:people.id;
+taggings.tag_id:tags.id;
+conversations.author_id:people.id;
+conversation_visibilities.conversation_id:conversations.id;
+conversation_visibilities.person_id:people.id;
+roles.person_id:people.id;
+aspects.user_id:users.id;
+services.user_id:users.id;
+contacts.user_id:users.id;
+contacts.person_id:people.id;
+user_preferences.user_id:users.id;
+tag_followings.tag_id:tags.id;
+tag_followings.user_id:users.id;
+reports.user_id:users.id;

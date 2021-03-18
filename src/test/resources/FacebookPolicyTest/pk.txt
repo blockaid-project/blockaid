@@ -1,0 +1,4 @@
+-- primary key listing, until fetching constraints from schema works
+-- rel:col1,col2,col3
+users:uid;
+photos:pid;
