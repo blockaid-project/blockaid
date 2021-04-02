@@ -6,11 +6,25 @@ import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
 import sql.QuerySequence;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 public class FastCheckDeterminacyFormula extends DeterminacyFormula{
     public FastCheckDeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
         super(context, schema, views);
+
+        List<BoolExpr> clauses = new ArrayList<>();
+        if (inst1.constraint != null) {
+            clauses.add(inst1.constraint);
+        }
+        if (inst2.constraint != null) {
+            clauses.add(inst2.constraint);
+        }
+        for (Query v : views) {
+            clauses.add(v.apply(context, inst1).isContainedIn(context, v.apply(context, inst2)));
+        }
+        this.preparedExpr = context.mkAnd(clauses.toArray(new BoolExpr[0]));
     }
 
     @Override

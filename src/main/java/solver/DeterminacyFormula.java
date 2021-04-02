@@ -23,18 +23,6 @@ public abstract class DeterminacyFormula {
         this.schema = schema;
         this.inst1 = schema.makeFreshInstance(context);
         this.inst2 = schema.makeFreshInstance(context);
-
-        List<BoolExpr> clauses = new ArrayList<>();
-        if (inst1.constraint != null) {
-            clauses.add(inst1.constraint);
-        }
-        if (inst2.constraint != null) {
-            clauses.add(inst2.constraint);
-        }
-        for (Query v : views) {
-            clauses.add(v.apply(context, inst1).isContainedIn(context, v.apply(context, inst2)));
-        }
-        this.preparedExpr = context.mkAnd(clauses.toArray(new BoolExpr[0]));
     }
 
     public abstract BoolExpr makeFormula(QuerySequence queries);
