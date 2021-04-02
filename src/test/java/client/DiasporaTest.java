@@ -92,12 +92,38 @@ public class DiasporaTest {
         PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setInt(1, 1);
         assertTrue(p.checkPolicy());
-        p.addFakeRow(Collections.singletonList("aaaa"));
+        p.addRow(Collections.singletonList("aaaa"));
         query = "SELECT username FROM users WHERE username = ??";
         p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setString(1, "aaaa");
         assertTrue(p.checkPolicy());
+    }
 
+    @Test
+    public void runSimpleTestWithData() throws Exception {
+        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("org.h2.Driver");
+
+        Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
+        conn.setAutoCommit(true);
+
+        String query = "INSERT INTO users(id, username) VALUES (??, ??)";
+        PreparedStatement s = conn.prepareStatement(query);
+        s.setInt(1, 1);
+        s.setString(2, "aaaa");
+        s.execute();
+
+        query = "SELECT username FROM users WHERE id = ?_MY_UID";
+        PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+        p.setInt(1, 1);
+        ResultSet resultSet = p.executeQuery();
+        while (resultSet.next()) { /* do nothing */ }
+
+        query = "SELECT username FROM users WHERE username = ??";
+        p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+        p.setString(1, "aaaa");
+        resultSet = p.executeQuery();
+        while (resultSet.next()) { /* do nothing */ }
     }
 
 }
