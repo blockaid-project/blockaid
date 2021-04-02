@@ -67,6 +67,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s) throws SQLException {
+    // TODO(zhangwen): What is this pattern / replacement for?
     Pattern pattern = Pattern.compile("(.*?\\?)(\\?|[A-Za-z0-9_]+)");
     Matcher matcher = pattern.matcher(s);
     List<String> parameters = new ArrayList<>();

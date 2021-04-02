@@ -208,7 +208,8 @@
         <groupId>com.microsoft</groupId>
         <artifactId>z3</artifactId>
         <scope>system</scope>
-        <systemPath>${basedir}/lib/com.microsoft.z3.jar</systemPath>
+        <version>1.0.0</version>
+        <systemPath>${pom.basedir}/lib/com.microsoft.z3.jar</systemPath>
     </dependency>
 
 
