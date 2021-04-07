@@ -1,23 +1,26 @@
 package sql;
 
+import org.apache.calcite.schema.SchemaPlus;
+
 import java.util.Collections;
 import java.util.List;
 
 public class PrivacyQueryFactory {
 
-    public static PrivacyQuery createPrivacyQuery(ParserResult result)
+    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlus schemaPlus)
     {
-        return createPrivacyQuery(result, new Object[0], Collections.emptyList());
+        return createPrivacyQuery(result, schemaPlus, new Object[0], Collections.emptyList());
     }
 
-    public static PrivacyQuery createPrivacyQuery(ParserResult result, Object[] parameters, List<String> paramNames)
+    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlus schemaPlus, Object[] parameters, List<String> paramNames)
     {
         if (result == null){
             return null;
         }
         switch(result.getKind()) {
             case SELECT:
-                return new PrivacyQuerySelect(result, parameters, paramNames);
+            case ORDER_BY:
+                return new PrivacyQuerySelect(result, schemaPlus, parameters, paramNames);
             default:
                 throw new AssertionError("unexpected");
         }

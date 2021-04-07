@@ -27,6 +27,7 @@ public class PrivacyConnection implements Connection {
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
   private QuerySequence current_sequence;
+  private SchemaPlus schema;
 
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
     this.direct_connection = direct_connection;
@@ -34,25 +35,25 @@ public class PrivacyConnection implements Connection {
     info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
     this.parser = new ParserFactory(info).getParser(info);
 
-    SchemaPlus schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
+    this.schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
 
     this.policy_list = new ArrayList<>();
     set_policy(info);
     String deps = info.getProperty("deps");
     String pks = info.getProperty("pk");
     String fks = info.getProperty("fk");
-    this.query_checker = new QueryChecker(this.policy_list, schema, deps.isEmpty() ? new String[0] : deps.split("\n"), pks.isEmpty() ? new String[0] : pks.split("\n"), fks.isEmpty() ? new String[0] : fks.split("\n"));
+    this.query_checker = new QueryChecker(this.policy_list, this.schema, deps.isEmpty() ? new String[0] : deps.split("\n"), pks.isEmpty() ? new String[0] : pks.split("\n"), fks.isEmpty() ? new String[0] : fks.split("\n"));
     current_sequence = new QuerySequence();
   }
 
   private void set_policy(Properties info) {
     for (String sql : info.getProperty("policy").split("\n")) {
-      this.policy_list.add(new Policy(info, sql));
+      this.policy_list.add(new Policy(info, this.schema, sql));
     }
   }
 
   private boolean shouldApplyPolicy(SqlKind kind) {
-    return kind.equals(SqlKind.SELECT);
+    return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY);
   }
 
   public void resetSequence() {
@@ -364,7 +365,7 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() throws SQLException {
-      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, values, paramNames);
+      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
       current_sequence.add(new QueryWithResult(privacy_query));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
         if (!query_checker.checkPolicy(current_sequence)) {

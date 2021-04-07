@@ -4,6 +4,7 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -20,14 +21,22 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     private SqlNodeList selectAttributes;
     private ParsedPSJ parsedPSJ;
 
-    public PrivacyQuerySelect(ParserResult parsedSql) {
-        this(parsedSql, new Object[0], Collections.emptyList());
+    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlus schema) {
+        this(parsedSql, schema, new Object[0], Collections.emptyList());
     }
 
-    public PrivacyQuerySelect(ParserResult parsedSql, Object[] parameters, List<String> paramNames) {
+    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlus schema, Object[] parameters, List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
         reduceQuery();
-        parsedPSJ = new ParsedPSJ(parsedSql.sqlNode, Arrays.asList(parameters), paramNames);
+        parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(parameters), paramNames);
+    }
+
+    private SqlSelect getSelectNode(ParserResult result) {
+        if (result.getSqlNode() instanceof SqlOrderBy) {
+            return (SqlSelect) ((SqlOrderBy) result.getSqlNode()).query;
+        } else {
+            return (SqlSelect) result.getSqlNode();
+        }
     }
 
     public boolean checkPolicySchema(){
@@ -46,7 +55,7 @@ public class PrivacyQuerySelect extends PrivacyQuery {
 
     @Override
     public void reduceQuery(){
-        SqlSelect select = (SqlSelect) parsedSql.sqlNode;
+        SqlSelect select = getSelectNode(parsedSql);
         where = select.getWhere();
         from =  select.getFrom();
         selectAttributes = select.getSelectList();

@@ -11,6 +11,7 @@ import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
 
+import java.sql.Types;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -75,22 +76,21 @@ public class QueryChecker {
             List<Column> columns = new ArrayList<>();
             for (PrivacyColumn column : table.getColumns()) {
                 Sort type;
-                // TODO cleaner (??)
                 switch (column.type) {
-                    case 4:
+                    case Types.INTEGER:
                         type = regularContext.getIntSort();
                         break;
-                    case 8:
+                    case Types.DOUBLE:
                         type = regularContext.getRealSort();
                         break;
-                    case 16:
+                    case Types.BOOLEAN:
                         type = regularContext.getBoolSort();
                         break;
-                    case 2005:
+                    case Types.CLOB:
                         type = regularContext.getStringSort();
                         break;
-                    case 93: // datetime TODO
-                    case 91: // date TODO
+                    case Types.TIMESTAMP: // TODO
+                    case Types.DATE:
                         type = regularContext.getStringSort();
                         break;
                     default:
@@ -129,22 +129,21 @@ public class QueryChecker {
             List<Column> columns = new ArrayList<>();
             for (PrivacyColumn column : table.getColumns()) {
                 Sort type;
-                // TODO cleaner (??)
                 switch (column.type) {
-                    case 4:
+                    case Types.INTEGER:
                         type = fastContext.getIntSort();
                         break;
-                    case 8:
+                    case Types.DOUBLE:
                         type = fastContext.getRealSort();
                         break;
-                    case 16:
+                    case Types.BOOLEAN:
                         type = fastContext.getBoolSort();
                         break;
-                    case 2005:
+                    case Types.CLOB:
                         type = fastContext.getStringSort();
                         break;
-                    case 93: // datetime TODO
-                    case 91: // date TODO
+                    case Types.TIMESTAMP: // TODO
+                    case Types.DATE:
                         type = fastContext.getStringSort(); // datetime.. not really accurate
                         break;
                     default:

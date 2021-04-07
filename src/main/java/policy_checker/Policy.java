@@ -2,6 +2,7 @@ package policy_checker;
 
 import com.microsoft.z3.*;
 import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -17,7 +18,7 @@ public class Policy {
     private ParsedPSJ parsedPSJ;
     private boolean useSuperset;
 
-    public Policy(Properties info, String sqlPolicy) {
+    public Policy(Properties info, SchemaPlus schema, String sqlPolicy) {
         QueryContext context = null;
         try {
             context = new QueryContext(info);
@@ -26,7 +27,7 @@ public class Policy {
             throw new RuntimeException(e);
         }
 
-        parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), Collections.emptyList(), Collections.emptyList());
+        parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), schema, Collections.emptyList(), Collections.emptyList());
         useSuperset = false;
     }
 

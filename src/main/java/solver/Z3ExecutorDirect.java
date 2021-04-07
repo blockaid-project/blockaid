@@ -16,9 +16,8 @@ public class Z3ExecutorDirect extends SMTExecutor {
     private CountDownLatch latch;
     private boolean satConclusive;
     private boolean unsatConclusive;
-    private Status result = null;
-    private Process process = null;
-    private AtomicBoolean shuttingDown = new AtomicBoolean(false);
+    private Status result = Status.UNKNOWN;
+    private Thread thisThread = null;
 
     public Z3ExecutorDirect(Solver solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive) {
         super(solver.toString(), latch, new String[]{}, satConclusive, unsatConclusive);
@@ -30,16 +29,20 @@ public class Z3ExecutorDirect extends SMTExecutor {
 
     @Override
     public void run() {
+        thisThread = Thread.currentThread();
         result = solver.check();
         if ((this.result == Status.UNSATISFIABLE && unsatConclusive) || (this.result == Status.SATISFIABLE && satConclusive)) {
             this.latch.countDown();
         } else {
             result = Status.UNKNOWN;
         }
+        while (true);
     }
 
     public synchronized void signalShutdown() {
-
+//        if (thisThread != null && thisThread.isAlive()) {
+//            thisThread.interrupt();
+//        }
     }
 
     public Status getResult() {

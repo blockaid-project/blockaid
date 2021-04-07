@@ -1,8 +1,11 @@
 package sql;
 
 import com.microsoft.z3.*;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
+import planner.PrivacyColumn;
+import planner.PrivacyTable;
 import solver.PSJ;
 import solver.Query;
 import solver.Schema;
@@ -18,7 +21,7 @@ public class ParsedPSJ {
     private List<String> paramNames;
     private SqlBasicCall theta;
 
-    public ParsedPSJ(SqlNode parsedSql, List<Object> parameters, List<String> paramNames) {
+    public ParsedPSJ(SqlNode parsedSql, SchemaPlus schema, List<Object> parameters, List<String> paramNames) {
         projectColumns = new ArrayList<>();
         thetaColumns = new ArrayList<>();
         this.parameters = parameters;
@@ -34,7 +37,23 @@ public class ParsedPSJ {
             relations = extractRelationNames((SqlJoin) fromClause);
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
-            projectColumns.add(quantifyName((SqlIdentifier) sn));
+            SqlIdentifier identifier = (SqlIdentifier) sn;
+            if (identifier.names.get(identifier.names.size() - 1).equals("")) {
+                if (identifier.names.size() == 1) {
+                    for (String relation : relations) {
+                        for (PrivacyColumn column : ((PrivacyTable) schema.getTable(relation)).getColumns()) {
+                            projectColumns.add(relation + "." + column.name.toUpperCase());
+                        }
+                    }
+                } else {
+                    String relation = identifier.names.get(identifier.names.size() - 2);
+                    for (PrivacyColumn column : ((PrivacyTable) schema.getTable(relation)).getColumns()) {
+                        projectColumns.add(relation + "." + column.name.toUpperCase());
+                    }
+                }
+            } else {
+                projectColumns.add(quantifyName(identifier));
+            }
         }
 
         // not WHERE TRUE, WHERE FALSE
