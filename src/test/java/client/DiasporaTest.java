@@ -1,6 +1,6 @@
 package client;
 
-import jdbc.PrivacyConnection;
+import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
 import org.flywaydb.core.Flyway;
 import org.junit.Before;
 import org.junit.Rule;
@@ -81,7 +81,7 @@ public class DiasporaTest {
 
     @Test
     public void runSimpleTest() throws Exception {
-        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
@@ -102,7 +102,7 @@ public class DiasporaTest {
 
     @Test
     public void runSimpleTestWithData() throws Exception {
-        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);

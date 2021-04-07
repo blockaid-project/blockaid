@@ -1,13 +1,9 @@
-package jdbc;
+package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
-import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlKind;
-import planner.PrivacyTable;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
-import solver.Schema;
 import sql.*;
 
 import java.io.InputStream;
@@ -35,7 +31,8 @@ public class PrivacyConnection implements Connection {
     info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
     this.parser = new ParserFactory(info).getParser(info);
 
-    this.schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
+    String database_name = info.getProperty("database_name", "PUBLIC");
+    this.schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema(database_name);
 
     this.policy_list = new ArrayList<>();
     set_policy(info);
@@ -365,12 +362,16 @@ public class PrivacyConnection implements Connection {
       return new ResultSetWrapper(direct_statement.executeQuery());
     }
 
-    public boolean checkPolicy() throws SQLException {
+    public boolean checkPolicy() {
       PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
       current_sequence.add(new QueryWithResult(privacy_query));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (!query_checker.checkPolicy(current_sequence)) {
-          return false;
+        final long startTime = System.currentTimeMillis();
+        try {
+          return query_checker.checkPolicy(current_sequence);
+        } finally {
+          final long endTime = System.currentTimeMillis();
+          System.out.println("\tPolicy checking:\t\t" + (endTime - startTime));
         }
       }
       return true;
@@ -405,12 +406,24 @@ public class PrivacyConnection implements Connection {
         }
         List<Object> row = new ArrayList<>();
         for (int i = 1; i <= columnTypes.size(); ++i) {
-          switch (columnTypes.get(i - 1)) {
+          // TODO(zhangwen): NULLs fetched from the DB are currently represented by the default value for the underlying
+          //  type (e.g., 0 for int).  We can probably get away with this?
+          int t = columnTypes.get(i - 1);
+          switch (t) {
             case Types.INTEGER:
+            case Types.BIGINT:
+            case Types.TINYINT:
+            case Types.BIT: // TODO(zhangwen): turn into a Boolean?
               row.add(resultSet.getInt(i));
               break;
+            case Types.VARCHAR:
+            case Types.LONGVARCHAR:
             case Types.CLOB:
-              row.add(resultSet.getString(i));
+              String value = resultSet.getString(i);
+              if (value == null) {
+                value = "";
+              }
+              row.add(value);
               break;
             case Types.DOUBLE:
               row.add(resultSet.getDouble(i));
@@ -424,7 +437,7 @@ public class PrivacyConnection implements Connection {
               row.add("placeholder");
               break;
             default:
-              throw new UnsupportedOperationException("unsupported type");
+              throw new UnsupportedOperationException("unsupported type: " + t);
           }
         }
         addRow(row);

@@ -11,6 +11,8 @@ import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.sql.Types;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -72,8 +74,13 @@ public class QueryChecker {
             List<Column> columns = new ArrayList<>();
             for (PrivacyColumn column : table.getColumns()) {
                 Sort type;
+                // TODO cleaner (??)
+                // TODO(zhangwen): This really needs to be merged with the `fastSchema` creation logic.
                 switch (column.type) {
                     case Types.INTEGER:
+                    case Types.BIGINT:
+                    case Types.TINYINT:
+                        // TODO(zhangwen): Rails seems to use `tinyint(1)` for booleans.  Do we care?
                         type = regularContext.getIntSort();
                         break;
                     case Types.DOUBLE:
@@ -82,6 +89,8 @@ public class QueryChecker {
                     case Types.BOOLEAN:
                         type = regularContext.getBoolSort();
                         break;
+                    case Types.VARCHAR:
+                    case Types.LONGVARCHAR:
                     case Types.CLOB:
                         type = regularContext.getStringSort();
                         break;
@@ -92,9 +101,11 @@ public class QueryChecker {
                     default:
                         throw new UnsupportedOperationException("bad column type: " + column.type + " for column " + tableName + "." + column.name);
                 }
-                columns.add(new Column(column.name, type, null));
+                // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
+                //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
+                columns.add(new Column(column.name.toUpperCase(), type, null));
             }
-            relations.put(tableName, columns);
+            relations.put(tableName.toUpperCase(), columns);
         }
 
         List<Dependency> dependencies = new ArrayList<>();
@@ -127,6 +138,9 @@ public class QueryChecker {
                 Sort type;
                 switch (column.type) {
                     case Types.INTEGER:
+                    case Types.BIGINT:
+                    case Types.TINYINT:
+                        // TODO(zhangwen): Rails seems to use `tinyint(1)` for booleans.  Do we care?
                         type = fastContext.getIntSort();
                         break;
                     case Types.DOUBLE:
@@ -135,6 +149,8 @@ public class QueryChecker {
                     case Types.BOOLEAN:
                         type = fastContext.getBoolSort();
                         break;
+                    case Types.VARCHAR:
+                    case Types.LONGVARCHAR:
                     case Types.CLOB:
                         type = fastContext.getStringSort();
                         break;
@@ -145,9 +161,11 @@ public class QueryChecker {
                     default:
                         throw new UnsupportedOperationException("bad column type: " + column.type + " for column " + tableName + "." + column.name);
                 }
-                columns.add(new Column(column.name, type, null));
+                // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
+                //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
+                columns.add(new Column(column.name.toUpperCase(), type, null));
             }
-            relations.put(tableName, columns);
+            relations.put(tableName.toUpperCase(), columns);
         }
 
         dependencies = new ArrayList<>();
@@ -283,25 +301,46 @@ public class QueryChecker {
         CountDownLatch latch = new CountDownLatch(1);
         PrivacyQuery query = queries.get(queries.size() - 1).query;
 
-        Solver solver;
         List<SMTExecutor> executors = new ArrayList<>();
 
 //        long startTime = System.nanoTime();
 
         // fast check
-        solver = fastContext.mkSolver();
-        solver.add(this.fastCheckDeterminacyFormula.makeFormula(queries));
-        executors.add(new Z3Executor(solver.toString(), latch, false, true));
+        {
+            final long startTime = System.currentTimeMillis();
+            Solver solver = fastContext.mkSolver();
+            solver.add(this.fastCheckDeterminacyFormula.makeFormula(queries));
+            String s = solver.toString();
+            final long endTime = System.currentTimeMillis();
+            System.out.println("\tMake fast formula:\t" + (endTime - startTime));
+            executors.add(new Z3Executor(s, latch, false, true));
+
+            try {
+                FileWriter writer = new FileWriter("/tmp/fast_check.smt2");
+                writer.append(s);
+                writer.flush();
+                writer.close();
+            } catch (IOException exp) {
+                System.err.println(exp.getMessage());
+            }
+
+        }
 
         // regular check
-        solver = regularContext.mkSolver();
-        solver.add(this.determinacyFormula.makeFormula(queries));
-//        String s = solver.toString();
-        executors.add(new Z3Executor(solver.toString(), latch, true, true));
+        {
+            final long startTime = System.currentTimeMillis();
+            Solver solver = regularContext.mkSolver();
+            solver.add(this.determinacyFormula.makeFormula(queries));
+            String s = solver.toString();
+            final long endTime = System.currentTimeMillis();
+            System.out.println("\tMake regular formula:\t" + (endTime - startTime));
+            executors.add(new Z3Executor(s, latch, true, true));
 //        executors.add(new VampireCascExecutor(s, latch, true, true));
 //        executors.add(new VampireFMBExecutor(s, latch, true, true));
 //        executors.add(new CVC4Executor(s, latch, true, true));
+        }
 
+        final long startTime = System.currentTimeMillis();
         for (SMTExecutor executor : executors) {
             executor.start();
         }
@@ -317,6 +356,8 @@ public class QueryChecker {
             throw new RuntimeException(e);
         }
 //        long endTime = System.nanoTime();
+        final long endTime = System.currentTimeMillis();
+        System.out.println("\tInvoke solvers:\t\t" + (endTime - startTime));
 
 //        System.err.println(((endTime - startTime) / 1000000000.0));
         for (SMTExecutor executor : executors) {

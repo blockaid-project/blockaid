@@ -43,7 +43,7 @@ public class Tuple extends ArrayList<Expr> {
         } else if (value instanceof String) {
             return context.mkString((String) value);
         } else {
-            throw new UnsupportedOperationException("unknown type for constant loading");
+            throw new UnsupportedOperationException("unknown type for constant loading: " + value);
         }
     }
 }

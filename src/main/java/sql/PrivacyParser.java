@@ -2,6 +2,7 @@ package sql;
 
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.config.Lex;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
@@ -40,6 +41,7 @@ public class PrivacyParser implements Parser {
                         .setQuotedCasing(config.quotedCasing())
                         .setUnquotedCasing(config.unquotedCasing())
                         .setQuoting(config.quoting())
+                        .setLex(Lex.MYSQL)
                         .build());
         SqlNode sqlNode;
         try {

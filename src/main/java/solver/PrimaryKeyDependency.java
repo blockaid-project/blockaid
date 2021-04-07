@@ -30,6 +30,9 @@ public class PrimaryKeyDependency implements Dependency {
                 agreeFormulaExprs[index++] = context.mkEq(tup1.get(i), tup2.get(i));
             }
         }
+        if (index < columnNames.size()) {
+            throw new RuntimeException("some column(s) not found: " + relationName + "." + columnNames);
+        }
 
         BoolExpr agreeFormula = context.mkAnd(agreeFormulaExprs);
 

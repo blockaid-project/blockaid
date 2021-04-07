@@ -30,34 +30,34 @@
 
     <build>
         <resources>
-	  <resource>
-            <directory>src</directory>
-            <includes>
-              <include>**/*.txt</include>
-              <include>**/*.sql</include>
-	      <include>**/*.json</include>
-            </includes>
-	  </resource>
-	  <resource>
-           <directory>src/main/resources</directory>
-           <includes>
-             <include>*.*</include>
-             <include>db/migration/*</include>
-           </includes>
-        </resource>
-	</resources>
+            <resource>
+                <directory>src</directory>
+                <includes>
+                    <include>**/*.txt</include>
+                    <include>**/*.sql</include>
+                    <include>**/*.json</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>*.*</include>
+                    <include>db/migration/*</include>
+                </includes>
+            </resource>
+        </resources>
 
-	<testResources>
-	  <testResource>
-            <directory>${project.basedir}/src/test/java</directory>
-            <excludes>
-	      <exclude>**/*.java</exclude>
-            </excludes>
-	  </testResource>
-	  <testResource>
-	    <directory>${project.basedir}/src/test/resources</directory>
-	  </testResource>
-	</testResources>
+        <testResources>
+            <testResource>
+                <directory>${project.basedir}/src/test/java</directory>
+                <excludes>
+                    <exclude>**/*.java</exclude>
+                </excludes>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/src/test/resources</directory>
+            </testResource>
+        </testResources>
 
         <plugins>
             <plugin>
@@ -73,6 +73,28 @@
                 <groupId>org.flywaydb</groupId>
                 <artifactId>flyway-maven-plugin</artifactId>
                 <version>6.5.4</version>
+            </plugin>
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriverDiasporaMySQLTest</mainClass>
+                        </manifest>
+                    </archive>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id> <!-- this is used for inheritance merges -->
+                        <phase>package</phase> <!-- bind to the packaging phase -->
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
@@ -196,21 +218,26 @@
             <artifactId>stringtemplate</artifactId>
             <version>3.2</version>
         </dependency>
-        <!--
-      <dependency>
-          <groupId>com.microsoft</groupId>
-          <artifactId>z3</artifactId>
-          <version>4.8.8</version>
-      </dependency>
-       -->
+        <dependency>
+            <groupId>com.microsoft</groupId>
+            <artifactId>z3</artifactId>
+            <version>4.8.8</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>5.1.47</version>
+        </dependency>
 
-    <dependency>
-        <groupId>com.microsoft</groupId>
-        <artifactId>z3</artifactId>
-        <scope>system</scope>
-        <version>1.0.0</version>
-        <systemPath>${pom.basedir}/lib/com.microsoft.z3.jar</systemPath>
-    </dependency>
+
+        <!--    <dependency>-->
+<!--        <groupId>com.microsoft</groupId>-->
+<!--        <artifactId>z3</artifactId>-->
+<!--        <scope>system</scope>-->
+<!--        <version>1.0.0</version>-->
+<!--        <systemPath>${pom.basedir}/lib/com.microsoft.z3.jar</systemPath>-->
+<!--    </dependency>-->
 
 
       <!--

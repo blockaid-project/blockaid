@@ -12,6 +12,7 @@ import solver.Schema;
 import solver.Tuple;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class ParsedPSJ {
     private List<String> relations;
@@ -36,6 +37,7 @@ public class ParsedPSJ {
         } else {
             relations = extractRelationNames((SqlJoin) fromClause);
         }
+        relations = relations.stream().map(String::toUpperCase).collect(Collectors.toList());
         for (SqlNode sn : sqlSelect.getSelectList()) {
             SqlIdentifier identifier = (SqlIdentifier) sn;
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
@@ -234,7 +236,15 @@ public class ParsedPSJ {
             for (int i = 0; i < columns.size(); ++i) {
                 String[] parts = iter.next().split("\\.");
                 relationIndex[i] = relations.indexOf(parts[0]);
-                columnIndex[i] = schema.getColumnNames(parts[0]).indexOf(parts[1]);
+                if (relationIndex[i] == -1) {
+                    throw new RuntimeException("relation not found: " + parts[0] + " in relations " + relations);
+                }
+                List<String> columnNames = schema.getColumnNames(parts[0]);
+                columnIndex[i] = columnNames.indexOf(parts[1]);
+                if (relationIndex[i] == -1 || columnIndex[i] == -1) {
+                    throw new RuntimeException("column not found: " + parts[0] + "." + parts[1]
+                            + " in columns: " + columnNames);
+                }
             }
         }
 

@@ -1,14 +1,12 @@
 package client;
 
-import jdbc.PrivacyConnection;
+import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
 import org.flywaydb.core.Flyway;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.sql.*;
 import java.util.*;
 

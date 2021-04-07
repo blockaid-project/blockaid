@@ -1,12 +1,6 @@
 package server;
 
-import jdbc.ThinClientUtil;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.flywaydb.core.Flyway;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
