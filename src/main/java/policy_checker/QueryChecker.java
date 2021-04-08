@@ -45,8 +45,6 @@ public class QueryChecker {
     {
         this.policySet = policySet;
         this.policyDecisionCacheCoarse = CacheBuilder.newBuilder()
-                .expireAfterAccess(100000, TimeUnit.SECONDS)
-                .maximumSize(50)
                 .build(new CacheLoader<PrivacyQueryCoarseWrapper, FastCheckDecision>() {
                     @Override
                     public FastCheckDecision load(final PrivacyQueryCoarseWrapper query) {
@@ -55,8 +53,6 @@ public class QueryChecker {
                 });
 
         this.policyDecisionCacheFine = CacheBuilder.newBuilder()
-                .expireAfterAccess(100000, TimeUnit.SECONDS)
-                .maximumSize(50)
                 .build(new CacheLoader<QuerySequence, Boolean>() {
                     @Override
                     public Boolean load(final QuerySequence query) {
@@ -358,7 +354,7 @@ public class QueryChecker {
             if (precheckResult != FastCheckDecision.UNKNOWN) {
                 return precheckResult == FastCheckDecision.ALLOW;
             }
-            return policyDecisionCacheFine.get(queries);
+            return policyDecisionCacheFine.get(queries.copy());
         } catch (ExecutionException e) {
             throw propagate(e);
         }

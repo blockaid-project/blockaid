@@ -7,6 +7,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import server.EndToEndTest;
+import sql.QuerySequence;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -126,4 +127,48 @@ public class DiasporaTest {
         while (resultSet.next()) { /* do nothing */ }
     }
 
+    @Test
+    public void testViewMyPost() throws Exception {
+        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("org.h2.Driver");
+
+        long startTime, endTime;
+        startTime = System.nanoTime();
+
+        Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
+        conn.setAutoCommit(true);
+
+        endTime = System.nanoTime();
+        System.err.println("setup time: " + (endTime - startTime) / 1000000.0);
+        startTime = System.nanoTime();
+
+        String query = "INSERT INTO users(id, username) VALUES (??, ??)";
+        PreparedStatement s = conn.prepareStatement(query);
+        s.setInt(1, 1);
+        s.setString(2, "aaaa");
+        s.execute();
+
+        endTime = System.nanoTime();
+        System.err.println("data entry time: " + (endTime - startTime) / 1000000.0);
+
+        for (int i = 0; i < 10; ++i) {
+            startTime = System.nanoTime();
+
+            query = "SELECT users.id FROM users WHERE users.id = ?_MY_UID ORDER BY users.id ASC LIMIT 1";
+            PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+            p.setInt(1, 1);
+
+            endTime = System.nanoTime();
+            System.err.println("query prepare time: " + (endTime - startTime) / 1000000.0);
+            startTime = System.nanoTime();
+
+            ResultSet resultSet = p.executeQuery();
+            while (resultSet.next()) { /* do nothing */ }
+
+            endTime = System.nanoTime();
+            System.err.println("query run time: " + (endTime - startTime) / 1000000.0);
+
+            ((PrivacyConnection) conn).resetSequence();
+        }
+    }
 }

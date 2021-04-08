@@ -71,20 +71,4 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     public SqlNode getFrom() {return from;}
 
     public SqlNodeList getSelectAttributes() {return selectAttributes;}
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-        PrivacyQuerySelect that = (PrivacyQuerySelect) o;
-        return Objects.equals(where, that.where) &&
-                Objects.equals(from, that.from) &&
-                Objects.equals(selectAttributes, that.selectAttributes);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), where, from, selectAttributes);
-    }
 }

@@ -26,7 +26,7 @@ public class PrivacyConnection implements Connection {
   private PrivacyParser parser;
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
-  private QuerySequence current_sequence;
+  public QuerySequence current_sequence;
   private SchemaPlus schema;
 
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {

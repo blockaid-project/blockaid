@@ -1,5 +1,6 @@
 package sql;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -14,6 +15,10 @@ public class QueryWithResult {
     public QueryWithResult(PrivacyQuery query, List<List<Object>> tuples) {
         this.query = query;
         this.tuples = tuples;
+    }
+
+    public QueryWithResult copy() {
+        return new QueryWithResult(query, tuples == null ? null : new ArrayList<>(tuples));
     }
 
     @Override
