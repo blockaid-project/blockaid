@@ -385,8 +385,8 @@ public class QueryChecker {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-            PrivacyQuery query = (PrivacyQuery) o;
-            return privacyQuery.parsedSql.equals(query.parsedSql);
+            PrivacyQueryCoarseWrapper query = (PrivacyQueryCoarseWrapper) o;
+            return privacyQuery.parsedSql.equals(query.privacyQuery.parsedSql);
         }
 
         @Override
