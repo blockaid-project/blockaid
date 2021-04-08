@@ -114,17 +114,20 @@ public class DiasporaTest {
         s.setString(2, "aaaa");
         s.execute();
 
-        query = "SELECT username FROM users WHERE id = ?_MY_UID";
-        PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-        p.setInt(1, 1);
-        ResultSet resultSet = p.executeQuery();
-        while (resultSet.next()) { /* do nothing */ }
+        for (int i = 0; i < 1; i++) {
+            query = "SELECT username FROM users WHERE id = ?_MY_UID";
+            PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+            p.setInt(1, 1);
+            ResultSet resultSet = p.executeQuery();
+            while (resultSet.next()) { /* do nothing */ }
+            ((PrivacyConnection) conn).resetSequence();
+        }
 
-        query = "SELECT username FROM users WHERE username = ??";
-        p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-        p.setString(1, "aaaa");
-        resultSet = p.executeQuery();
-        while (resultSet.next()) { /* do nothing */ }
+//        query = "SELECT username FROM users WHERE username = ??";
+//        p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+//        p.setString(1, "aaaa");
+//        resultSet = p.executeQuery();
+//        while (resultSet.next()) { /* do nothing */ }
     }
 
     @Test

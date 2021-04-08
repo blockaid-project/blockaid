@@ -11,8 +11,6 @@ import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
 
-import java.io.FileWriter;
-import java.io.IOException;
 import java.sql.Types;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -307,23 +305,40 @@ public class QueryChecker {
 
         // fast check
         {
-            final long startTime = System.currentTimeMillis();
-            Solver solver = fastContext.mkSolver();
-            solver.add(this.fastCheckDeterminacyFormula.makeFormula(queries));
-            String s = solver.toString();
-            final long endTime = System.currentTimeMillis();
-            System.out.println("\tMake fast formula:\t" + (endTime - startTime));
-            executors.add(new Z3Executor(s, latch, false, true));
-
-            try {
-                FileWriter writer = new FileWriter("/tmp/fast_check.smt2");
-                writer.append(s);
-                writer.flush();
-                writer.close();
-            } catch (IOException exp) {
-                System.err.println(exp.getMessage());
+            Solver solver;
+            {
+                final long startTime = System.currentTimeMillis();
+                solver = fastContext.mkSolver();
+                solver.add(this.fastCheckDeterminacyFormula.makeFormula(queries));
+                final long endTime = System.currentTimeMillis();
+                System.out.println("\t| Make fast formula:\t" + (endTime - startTime));
             }
 
+            {
+                final long startTime = System.currentTimeMillis();
+                Status res = solver.check();
+                final long endTime = System.currentTimeMillis();
+                System.out.println("\t| check:\t" + (endTime - startTime) + ", " + res);
+            }
+
+            String s;
+            {
+                final long startTime = System.currentTimeMillis();
+                s = solver.toString();
+                final long endTime = System.currentTimeMillis();
+                System.out.println("\t| Formula toString:\t" + (endTime - startTime));
+            }
+
+            executors.add(new Z3Executor(s, latch, false, true));
+
+//            try {
+//                FileWriter writer = new FileWriter("/tmp/fast_check.smt2");
+//                writer.append(s);
+//                writer.flush();
+//                writer.close();
+//            } catch (IOException exp) {
+//                System.err.println(exp.getMessage());
+//            }
         }
 
         // regular check
@@ -333,7 +348,7 @@ public class QueryChecker {
             solver.add(this.determinacyFormula.makeFormula(queries));
             String s = solver.toString();
             final long endTime = System.currentTimeMillis();
-            System.out.println("\tMake regular formula:\t" + (endTime - startTime));
+            System.out.println("\t| Make regular formula:\t" + (endTime - startTime));
             executors.add(new Z3Executor(s, latch, true, true));
 //        executors.add(new VampireCascExecutor(s, latch, true, true));
 //        executors.add(new VampireFMBExecutor(s, latch, true, true));
@@ -357,7 +372,7 @@ public class QueryChecker {
         }
 //        long endTime = System.nanoTime();
         final long endTime = System.currentTimeMillis();
-        System.out.println("\tInvoke solvers:\t\t" + (endTime - startTime));
+        System.out.println("\t| Invoke solvers:\t" + (endTime - startTime));
 
 //        System.err.println(((endTime - startTime) / 1000000000.0));
         for (SMTExecutor executor : executors) {

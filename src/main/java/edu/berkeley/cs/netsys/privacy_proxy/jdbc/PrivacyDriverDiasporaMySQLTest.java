@@ -57,12 +57,11 @@ public class PrivacyDriverDiasporaMySQLTest {
                 dbDatabaseName
         );
 
-        try (Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            for (int i = 0; i < 10; i++) {
+        try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
+            for (int i = 0; i < 2; i++) {
                 String username = null;
 
-//                final String query1 = "SELECT username FROM users WHERE id = ?_MY_UID";
-                final String query1 = "SELECT users.id, users.username, users.serialized_private_key, users.getting_started, users.disable_mail, users.`language`, users.email, users.encrypted_password, users.reset_password_token, users.remember_created_at, users.sign_in_count, users.current_sign_in_at, users.last_sign_in_at, users.current_sign_in_ip, users.last_sign_in_ip, users.created_at, users.updated_at, users.invited_by_id, users.authentication_token, users.unconfirmed_email, users.confirm_email_token, users.locked_at, users.show_community_spotlight_in_stream, users.auto_follow_back, users.auto_follow_back_aspect_id, users.hidden_shareables, users.reset_password_sent_at, users.last_seen, users.remove_after, users.export, users.exported_at, users.exporting, users.strip_exif, users.exported_photos_file, users.exported_photos_at, users.exporting_photos, users.color_theme, users.post_default_public, users.consumed_timestep, users.otp_required_for_login, users.otp_backup_codes, users.plain_otp_secret FROM users WHERE users.id = ?_MY_UID";
+                final String query1 = "SELECT users.* FROM users WHERE id = ?_MY_UID";
                 System.out.println(query1);
                 try (PrivacyConnection.PrivacyPreparedStatement stmt =
                              (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query1)) {
@@ -80,21 +79,23 @@ public class PrivacyDriverDiasporaMySQLTest {
                     return;
                 }
 
-                String query2 = "SELECT email FROM users WHERE username = ??";
-                System.out.println(query2);
-                try (PrivacyConnection.PrivacyPreparedStatement stmt =
-                             (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query2)) {
-                    stmt.setString(1, username);
-                    try (ResultSet rs = stmt.executeQuery()) {
-                        while (rs.next()) {
-                            System.out.println("\temail:\t" + rs.getString("email"));
-                        }
-                    } catch (SQLException ex) {
-                        System.out.println("\tFAILED:\t" + ex);
-                    }
-                }
+//                String query2 = "SELECT email FROM users WHERE username = ??";
+//                System.out.println(query2);
+//                try (PrivacyConnection.PrivacyPreparedStatement stmt =
+//                             (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query2)) {
+//                    stmt.setString(1, username);
+//                    try (ResultSet rs = stmt.executeQuery()) {
+//                        while (rs.next()) {
+//                            System.out.println("\temail:\t" + rs.getString("email"));
+//                        }
+//                    } catch (SQLException ex) {
+//                        System.out.println("\tFAILED:\t" + ex);
+//                    }
+//                }
+//
+//                System.out.println();
 
-                System.out.println();
+                conn.resetSequence();
             }
         }
     }

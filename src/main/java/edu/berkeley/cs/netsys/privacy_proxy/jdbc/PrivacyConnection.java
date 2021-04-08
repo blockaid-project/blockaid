@@ -371,7 +371,7 @@ public class PrivacyConnection implements Connection {
           return query_checker.checkPolicy(current_sequence);
         } finally {
           final long endTime = System.currentTimeMillis();
-          System.out.println("\tPolicy checking:\t\t" + (endTime - startTime));
+          System.out.println("\t+ Policy checking:\t" + (endTime - startTime));
         }
       }
       return true;
