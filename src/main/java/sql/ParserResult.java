@@ -4,6 +4,8 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 
+import java.util.Objects;
+
 /**
  * Created by amoghm on 3/4/16.
  */
@@ -42,5 +44,18 @@ public abstract class ParserResult {
 
     public boolean isParseResult() {
         return parseResult;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ParserResult that = (ParserResult) o;
+        return Objects.equals(parsedSql, that.parsedSql);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(parsedSql);
     }
 }
