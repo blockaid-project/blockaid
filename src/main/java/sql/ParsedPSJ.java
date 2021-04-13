@@ -37,6 +37,9 @@ public class ParsedPSJ {
             relations = extractRelationNames((SqlJoin) fromClause);
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
+            if (sn instanceof SqlLiteral) {
+                continue;
+            }
             SqlIdentifier identifier = (SqlIdentifier) sn;
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
                 if (identifier.names.size() == 1) {

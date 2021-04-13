@@ -4,6 +4,9 @@ import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlLiteral;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlSelect;
 import planner.PrivacyTable;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
@@ -346,14 +349,21 @@ public class PrivacyConnection implements Connection {
   public class PrivacyPreparedStatement implements PreparedStatement {
     private PreparedStatement direct_statement;
     private ParserResult parser_result;
-    private List<String> paramNames;
+    private List<String> param_names;
     private Object[] values;
+    private List<Boolean> is_literal;
 
-    PrivacyPreparedStatement(String sql, List<String> paramNames) throws SQLException {
+    PrivacyPreparedStatement(String sql, List<String> param_names) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
       parser_result = parser.parse(sql);
       direct_statement = direct_connection.prepareStatement(sql);
-      this.paramNames = paramNames;
+      this.param_names = param_names;
+
+      is_literal = new ArrayList<>();
+      SqlSelect sqlSelect = (SqlSelect) parser_result.getSqlNode();
+      for (SqlNode sn : sqlSelect.getSelectList()) {
+        is_literal.add(sn instanceof SqlLiteral);
+      }
     }
 
     @Override
@@ -365,7 +375,7 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() throws SQLException {
-      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
+      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
       current_sequence.add(new QueryWithResult(privacy_query));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
         if (!query_checker.checkPolicy(current_sequence)) {
@@ -376,10 +386,16 @@ public class PrivacyConnection implements Connection {
     }
 
     public void addRow(List<Object> row) {
-      if (current_sequence.get(current_sequence.size() - 1).tuples == null) {
-        current_sequence.get(current_sequence.size() - 1).tuples = new ArrayList<>();
+      QueryWithResult current = current_sequence.get(current_sequence.size() - 1);
+      if (current.tuples == null) {
+        current.tuples = new ArrayList<>();
       }
-      current_sequence.get(current_sequence.size() - 1).tuples.add(row);
+      for (int i = row.size(); i-- > 0; ) {
+        if (is_literal.get(i)) {
+          row.remove(i);
+        }
+      }
+      current.tuples.add(row);
     }
 
     private class ResultSetWrapper implements ResultSet {
