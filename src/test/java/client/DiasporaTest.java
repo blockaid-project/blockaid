@@ -101,6 +101,32 @@ public class DiasporaTest {
     }
 
     @Test
+    public void runTestSetConst() throws Exception {
+        Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
+        Class.forName("org.h2.Driver");
+
+        try (PrivacyConnection conn =
+                     (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
+            conn.setAutoCommit(true);
+
+            // todo: data needs to be generated or we're querying an empty database
+
+            for (int i = 0; i < 3; i++) {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.execute("SET @_MY_UID = 2");
+                }
+
+                String query = "SELECT username FROM users WHERE id = 2";
+                try (PrivacyConnection.PrivacyPreparedStatement p =
+                             (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query)) {
+                    assertTrue(p.checkPolicy());
+                }
+                conn.resetSequence();
+            }
+        }
+    }
+
+    @Test
     public void runSimpleTestWithData() throws Exception {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");

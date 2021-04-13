@@ -35,7 +35,7 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
          *  Currently only supports PSJ / union of PSJ.
          *  TODO(zhangwen): Contrary to what I wrote, this formula supports any query, right?
          */
-        Query query = queries.get(queries.size() - 1).query.getSolverQuery(schema);
+        Query query = queries.lastInTrace().query.getSolverQuery(schema);
         Sort[] headTypes = query.headTypes();
         Expr[] freshConsts = new Expr[headTypes.length];
         for (int i = 0; i < freshConsts.length; ++i) {
@@ -46,7 +46,7 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         return context.mkAnd(
                 query.doesContain(context, inst1, extHeadTup),
                 context.mkNot(query.doesContain(context, inst2, extHeadTup)),
-                generateTupleCheck(queries),
+                generateTraceConformanceExpr(queries),
                 preparedExpr
         );
     }

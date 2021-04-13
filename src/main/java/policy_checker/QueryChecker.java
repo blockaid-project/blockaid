@@ -297,7 +297,6 @@ public class QueryChecker {
 
     private boolean doCheckPolicy(QuerySequence queries) {
         CountDownLatch latch = new CountDownLatch(1);
-        PrivacyQuery query = queries.get(queries.size() - 1).query;
 
         List<SMTExecutor> executors = new ArrayList<>();
 
@@ -314,12 +313,12 @@ public class QueryChecker {
                 System.out.println("\t| Make fast formula:\t" + (endTime - startTime));
             }
 
-            {
-                final long startTime = System.currentTimeMillis();
-                Status res = solver.check();
-                final long endTime = System.currentTimeMillis();
-                System.out.println("\t| check:\t" + (endTime - startTime) + ", " + res);
-            }
+//            {
+//                final long startTime = System.currentTimeMillis();
+//                Status res = solver.check();
+//                final long endTime = System.currentTimeMillis();
+//                System.out.println("\t| check:\t" + (endTime - startTime) + ", " + res);
+//            }
 
             String s;
             {
@@ -406,7 +405,7 @@ public class QueryChecker {
 
     public boolean checkPolicy(QuerySequence queries) {
         try {
-            FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.get(queries.size() - 1).query));
+            FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.lastInTrace().query));
             if (precheckResult != FastCheckDecision.UNKNOWN) {
                 return precheckResult == FastCheckDecision.ALLOW;
             }

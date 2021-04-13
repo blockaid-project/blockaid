@@ -50,8 +50,9 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
             return null;
         }
 
-        System.out.println("!!!\tPrivacyDriver.connect: " + url);
-
+        System.out.println("!!! PrivacyDriver.connect:");
+        System.out.println("\t" + url);
+        System.out.println("\t" + info);
 
         // hack to read in primary/foreign keys from files, TODO read from schema instead
         // String[] urls = url.split(",", 4);
@@ -63,6 +64,18 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
         String pk_file = urls[4];
         String fk_file = urls[5];
         String database_name = urls.length >= 7 ? urls[6] : null;
+
+        try {
+            if (direct_access_url.startsWith("jdbc:mysql:")) {
+                Class.forName("com.mysql.jdbc.Driver");
+            } else if (direct_access_url.startsWith("jdbc:h2:")) {
+                Class.forName("org.h2.Driver");
+            } else {
+                throw new RuntimeException("unsupported direct connection: " + direct_access_url);
+            }
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
 
         Connection direct_connection = DriverManager.getConnection(direct_access_url, info.getProperty("user"), info.getProperty("password"));
         Properties info_ = new Properties(info);

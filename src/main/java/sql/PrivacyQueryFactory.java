@@ -2,6 +2,7 @@ package sql;
 
 import org.apache.calcite.schema.SchemaPlus;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 

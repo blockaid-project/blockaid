@@ -27,10 +27,10 @@ public class BasicDeterminacyFormula extends DeterminacyFormula {
 
     @Override
     public BoolExpr makeFormula(QuerySequence queries) {
-        Query query = queries.get(queries.size() - 1).query.getSolverQuery(schema);
+        Query query = queries.lastInTrace().query.getSolverQuery(schema);
         return context.mkAnd(
                 context.mkNot(query.apply(context, inst1).equalsExpr(context, query.apply(context, inst2))),
-                generateTupleCheck(queries),
+                generateTraceConformanceExpr(queries),
                 preparedExpr
         );
     }

@@ -12,6 +12,8 @@ import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.sql.SqlIdentifier;
 
+import org.apache.calcite.sql.validate.SqlConformance;
+import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

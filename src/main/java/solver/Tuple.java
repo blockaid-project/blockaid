@@ -38,6 +38,11 @@ public class Tuple extends ArrayList<Expr> {
     public static Expr getExprFromObject(Context context, Object value) {
         if (value instanceof Integer) {
             return context.mkInt((Integer) value);
+        } else if (value instanceof Long) {
+            return context.mkInt((Long) value);
+        } else if (value instanceof Boolean) {
+            // TODO(zhangwen): "casting" boolean into int.
+            return ((Boolean) value) ? context.mkInt(1) : context.mkInt(0);
         } else if (value instanceof Double) {
             throw new UnsupportedOperationException("float loading todo");
         } else if (value instanceof String) {

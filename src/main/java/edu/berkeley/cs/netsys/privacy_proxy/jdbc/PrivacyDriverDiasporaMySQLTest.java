@@ -8,8 +8,9 @@ import java.io.IOException;
 import java.sql.*;
 
 public class PrivacyDriverDiasporaMySQLTest {
-    private static final String dbDatabaseName = "diaspora_development";
-    private static final String dbUrl = "jdbc:mysql://localhost:3306/" + dbDatabaseName + "?useSSL=false";
+    private static final String dbDatabaseName = "diaspora_production";
+    private static final String dbUrl = "jdbc:mysql://localhost:3306/" + dbDatabaseName +
+            "?useSSL=false&useUnicode=true&character_set_server=utf8mb4&collation_server=utf8mb4_bin";
     private static final String dbUsername = "diaspora";
     private static final String dbPassword = "12345678";
 
@@ -57,16 +58,22 @@ public class PrivacyDriverDiasporaMySQLTest {
                 dbDatabaseName
         );
 
+        System.out.println(proxyUrl);
+
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            for (int i = 0; i < 2; i++) {
+            for (int i = 1; i <= 2; i++) {
                 String username = null;
 
-                final String query1 = "SELECT users.* FROM users WHERE id = ?_MY_UID";
+//                final String query1 = "SELECT users.* FROM users WHERE id = ?_MY_UID";
+//                final String query1 = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?";
+                final String query1 = "SELECT  1 AS one FROM `users` WHERE `users`.`username` = ? AND `users`.`id` != ? LIMIT ?";
                 System.out.println(query1);
                 try (PrivacyConnection.PrivacyPreparedStatement stmt =
                              (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query1)) {
-                    stmt.setInt(1, 1);
-                    try (ResultSet rs = stmt.executeQuery()) {
+                    stmt.setInt(1, 2);
+                    stmt.setInt(2, 1);
+                    stmt.execute();
+                    try (ResultSet rs = stmt.getResultSet()) {
                         while (rs.next()) {
                             username = rs.getString("username");
                             System.out.println("\tusername:\t" + username);
@@ -74,17 +81,18 @@ public class PrivacyDriverDiasporaMySQLTest {
                     }
                 }
 
-                if (username == null) {
-                    System.out.println("\tFAILED: query returned empty");
-                    return;
-                }
-
+//                if (username == null) {
+//                    System.out.println("\tFAILED: query returned empty");
+//                    return;
+//                }
+//
 //                String query2 = "SELECT email FROM users WHERE username = ??";
 //                System.out.println(query2);
 //                try (PrivacyConnection.PrivacyPreparedStatement stmt =
 //                             (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query2)) {
 //                    stmt.setString(1, username);
-//                    try (ResultSet rs = stmt.executeQuery()) {
+//                    stmt.execute();
+//                    try (ResultSet rs = stmt.getResultSet()) {
 //                        while (rs.next()) {
 //                            System.out.println("\temail:\t" + rs.getString("email"));
 //                        }

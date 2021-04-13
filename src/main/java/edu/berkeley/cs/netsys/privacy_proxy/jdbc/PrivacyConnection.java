@@ -6,6 +6,7 @@ import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import sql.*;
 
+import javax.swing.text.html.Option;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -54,28 +55,33 @@ public class PrivacyConnection implements Connection {
   }
 
   public void resetSequence() {
-    current_sequence = new QuerySequence();
+    current_sequence.clear();
   }
 
   @Override
   public Statement createStatement() throws SQLException {
+//    System.out.println("=== createStatement ===");
     return new PrivacyStatement();
   }
 
   @Override
   public PreparedStatement prepareStatement(String s) throws SQLException {
-    // TODO(zhangwen): What is this pattern / replacement for?
-    Pattern pattern = Pattern.compile("(.*?\\?)(\\?|[A-Za-z0-9_]+)");
+//    System.out.println("=== prepareStatement: " + s);
+    Pattern pattern = Pattern.compile("\\?([A-Za-z0-9_]*)");
     Matcher matcher = pattern.matcher(s);
-    List<String> parameters = new ArrayList<>();
+    List<String> paramNames = new ArrayList<>();
     while (matcher.find()) {
-      parameters.add(matcher.group(2));
+      String name = matcher.group(1);
+      if (name.isEmpty()) {
+        name = "?";
+      }
+      paramNames.add(name);
     }
-    s = matcher.replaceAll("$1");
-
+    s = matcher.replaceAll("?");
+    // FIXME(zhangwen): We'll get rid of any LIMIT clause, but we keep any parameters used by the LIMIT clause.  Bad?
 
     if (shouldApplyPolicy(parser.parse(s).getSqlNode().getKind())) {
-      return new PrivacyPreparedStatement(s, parameters);
+      return new PrivacyPreparedStatement(s, paramNames);
     } else {
       return direct_connection.prepareStatement(s);
     }
@@ -83,71 +89,85 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public CallableStatement prepareCall(String s) throws SQLException {
+//      System.out.println("=== prepareCall ===");
     return direct_connection.prepareCall(s);
   }
 
   @Override
   public String nativeSQL(String s) throws SQLException {
+//    System.out.println("=== nativeSQL ===");
     return direct_connection.nativeSQL(s);
   }
 
   @Override
   public void setAutoCommit(boolean b) throws SQLException {
+//    System.out.println("=== setAutoCommit ===");
     direct_connection.setAutoCommit(b);
   }
 
   @Override
   public boolean getAutoCommit() throws SQLException {
+//    System.out.println("=== getAutoCommit ===");
     return direct_connection.getAutoCommit();
   }
 
   @Override
   public void commit() throws SQLException {
+//    System.out.println("=== commit ===");
     direct_connection.commit();
   }
 
   @Override
   public void rollback() throws SQLException {
+//    System.out.println("=== rollback ===");
     direct_connection.rollback();
   }
 
   @Override
   public void close() throws SQLException {
+//    System.out.println("=== close ===");
     direct_connection.close();
   }
 
   @Override
   public boolean isClosed() throws SQLException {
+//    System.out.println("=== isClosed ===");
     return direct_connection.isClosed();
   }
 
   @Override
   public DatabaseMetaData getMetaData() throws SQLException {
+//    System.out.println("=== getMetaData ===");
     return direct_connection.getMetaData();
   }
 
   @Override
   public void setReadOnly(boolean b) throws SQLException {
+//    System.out.println("=== setReadOnly ===");
     direct_connection.setReadOnly(b);
   }
 
   @Override
   public boolean isReadOnly() throws SQLException {
+//    System.out.println("=== isReadOnly ===");
     return direct_connection.isReadOnly();
   }
 
   @Override
   public void setCatalog(String s) throws SQLException {
+//    System.out.println("=== setCatalog ===");
     direct_connection.setCatalog(s);
   }
 
   @Override
   public String getCatalog() throws SQLException {
+//    System.out.println("=== getCatalog ===");
     return direct_connection.getCatalog();
   }
 
   @Override
   public void setTransactionIsolation(int i) throws SQLException {
+//    System.out.println("=== setTransactionIsolation ===");
     direct_connection.setTransactionIsolation(i);
   }
 
@@ -173,11 +193,13 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s, int i, int i1) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, i, i1);
   }
 
   @Override
   public CallableStatement prepareCall(String s, int i, int i1) throws SQLException {
+//    System.out.println("=== prepareCall ===");
     return direct_connection.prepareCall(s, i, i1);
   }
 
@@ -213,6 +235,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public void rollback(Savepoint savepoint) throws SQLException {
+//    System.out.println("=== rollback ===");
     direct_connection.rollback(savepoint);
   }
 
@@ -228,26 +251,31 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s, int i, int i1, int i2) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, i, i1, i2);
   }
 
   @Override
   public CallableStatement prepareCall(String s, int i, int i1, int i2) throws SQLException {
+//    System.out.println("=== prepareCall ===");
     return direct_connection.prepareCall(s, i, i1, i2);
   }
 
   @Override
   public PreparedStatement prepareStatement(String s, int i) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, i);
   }
 
   @Override
   public PreparedStatement prepareStatement(String s, int[] ints) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, ints);
   }
 
   @Override
   public PreparedStatement prepareStatement(String s, String[] strings) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, strings);
   }
 
@@ -308,6 +336,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public void setSchema(String s) throws SQLException {
+//    System.out.println("=== setSchema ===");
     direct_connection.setSchema(s);
   }
 
@@ -347,6 +376,8 @@ public class PrivacyConnection implements Connection {
     private List<String> paramNames;
     private Object[] values;
 
+    private boolean isLastQueryChecked;
+
     PrivacyPreparedStatement(String sql, List<String> paramNames) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
       parser_result = parser.parse(sql);
@@ -356,32 +387,47 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ResultSet executeQuery() throws SQLException {
-      if (!checkPolicy()) {
+      Optional<Boolean> res = checkPolicy();
+      if (!res.isPresent()) { // Not checked.
+        return direct_statement.executeQuery();
+      }
+      if (!res.get()) {
         throw new SQLException("Privacy compliance was not met");
       }
       return new ResultSetWrapper(direct_statement.executeQuery());
     }
 
-    public boolean checkPolicy() {
-      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
-      current_sequence.add(new QueryWithResult(privacy_query));
-      if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        final long startTime = System.currentTimeMillis();
-        try {
-          return query_checker.checkPolicy(current_sequence);
-        } finally {
-          final long endTime = System.currentTimeMillis();
-          System.out.println("\t+ Policy checking:\t" + (endTime - startTime));
-        }
+    /**
+     * Checks query compliance if applicable.
+     * @return If the query needs to be checked, checks it and returns compliance as a boolean.  If the query need not
+     * be checked, returns NULL.
+     */
+    public Optional<Boolean> checkPolicy() {
+//      return Optional.empty();
+
+      System.out.println("checkPolicy: " + parser_result.getParsedSql() + "\t" + Arrays.toString(values));
+      if (!shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
+        System.out.println("\t(Not checked)");
+        return Optional.empty();
       }
-      return true;
+
+      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
+      current_sequence.addToTrace(new QueryWithResult(privacy_query));
+      final long startTime = System.currentTimeMillis();
+      try {
+        return Optional.of(query_checker.checkPolicy(current_sequence));
+      } finally {
+        final long endTime = System.currentTimeMillis();
+        System.out.println("\t+ Policy checking:\t" + (endTime - startTime));
+      }
     }
 
     public void addRow(List<Object> row) {
-      if (current_sequence.get(current_sequence.size() - 1).tuples == null) {
-        current_sequence.get(current_sequence.size() - 1).tuples = new ArrayList<>();
+      QueryWithResult last = current_sequence.lastInTrace();
+      if (last.tuples == null) {
+        last.tuples = new ArrayList<>();
       }
-      current_sequence.get(current_sequence.size() - 1).tuples.add(row);
+      last.tuples.add(row);
     }
 
     private class ResultSetWrapper implements ResultSet {
@@ -1540,6 +1586,12 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public boolean execute() throws SQLException {
+      System.out.println("PrivacyPreparedStatement.execute");
+      Optional<Boolean> res = checkPolicy();
+      isLastQueryChecked = res.isPresent();
+      if (res.isPresent() && !res.get()) {
+        throw new SQLException("Privacy compliance was not met");
+      }
       return direct_statement.execute();
     }
 
@@ -1795,7 +1847,13 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ResultSet getResultSet() throws SQLException {
-      throw new UnsupportedOperationException();
+      System.out.println("PrivacyPreparedStatement.getResultSet");
+      // TODO(zhangwen): Is this right?
+      ResultSet rs = direct_statement.getResultSet();
+      if (rs == null || !isLastQueryChecked) {
+        return rs;
+      }
+      return new ResultSetWrapper(rs);
     }
 
     @Override
@@ -2061,6 +2119,10 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public boolean execute(String s) throws SQLException {
+      Optional<Boolean> r = processSetConst(s);
+      if (r.isPresent()) {
+        return r.get();
+      }
       return active_statment.execute(s);
     }
 
@@ -2154,8 +2216,38 @@ public class PrivacyConnection implements Connection {
       return active_statment.executeUpdate(s, strings);
     }
 
+    /**
+     * Detects whether the query is a special query that sets the value of a constant, and if so, executes the request
+     * by adding the (constant name, value) pair to the current sequence.
+     * The syntax for such special queries is like: SET @_MY_UID = 2.
+     * Currently only supports integer values.
+     * @param query the query to check.
+     * @return empty if the query is not a set const query, otherwise, the return value of execute.
+     */
+    private Optional<Boolean> processSetConst(String query) throws SQLException {
+      // I made up this syntax.
+      Pattern pattern = Pattern.compile("^SET @(_[A-Za-z0-9_]+) = (\\d+)$");
+      Matcher matcher = pattern.matcher(query);
+      if (!matcher.find()) {
+        return Optional.empty();
+      }
+
+      String name = matcher.group(1);
+      String value = matcher.group(2);
+      System.out.println("=== processSetConst: " + name + " = " + value);
+      current_sequence.setConstValue(name, Integer.valueOf(value));
+
+      // Still execute the query on `active_statement`, so that proper state is maintained about this execution.
+      return Optional.of(active_statment.execute(query));
+    }
+
     @Override
     public boolean execute(String s, int i) throws SQLException {
+      System.out.println("=== PrivacyStatement.execute: " + s);
+      Optional<Boolean> r = processSetConst(s);
+      if (r.isPresent()) {
+        return r.get();
+      }
       return active_statment.execute(s, i);
     }
 

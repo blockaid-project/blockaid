@@ -56,6 +56,7 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     @Override
     public void reduceQuery(){
         SqlSelect select = getSelectNode(parsedSql);
+        System.out.println("\t\t| reduceQuery: " + parsedSql + ", " + select);
         where = select.getWhere();
         from =  select.getFrom();
         selectAttributes = select.getSelectList();

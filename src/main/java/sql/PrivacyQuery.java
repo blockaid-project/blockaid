@@ -19,9 +19,7 @@ public abstract class PrivacyQuery {
     {
         this.parsedSql = parsedSql;
         this.parameters = new Object[parameters.length];
-        for (int i = 0; i < parameters.length; ++i) {
-            this.parameters[i] = parameters[i];
-        }
+        System.arraycopy(parameters, 0, this.parameters, 0, parameters.length);
         this.paramNames = paramNames;
     }
 
