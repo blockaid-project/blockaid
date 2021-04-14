@@ -11,7 +11,6 @@ import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
 
-import java.sql.Types;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -19,6 +18,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class QueryChecker {
+    public static boolean ENABLE_CACHING = true;
+    public static boolean ENABLE_PRECHECK = true;
+
     private enum FastCheckDecision {
         ALLOW,
         DENY,
@@ -31,10 +33,8 @@ public class QueryChecker {
     private List<Set<String>> preapprovedSets;
     private LoadingCache<PrivacyQueryCoarseWrapper, FastCheckDecision> policyDecisionCacheCoarse;
     private LoadingCache<QuerySequence, Boolean> policyDecisionCacheFine;
-    private Context regularContext;
-    private Context fastContext;
-    private Schema regularSchema;
-    private Schema fastSchema;
+    private Context context;
+    private Schema schema;
     private DeterminacyFormula fastCheckDeterminacyFormula;
     private DeterminacyFormula determinacyFormula;
 
@@ -45,6 +45,7 @@ public class QueryChecker {
     {
         this.policySet = policySet;
         this.policyDecisionCacheCoarse = CacheBuilder.newBuilder()
+                .maximumSize(ENABLE_CACHING ? Integer.MAX_VALUE : 0)
                 .build(new CacheLoader<PrivacyQueryCoarseWrapper, FastCheckDecision>() {
                     @Override
                     public FastCheckDecision load(final PrivacyQueryCoarseWrapper query) {
@@ -53,6 +54,7 @@ public class QueryChecker {
                 });
 
         this.policyDecisionCacheFine = CacheBuilder.newBuilder()
+                .maximumSize(ENABLE_CACHING ? Integer.MAX_VALUE : 0)
                 .build(new CacheLoader<QuerySequence, Boolean>() {
                     @Override
                     public Boolean load(final QuerySequence query) {
@@ -60,45 +62,14 @@ public class QueryChecker {
                     }
                 });
 
-        this.regularContext = new Context();
-        this.fastContext = new Context();
-
-        this.preapprovedSets = new ArrayList<>();
-        //buildPreapprovedSets();
+        this.context = new Context();
 
         Map<String, List<Column>> relations = new HashMap<>();
         for (String tableName : rawSchema.getTableNames()) {
             PrivacyTable table = (PrivacyTable) rawSchema.getTable(tableName);
             List<Column> columns = new ArrayList<>();
             for (PrivacyColumn column : table.getColumns()) {
-                Sort type;
-                // TODO cleaner (??)
-                // TODO(zhangwen): This really needs to be merged with the `fastSchema` creation logic.
-                switch (column.type) {
-                    case Types.INTEGER:
-                    case Types.BIGINT:
-                    case Types.TINYINT:
-                        // TODO(zhangwen): Rails seems to use `tinyint(1)` for booleans.  Do we care?
-                        type = regularContext.getIntSort();
-                        break;
-                    case Types.DOUBLE:
-                        type = regularContext.getRealSort();
-                        break;
-                    case Types.BOOLEAN:
-                        type = regularContext.getBoolSort();
-                        break;
-                    case Types.VARCHAR:
-                    case Types.LONGVARCHAR:
-                    case Types.CLOB:
-                        type = regularContext.getStringSort();
-                        break;
-                    case Types.TIMESTAMP: // TODO
-                    case Types.DATE:
-                        type = regularContext.getStringSort();
-                        break;
-                    default:
-                        throw new UnsupportedOperationException("bad column type: " + column.type + " for column " + tableName + "." + column.name);
-                }
+                Sort type = Schema.getSortFromSqlType(context, column.type);
                 // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
                 //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
                 columns.add(new Column(column.name.toUpperCase(), type, null));
@@ -124,69 +95,15 @@ public class QueryChecker {
             dependencies.add(new ImportedDependency(dep));
         }
 
-        this.regularSchema = new Schema(relations, dependencies);
-        List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(regularSchema)).collect(Collectors.toList());
-        this.determinacyFormula = new BasicDeterminacyFormula(regularContext, regularSchema, policyQueries);
+        this.schema = new Schema(relations, dependencies);
+        List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
+        this.determinacyFormula = new BasicDeterminacyFormula(context, schema, policyQueries);
+        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(context, schema, policyQueries);
 
-        relations = new HashMap<>();
-        for (String tableName : rawSchema.getTableNames()) {
-            PrivacyTable table = (PrivacyTable) rawSchema.getTable(tableName);
-            List<Column> columns = new ArrayList<>();
-            for (PrivacyColumn column : table.getColumns()) {
-                Sort type;
-                switch (column.type) {
-                    case Types.INTEGER:
-                    case Types.BIGINT:
-                    case Types.TINYINT:
-                        // TODO(zhangwen): Rails seems to use `tinyint(1)` for booleans.  Do we care?
-                        type = fastContext.getIntSort();
-                        break;
-                    case Types.DOUBLE:
-                        type = fastContext.getRealSort();
-                        break;
-                    case Types.BOOLEAN:
-                        type = fastContext.getBoolSort();
-                        break;
-                    case Types.VARCHAR:
-                    case Types.LONGVARCHAR:
-                    case Types.CLOB:
-                        type = fastContext.getStringSort();
-                        break;
-                    case Types.TIMESTAMP: // TODO
-                    case Types.DATE:
-                        type = fastContext.getStringSort(); // datetime.. not really accurate
-                        break;
-                    default:
-                        throw new UnsupportedOperationException("bad column type: " + column.type + " for column " + tableName + "." + column.name);
-                }
-                // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
-                //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
-                columns.add(new Column(column.name.toUpperCase(), type, null));
-            }
-            relations.put(tableName.toUpperCase(), columns);
+        if (ENABLE_PRECHECK) {
+            this.preapprovedSets = new ArrayList<>();
+            buildPreapprovedSets();
         }
-
-        dependencies = new ArrayList<>();
-        for (String pk : pks) {
-            pk = pk.toUpperCase();
-            String[] parts = pk.split(":", 2);
-            String[] columns = parts[1].split(",");
-            dependencies.add(new PrimaryKeyDependency(parts[0], Arrays.asList(columns)));
-        }
-        for (String fk : fks) {
-            fk = fk.toUpperCase();
-            String[] parts = fk.split(":", 2);
-            String[] from = parts[0].split("\\.", 2);
-            String[] to = parts[1].split("\\.", 2);
-            dependencies.add(new ForeignKeyDependency(from[0], from[1], to[0], to[1]));
-        }
-        for (String dep : deps) {
-            dependencies.add(new ImportedDependency(dep));
-        }
-
-        this.fastSchema = new Schema(relations, dependencies);
-        policyQueries = policySet.stream().map(p -> p.getSolverQuery(fastSchema)).collect(Collectors.toList());
-        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(fastContext, fastSchema, policyQueries);
     }
 
     private void buildPreapprovedSets() {
@@ -201,7 +118,7 @@ public class QueryChecker {
         }
 
         Map<Set<Integer>, Entry> previousPass = new HashMap<>();
-        previousPass.put(Collections.emptySet(), new Entry(regularContext.mkBool(false), getAllColumns()));
+        previousPass.put(Collections.emptySet(), new Entry(context.mkBool(false), getAllColumns()));
 
         Map<Set<Integer>, Entry> currentPass;
 
@@ -230,10 +147,10 @@ public class QueryChecker {
                         Set<String> nextColumns = setIntersection(prevColumns, policySet.get(j).getProjectColumns());
 
                         if (!nextColumns.isEmpty()) {
-                            BoolExpr nextPredicate = regularContext.mkOr(prevPredicate, policySet.get(j).getPredicate(regularContext));
+                            BoolExpr nextPredicate = context.mkOr(prevPredicate, policySet.get(j).getPredicate(context, schema));
 
-                            Solver solver = regularContext.mkSolver();
-                            solver.add(regularContext.mkNot(nextPredicate));
+                            Solver solver = context.mkSolver();
+                            solver.add(context.mkNot(nextPredicate));
                             Status q = solver.check();
                             boolean predicateResult = (q == Status.UNSATISFIABLE);
                             currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
@@ -280,19 +197,17 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {
-//        Set<String> projectColumns = query.getProjectColumns();
-//        for (Set<String> s : preapprovedSets) {
-//            if (containsAll(s, projectColumns)) {
-//                return true;
-//            }
-//        }
-//        return false;
+        Set<String> projectColumns = query.getProjectColumns();
+        for (Set<String> s : preapprovedSets) {
+            if (containsAll(s, projectColumns)) {
+                return true;
+            }
+        }
         return false;
     }
 
     private boolean precheckPolicyDenial(PrivacyQuery query, Policy policy) {
-//        return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
-        return false;
+        return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
     }
 
     private boolean doCheckPolicy(QuerySequence queries) {
@@ -300,59 +215,17 @@ public class QueryChecker {
 
         List<SMTExecutor> executors = new ArrayList<>();
 
-//        long startTime = System.nanoTime();
-
+        String smt;
         // fast check
-        {
-            Solver solver;
-            {
-                final long startTime = System.currentTimeMillis();
-                solver = fastContext.mkSolver();
-                solver.add(this.fastCheckDeterminacyFormula.makeFormula(queries));
-                final long endTime = System.currentTimeMillis();
-                System.out.println("\t| Make fast formula:\t" + (endTime - startTime));
-            }
-
-//            {
-//                final long startTime = System.currentTimeMillis();
-//                Status res = solver.check();
-//                final long endTime = System.currentTimeMillis();
-//                System.out.println("\t| check:\t" + (endTime - startTime) + ", " + res);
-//            }
-
-            String s;
-            {
-                final long startTime = System.currentTimeMillis();
-                s = solver.toString();
-                final long endTime = System.currentTimeMillis();
-                System.out.println("\t| Formula toString:\t" + (endTime - startTime));
-            }
-
-            executors.add(new Z3Executor(s, latch, false, true));
-
-//            try {
-//                FileWriter writer = new FileWriter("/tmp/fast_check.smt2");
-//                writer.append(s);
-//                writer.flush();
-//                writer.close();
-//            } catch (IOException exp) {
-//                System.err.println(exp.getMessage());
-//            }
-        }
+        smt = this.fastCheckDeterminacyFormula.generateSMT(queries);
+        executors.add(new Z3Executor(smt, latch, false, true));
 
         // regular check
-        {
-            final long startTime = System.currentTimeMillis();
-            Solver solver = regularContext.mkSolver();
-            solver.add(this.determinacyFormula.makeFormula(queries));
-            String s = solver.toString();
-            final long endTime = System.currentTimeMillis();
-            System.out.println("\t| Make regular formula:\t" + (endTime - startTime));
-            executors.add(new Z3Executor(s, latch, true, true));
-//        executors.add(new VampireCascExecutor(s, latch, true, true));
-//        executors.add(new VampireFMBExecutor(s, latch, true, true));
-//        executors.add(new CVC4Executor(s, latch, true, true));
-        }
+        smt = this.determinacyFormula.generateSMT(queries);
+        executors.add(new Z3Executor(smt, latch, true, true));
+//        executors.add(new VampireCascExecutor(smt, latch, true, true));
+//        executors.add(new VampireFMBExecutor(smt, latch, true, true));
+//        executors.add(new CVC4Executor(smt, latch, true, true));
 
         final long startTime = System.currentTimeMillis();
         for (SMTExecutor executor : executors) {
@@ -369,16 +242,15 @@ public class QueryChecker {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-//        long endTime = System.nanoTime();
         final long endTime = System.currentTimeMillis();
         System.out.println("\t| Invoke solvers:\t" + (endTime - startTime));
 
-//        System.err.println(((endTime - startTime) / 1000000000.0));
         for (SMTExecutor executor : executors) {
             if (executor.getResult() != Status.UNKNOWN) {
                 return executor.getResult() == Status.UNSATISFIABLE;
             }
         }
+
         // all timeout/inconclusive
         return false;
     }
@@ -405,9 +277,15 @@ public class QueryChecker {
 
     public boolean checkPolicy(QuerySequence queries) {
         try {
-            FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.lastInTrace().query));
-            if (precheckResult != FastCheckDecision.UNKNOWN) {
-                return precheckResult == FastCheckDecision.ALLOW;
+            if (ENABLE_PRECHECK) {
+                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.lastInTrace().query));
+                if (precheckResult == FastCheckDecision.ALLOW) {
+                    return true;
+                }
+                if (precheckResult == FastCheckDecision.DENY && queries.traceSize() == 1) {
+                    // fast check deny will reject queries that depend on past data
+                    return false;
+                }
             }
             return policyDecisionCacheFine.get(queries.copy());
         } catch (ExecutionException e) {

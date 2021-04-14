@@ -53,8 +53,8 @@ public class Policy {
         return new HashSet<>(parsedPSJ.getThetaColumns());
     }
 
-    public BoolExpr getPredicate(Context context) {
-        return parsedPSJ.getPredicate(context);
+    public BoolExpr getPredicate(Context context, Schema schema) {
+        return parsedPSJ.getPredicate(context, schema);
     }
 
     public boolean checkApplicable(Set<String> projectColumns, Set<String> thetaColumns) {

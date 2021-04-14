@@ -24,11 +24,11 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         for (Query v : views) {
             clauses.add(v.apply(context, inst1).isContainedIn(context, v.apply(context, inst2)));
         }
-        this.preparedExpr = context.mkAnd(clauses.toArray(new BoolExpr[0]));
+        setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
     }
 
     @Override
-    public BoolExpr makeFormula(QuerySequence queries) {
+    public Expr[] makeFormulaConstants(QuerySequence queries) {
         /**
          *  Makes SMT formula for fast check: either "determinacy holds" or "I don't know".
          *
@@ -39,15 +39,19 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         Sort[] headTypes = query.headTypes();
         Expr[] freshConsts = new Expr[headTypes.length];
         for (int i = 0; i < freshConsts.length; ++i) {
-            freshConsts[i] = context.mkFreshConst("v", headTypes[i]);
+            freshConsts[i] = context.mkFreshConst("z", headTypes[i]);
         }
+        return freshConsts;
+    }
 
-        Tuple extHeadTup = new Tuple(freshConsts);
+    @Override
+    public BoolExpr makeFormula(QuerySequence queries, Expr[] constants) {
+        Query query = queries.lastInTrace().query.getSolverQuery(schema);
+        Tuple extHeadTup = new Tuple(constants);
         return context.mkAnd(
                 query.doesContain(context, inst1, extHeadTup),
                 context.mkNot(query.doesContain(context, inst2, extHeadTup)),
-                generateTraceConformanceExpr(queries),
-                preparedExpr
+                generateTraceConformanceExpr(queries)
         );
     }
 }

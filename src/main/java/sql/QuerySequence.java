@@ -58,6 +58,10 @@ public class QuerySequence {
         return trace.get(trace.size() - 1);
     }
 
+    public int traceSize() {
+        return trace.size();
+    }
+
     public void clear() {
         trace.clear();
         constMap.clear();

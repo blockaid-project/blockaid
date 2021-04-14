@@ -6,10 +6,7 @@ import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
-import solver.PSJ;
-import solver.Query;
-import solver.Schema;
-import solver.Tuple;
+import solver.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -39,6 +36,9 @@ public class ParsedPSJ {
         }
         relations = relations.stream().map(String::toUpperCase).collect(Collectors.toList());
         for (SqlNode sn : sqlSelect.getSelectList()) {
+            if (sn instanceof SqlLiteral) {
+                continue;
+            }
             SqlIdentifier identifier = (SqlIdentifier) sn;
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
                 if (identifier.names.size() == 1) {
@@ -110,13 +110,24 @@ public class ParsedPSJ {
         }
     }
 
-    private Expr getPredicate(Context context, SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames) {
+    private Expr getPredicate(Context context, SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
         if (theta instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {
                 return symbolMap.get(name);
+            } else if (!name.startsWith("@")) {
+                String[] parts = name.split("\\.", 2);
+                assert parts.length == 2;
+                List<Column> columns = schema.getColumns(parts[0]);
+                for (Column column : columns) {
+                    if (column.name.toUpperCase().equals(parts[1])) {
+                        return context.mkConst(context.mkSymbol(name), column.type);
+                    }
+                }
+
+                throw new RuntimeException("unknown type for column " + name);
             } else {
-                return context.mkConst(context.mkSymbol(name), context.getIntSort());
+                return context.mkConst(name, context.getIntSort());
             }
         } else if (theta instanceof SqlLiteral) {
             SqlLiteral literal = (SqlLiteral) theta;
@@ -129,8 +140,8 @@ public class ParsedPSJ {
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall) {
-            Expr left = getPredicate(context, ((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames);
-            Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames);
+            Expr left = getPredicate(context, ((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
+            Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (theta.getKind() == SqlKind.AND) {
                 return context.mkAnd((BoolExpr) left, (BoolExpr) right);
             } else if (theta.getKind() == SqlKind.OR) {
@@ -196,20 +207,20 @@ public class ParsedPSJ {
         return relations;
     }
 
-    public BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap) {
+    public BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap, Schema schema) {
         if (theta != null) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
             List<String> names = new ArrayList<>(paramNames);
             Collections.reverse(names);
-            return (BoolExpr) getPredicate(context, theta, symbolMap, params, names);
+            return (BoolExpr) getPredicate(context, theta, symbolMap, params, names, schema);
         } else {
             return context.mkTrue();
         }
     }
 
-    public BoolExpr getPredicate(Context context) {
-        return getPredicate(context, Collections.emptyMap());
+    public BoolExpr getPredicate(Context context, Schema schema) {
+        return getPredicate(context, Collections.emptyMap(), schema);
     }
 
     public Query getSolverQuery(Schema schema) {
@@ -221,6 +232,7 @@ public class ParsedPSJ {
         int[] projectColumnIndex;
         int[] thetaRelationIndex;
         int[] thetaColumnIndex;
+        Schema schema;
 
         public SolverQuery(Schema schema) {
             super(schema, relations);
@@ -229,6 +241,8 @@ public class ParsedPSJ {
             projectColumnIndex = new int[projectColumns.size()];
             thetaRelationIndex = new int[thetaColumns.size()];
             thetaColumnIndex = new int[thetaColumns.size()];
+
+            this.schema = schema;
 
             mapIndices(schema, projectColumns, projectRelationIndex, projectColumnIndex);
             mapIndices(schema, thetaColumns, thetaRelationIndex, thetaColumnIndex);
@@ -257,7 +271,7 @@ public class ParsedPSJ {
             for (int i = 0; i < thetaColumnIndex.length; ++i) {
                 map.put(thetaColumns.get(i), tuples[thetaRelationIndex[i]].get(thetaColumnIndex[i]));
             }
-            return getPredicate(context, map);
+            return getPredicate(context, map, schema);
         }
 
         @Override

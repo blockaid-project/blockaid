@@ -2,6 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.*;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import sql.*;
@@ -45,7 +46,13 @@ public class PrivacyConnection implements Connection {
     String deps = info.getProperty("deps");
     String pks = info.getProperty("pk");
     String fks = info.getProperty("fk");
-    this.query_checker = new QueryChecker(this.policy_list, this.schema, deps.isEmpty() ? new String[0] : deps.split("\n"), pks.isEmpty() ? new String[0] : pks.split("\n"), fks.isEmpty() ? new String[0] : fks.split("\n"));
+    this.query_checker = new QueryChecker(
+            this.policy_list,
+            this.schema,
+            deps.isEmpty() ? new String[0] : deps.split("\n"),
+            pks.isEmpty() ? new String[0] : pks.split("\n"),
+            fks.isEmpty() ? new String[0] : fks.split("\n")
+    );
     current_sequence = new QuerySequence();
   }
 
@@ -378,14 +385,22 @@ public class PrivacyConnection implements Connection {
   public class PrivacyPreparedStatement implements PreparedStatement {
     private PreparedStatement direct_statement;
     private ParserResult parser_result;
-    private List<String> paramNames;
+    private List<String> param_names;
     private Object[] values;
+    private List<Boolean> is_literal;
 
-    PrivacyPreparedStatement(String sql, List<String> paramNames) throws SQLException {
+    PrivacyPreparedStatement(String sql, List<String> param_names) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
       parser_result = parser.parse(sql);
       direct_statement = direct_connection.prepareStatement(sql);
-      this.paramNames = paramNames;
+      this.param_names = param_names;
+
+      is_literal = new ArrayList<>();
+      SqlNode sqlNode = parser_result.getSqlNode();
+      SqlSelect sqlSelect = (SqlSelect) (sqlNode instanceof SqlOrderBy ? ((SqlOrderBy) sqlNode).query : sqlNode);
+      for (SqlNode sn : sqlSelect.getSelectList()) {
+        is_literal.add(sn instanceof SqlLiteral);
+      }
     }
 
     @Override
@@ -398,7 +413,7 @@ public class PrivacyConnection implements Connection {
 
     public boolean checkPolicy() {
       System.out.println("checkPolicy: " + parser_result.getParsedSql() + "\t" + Arrays.toString(values));
-      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
+      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
       current_sequence.addToTrace(new QueryWithResult(privacy_query));
       final long startTime = System.currentTimeMillis();
       try {
@@ -414,11 +429,16 @@ public class PrivacyConnection implements Connection {
     }
 
     public void addRow(List<Object> row) {
-      QueryWithResult last = current_sequence.lastInTrace();
-      if (last.tuples == null) {
-        last.tuples = new ArrayList<>();
+      QueryWithResult current = current_sequence.lastInTrace();
+      if (current.tuples == null) {
+        current.tuples = new ArrayList<>();
       }
-      last.tuples.add(row);
+      for (int i = row.size(); i-- > 0; ) {
+        if (is_literal.get(i)) {
+          row.remove(i);
+        }
+      }
+      current.tuples.add(row);
     }
 
     private class ResultSetWrapper implements ResultSet {
