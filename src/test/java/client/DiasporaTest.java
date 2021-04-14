@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import policy_checker.QueryChecker;
 import server.EndToEndTest;
 import sql.QuerySequence;
 
@@ -134,6 +135,9 @@ public class DiasporaTest {
         Class.forName("jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
+        QueryChecker.ENABLE_CACHING = false;
+        QueryChecker.ENABLE_PRECHECK = true;
+
         long startTime, endTime;
         startTime = System.nanoTime();
 
@@ -154,7 +158,7 @@ public class DiasporaTest {
         System.err.println("data entry time: " + (endTime - startTime) / 1000000.0);
 
         List<Long> times = new ArrayList<>();
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < 1000; ++i) {
             startTime = System.nanoTime();
 
             query = "SELECT users.id FROM users WHERE users.id = ?_MY_UID ORDER BY users.id ASC LIMIT 1";

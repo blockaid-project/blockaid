@@ -11,7 +11,6 @@ import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
 
-import java.sql.Types;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -19,6 +18,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class QueryChecker {
+    public static boolean ENABLE_CACHING = true;
+    public static boolean ENABLE_PRECHECK = true;
+
     private enum FastCheckDecision {
         ALLOW,
         DENY,
@@ -31,10 +33,8 @@ public class QueryChecker {
     private List<Set<String>> preapprovedSets;
     private LoadingCache<PrivacyQueryCoarseWrapper, FastCheckDecision> policyDecisionCacheCoarse;
     private LoadingCache<QuerySequence, Boolean> policyDecisionCacheFine;
-    private Context regularContext;
-    private Context fastContext;
-    private Schema regularSchema;
-    private Schema fastSchema;
+    private Context context;
+    private Schema schema;
     private DeterminacyFormula fastCheckDeterminacyFormula;
     private DeterminacyFormula determinacyFormula;
 
@@ -45,6 +45,7 @@ public class QueryChecker {
     {
         this.policySet = policySet;
         this.policyDecisionCacheCoarse = CacheBuilder.newBuilder()
+                .maximumSize(ENABLE_CACHING ? Integer.MAX_VALUE : 0)
                 .build(new CacheLoader<PrivacyQueryCoarseWrapper, FastCheckDecision>() {
                     @Override
                     public FastCheckDecision load(final PrivacyQueryCoarseWrapper query) {
@@ -53,7 +54,7 @@ public class QueryChecker {
                 });
 
         this.policyDecisionCacheFine = CacheBuilder.newBuilder()
-//                .maximumSize(0)
+                .maximumSize(ENABLE_CACHING ? Integer.MAX_VALUE : 0)
                 .build(new CacheLoader<QuerySequence, Boolean>() {
                     @Override
                     public Boolean load(final QuerySequence query) {
@@ -61,38 +62,14 @@ public class QueryChecker {
                     }
                 });
 
-        this.regularContext = new Context();
-        this.fastContext = new Context();
-
-        this.preapprovedSets = new ArrayList<>();
-        //buildPreapprovedSets();
+        this.context = new Context();
 
         Map<String, List<Column>> relations = new HashMap<>();
         for (String tableName : rawSchema.getTableNames()) {
             PrivacyTable table = (PrivacyTable) rawSchema.getTable(tableName);
             List<Column> columns = new ArrayList<>();
             for (PrivacyColumn column : table.getColumns()) {
-                Sort type;
-                switch (column.type) {
-                    case Types.INTEGER:
-                        type = regularContext.getIntSort();
-                        break;
-                    case Types.DOUBLE:
-                        type = regularContext.getRealSort();
-                        break;
-                    case Types.BOOLEAN:
-                        type = regularContext.getBoolSort();
-                        break;
-                    case Types.CLOB:
-                        type = regularContext.getStringSort();
-                        break;
-                    case Types.TIMESTAMP: // TODO
-                    case Types.DATE:
-                        type = regularContext.getStringSort();
-                        break;
-                    default:
-                        throw new UnsupportedOperationException("bad column type: " + column.type + " for column " + tableName + "." + column.name);
-                }
+                Sort type = Schema.getSortFromSqlType(context, column.type);
                 columns.add(new Column(column.name, type, null));
             }
             relations.put(tableName, columns);
@@ -116,62 +93,15 @@ public class QueryChecker {
             dependencies.add(new ImportedDependency(dep));
         }
 
-        this.regularSchema = new Schema(relations, dependencies);
-        List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(regularSchema)).collect(Collectors.toList());
-        this.determinacyFormula = new BasicDeterminacyFormula(regularContext, regularSchema, policyQueries);
+        this.schema = new Schema(relations, dependencies);
+        List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
+        this.determinacyFormula = new BasicDeterminacyFormula(context, schema, policyQueries);
+        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(context, schema, policyQueries);
 
-        relations = new HashMap<>();
-        for (String tableName : rawSchema.getTableNames()) {
-            PrivacyTable table = (PrivacyTable) rawSchema.getTable(tableName);
-            List<Column> columns = new ArrayList<>();
-            for (PrivacyColumn column : table.getColumns()) {
-                Sort type;
-                switch (column.type) {
-                    case Types.INTEGER:
-                        type = fastContext.getIntSort();
-                        break;
-                    case Types.DOUBLE:
-                        type = fastContext.getRealSort();
-                        break;
-                    case Types.BOOLEAN:
-                        type = fastContext.getBoolSort();
-                        break;
-                    case Types.CLOB:
-                        type = fastContext.getStringSort();
-                        break;
-                    case Types.TIMESTAMP: // TODO
-                    case Types.DATE:
-                        type = fastContext.getStringSort(); // datetime.. not really accurate
-                        break;
-                    default:
-                        throw new UnsupportedOperationException("bad column type: " + column.type + " for column " + tableName + "." + column.name);
-                }
-                columns.add(new Column(column.name, type, null));
-            }
-            relations.put(tableName, columns);
+        if (ENABLE_PRECHECK) {
+            this.preapprovedSets = new ArrayList<>();
+            buildPreapprovedSets();
         }
-
-        dependencies = new ArrayList<>();
-        for (String pk : pks) {
-            pk = pk.toUpperCase();
-            String[] parts = pk.split(":", 2);
-            String[] columns = parts[1].split(",");
-            dependencies.add(new PrimaryKeyDependency(parts[0], Arrays.asList(columns)));
-        }
-        for (String fk : fks) {
-            fk = fk.toUpperCase();
-            String[] parts = fk.split(":", 2);
-            String[] from = parts[0].split("\\.", 2);
-            String[] to = parts[1].split("\\.", 2);
-            dependencies.add(new ForeignKeyDependency(from[0], from[1], to[0], to[1]));
-        }
-        for (String dep : deps) {
-            dependencies.add(new ImportedDependency(dep));
-        }
-
-        this.fastSchema = new Schema(relations, dependencies);
-        policyQueries = policySet.stream().map(p -> p.getSolverQuery(fastSchema)).collect(Collectors.toList());
-        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(fastContext, fastSchema, policyQueries);
     }
 
     private void buildPreapprovedSets() {
@@ -186,7 +116,7 @@ public class QueryChecker {
         }
 
         Map<Set<Integer>, Entry> previousPass = new HashMap<>();
-        previousPass.put(Collections.emptySet(), new Entry(regularContext.mkBool(false), getAllColumns()));
+        previousPass.put(Collections.emptySet(), new Entry(context.mkBool(false), getAllColumns()));
 
         Map<Set<Integer>, Entry> currentPass;
 
@@ -215,10 +145,10 @@ public class QueryChecker {
                         Set<String> nextColumns = setIntersection(prevColumns, policySet.get(j).getProjectColumns());
 
                         if (!nextColumns.isEmpty()) {
-                            BoolExpr nextPredicate = regularContext.mkOr(prevPredicate, policySet.get(j).getPredicate(regularContext));
+                            BoolExpr nextPredicate = context.mkOr(prevPredicate, policySet.get(j).getPredicate(context, schema));
 
-                            Solver solver = regularContext.mkSolver();
-                            solver.add(regularContext.mkNot(nextPredicate));
+                            Solver solver = context.mkSolver();
+                            solver.add(context.mkNot(nextPredicate));
                             Status q = solver.check();
                             boolean predicateResult = (q == Status.UNSATISFIABLE);
                             currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
@@ -265,19 +195,17 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {
-//        Set<String> projectColumns = query.getProjectColumns();
-//        for (Set<String> s : preapprovedSets) {
-//            if (containsAll(s, projectColumns)) {
-//                return true;
-//            }
-//        }
-//        return false;
+        Set<String> projectColumns = query.getProjectColumns();
+        for (Set<String> s : preapprovedSets) {
+            if (containsAll(s, projectColumns)) {
+                return true;
+            }
+        }
         return false;
     }
 
     private boolean precheckPolicyDenial(PrivacyQuery query, Policy policy) {
-//        return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
-        return false;
+        return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
     }
 
     private boolean doCheckPolicy(QuerySequence queries) {
@@ -345,9 +273,15 @@ public class QueryChecker {
 
     public boolean checkPolicy(QuerySequence queries) {
         try {
-            FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.get(queries.size() - 1).query));
-            if (precheckResult != FastCheckDecision.UNKNOWN) {
-                return precheckResult == FastCheckDecision.ALLOW;
+            if (ENABLE_PRECHECK) {
+                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.get(queries.size() - 1).query));
+                if (precheckResult == FastCheckDecision.ALLOW) {
+                    return true;
+                }
+                if (precheckResult == FastCheckDecision.DENY && queries.size() == 1) {
+                    // fast check deny will reject queries that depend on past data
+                    return false;
+                }
             }
             return policyDecisionCacheFine.get(queries.copy());
         } catch (ExecutionException e) {

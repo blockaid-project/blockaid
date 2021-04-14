@@ -42,7 +42,13 @@ public class PrivacyConnection implements Connection {
     String deps = info.getProperty("deps");
     String pks = info.getProperty("pk");
     String fks = info.getProperty("fk");
-    this.query_checker = new QueryChecker(this.policy_list, this.schema, deps.isEmpty() ? new String[0] : deps.split("\n"), pks.isEmpty() ? new String[0] : pks.split("\n"), fks.isEmpty() ? new String[0] : fks.split("\n"));
+    this.query_checker = new QueryChecker(
+            this.policy_list,
+            this.schema,
+            deps.isEmpty() ? new String[0] : deps.split("\n"),
+            pks.isEmpty() ? new String[0] : pks.split("\n"),
+            fks.isEmpty() ? new String[0] : fks.split("\n")
+    );
     current_sequence = new QuerySequence();
   }
 

@@ -2,6 +2,7 @@ package solver;
 
 import com.microsoft.z3.*;
 
+import java.sql.Types;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -95,5 +96,23 @@ public class Schema {
             tuple.add(context.mkFreshConst("v", column.type));
         }
         return tuple;
+    }
+
+    public static Sort getSortFromSqlType(Context context, int type) {
+        switch (type) {
+            case Types.INTEGER:
+                return context.getIntSort();
+            case Types.DOUBLE:
+                return context.getRealSort();
+            case Types.BOOLEAN:
+                return context.getBoolSort();
+            case Types.CLOB:
+                return context.getStringSort();
+            case Types.TIMESTAMP: // TODO
+            case Types.DATE:
+                return context.getStringSort();
+            default:
+                throw new UnsupportedOperationException("bad column type: " + type);
+        }
     }
 }
