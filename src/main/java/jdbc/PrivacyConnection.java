@@ -3,10 +3,7 @@ package jdbc;
 import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlLiteral;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlSelect;
+import org.apache.calcite.sql.*;
 import planner.PrivacyTable;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
@@ -360,7 +357,8 @@ public class PrivacyConnection implements Connection {
       this.param_names = param_names;
 
       is_literal = new ArrayList<>();
-      SqlSelect sqlSelect = (SqlSelect) parser_result.getSqlNode();
+      SqlNode sqlNode = parser_result.getSqlNode();
+      SqlSelect sqlSelect = (SqlSelect) (sqlNode instanceof SqlOrderBy ? ((SqlOrderBy) sqlNode).query : sqlNode);
       for (SqlNode sn : sqlSelect.getSelectList()) {
         is_literal.add(sn instanceof SqlLiteral);
       }

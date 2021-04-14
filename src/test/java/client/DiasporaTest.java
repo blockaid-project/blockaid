@@ -11,7 +11,9 @@ import sql.QuerySequence;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.Assert.*;
@@ -151,7 +153,8 @@ public class DiasporaTest {
         endTime = System.nanoTime();
         System.err.println("data entry time: " + (endTime - startTime) / 1000000.0);
 
-        for (int i = 0; i < 10; ++i) {
+        List<Long> times = new ArrayList<>();
+        for (int i = 0; i < 100; ++i) {
             startTime = System.nanoTime();
 
             query = "SELECT users.id FROM users WHERE users.id = ?_MY_UID ORDER BY users.id ASC LIMIT 1";
@@ -167,8 +170,15 @@ public class DiasporaTest {
 
             endTime = System.nanoTime();
             System.err.println("query run time: " + (endTime - startTime) / 1000000.0);
+            times.add(endTime - startTime);
 
             ((PrivacyConnection) conn).resetSequence();
         }
+
+        long y = 0;
+        for (Long x : times) {
+            y += x;
+        }
+        System.err.println("average query run time: " + (((float) y) / times.size()) / 1000000.0);
     }
 }

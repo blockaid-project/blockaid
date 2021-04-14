@@ -53,6 +53,7 @@ public class QueryChecker {
                 });
 
         this.policyDecisionCacheFine = CacheBuilder.newBuilder()
+//                .maximumSize(0)
                 .build(new CacheLoader<QuerySequence, Boolean>() {
                     @Override
                     public Boolean load(final QuerySequence query) {
@@ -283,24 +284,19 @@ public class QueryChecker {
         CountDownLatch latch = new CountDownLatch(1);
         PrivacyQuery query = queries.get(queries.size() - 1).query;
 
-        Solver solver;
         List<SMTExecutor> executors = new ArrayList<>();
 
-//        long startTime = System.nanoTime();
-
+        String smt;
         // fast check
-        solver = fastContext.mkSolver();
-        solver.add(this.fastCheckDeterminacyFormula.makeFormula(queries));
-        executors.add(new Z3Executor(solver.toString(), latch, false, true));
+        smt = this.fastCheckDeterminacyFormula.generateSMT(queries);
+        executors.add(new Z3Executor(smt, latch, false, true));
 
         // regular check
-        solver = regularContext.mkSolver();
-        solver.add(this.determinacyFormula.makeFormula(queries));
-//        String s = solver.toString();
-        executors.add(new Z3Executor(solver.toString(), latch, true, true));
-//        executors.add(new VampireCascExecutor(s, latch, true, true));
-//        executors.add(new VampireFMBExecutor(s, latch, true, true));
-//        executors.add(new CVC4Executor(s, latch, true, true));
+        smt = this.determinacyFormula.generateSMT(queries);
+        executors.add(new Z3Executor(smt, latch, true, true));
+//        executors.add(new VampireCascExecutor(smt, latch, true, true));
+//        executors.add(new VampireFMBExecutor(smt, latch, true, true));
+//        executors.add(new CVC4Executor(smt, latch, true, true));
 
         for (SMTExecutor executor : executors) {
             executor.start();
@@ -316,14 +312,13 @@ public class QueryChecker {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-//        long endTime = System.nanoTime();
 
-//        System.err.println(((endTime - startTime) / 1000000000.0));
         for (SMTExecutor executor : executors) {
             if (executor.getResult() != Status.UNKNOWN) {
                 return executor.getResult() == Status.UNSATISFIABLE;
             }
         }
+
         // all timeout/inconclusive
         return false;
     }
