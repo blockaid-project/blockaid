@@ -69,7 +69,7 @@ public class ParsedPSJ {
 
     private List<String> extractRelationNames(SqlJoin join) {
         if (join.getJoinType() != JoinType.COMMA || join.getCondition() != null) {
-            throw new RuntimeException("unhandled join type");
+            throw new RuntimeException("unhandled join type: " + join.getJoinType() + ", " + join.getCondition());
         }
         SqlNode left = join.getLeft();
         SqlNode right = join.getRight();
@@ -154,6 +154,9 @@ public class ParsedPSJ {
             String name = "@" + paramNames.get(paramNames.size() - 1);
             paramNames.remove(paramNames.size() - 1);
             if (name.equals("@?")) {
+                if (param == null) {
+                    throw new UnsupportedOperationException("null parameter is not supported (yet)");
+                }
                 return Tuple.getExprFromObject(context, param);
             } else {
                 if (symbolMap.containsKey(name)) {

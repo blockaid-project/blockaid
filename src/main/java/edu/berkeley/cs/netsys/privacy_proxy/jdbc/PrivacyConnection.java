@@ -6,7 +6,6 @@ import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import sql.*;
 
-import javax.swing.text.html.Option;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -30,13 +29,19 @@ public class PrivacyConnection implements Connection {
     this.direct_connection = direct_connection;
     Properties info = direct_info;
     info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
-    this.parser = new ParserFactory(info).getParser(info);
+    QueryContext ctx;
+    try {
+      ctx = new QueryContext(info);
+    } catch (PrivacyException e){
+      throw new SQLException(e.getMessage(), e);
+    }
+    this.parser = new ParserFactory(ctx).getParser();
 
     String database_name = info.getProperty("database_name", "PUBLIC");
     this.schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema(database_name);
 
     this.policy_list = new ArrayList<>();
-    set_policy(info);
+    set_policy(info, ctx);
     String deps = info.getProperty("deps");
     String pks = info.getProperty("pk");
     String fks = info.getProperty("fk");
@@ -44,13 +49,14 @@ public class PrivacyConnection implements Connection {
     current_sequence = new QuerySequence();
   }
 
-  private void set_policy(Properties info) {
+  private void set_policy(Properties info, QueryContext ctx) {
     for (String sql : info.getProperty("policy").split("\n")) {
-      this.policy_list.add(new Policy(info, this.schema, sql));
+      this.policy_list.add(new Policy(ctx, this.schema, sql));
     }
   }
 
-  private boolean shouldApplyPolicy(SqlKind kind) {
+  private boolean shouldApplyPolicy(String query) throws SQLException {
+    SqlKind kind = parser.parse(query).getSqlNode().getKind();
     return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY);
   }
 
@@ -66,7 +72,6 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s) throws SQLException {
-//    System.out.println("=== prepareStatement: " + s);
     Pattern pattern = Pattern.compile("\\?([A-Za-z0-9_]*)");
     Matcher matcher = pattern.matcher(s);
     List<String> paramNames = new ArrayList<>();
@@ -80,7 +85,7 @@ public class PrivacyConnection implements Connection {
     s = matcher.replaceAll("?");
     // FIXME(zhangwen): We'll get rid of any LIMIT clause, but we keep any parameters used by the LIMIT clause.  Bad?
 
-    if (shouldApplyPolicy(parser.parse(s).getSqlNode().getKind())) {
+    if (shouldApplyPolicy(s)) {
       return new PrivacyPreparedStatement(s, paramNames);
     } else {
       return direct_connection.prepareStatement(s);
@@ -376,8 +381,6 @@ public class PrivacyConnection implements Connection {
     private List<String> paramNames;
     private Object[] values;
 
-    private boolean isLastQueryChecked;
-
     PrivacyPreparedStatement(String sql, List<String> paramNames) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
       parser_result = parser.parse(sql);
@@ -387,35 +390,23 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ResultSet executeQuery() throws SQLException {
-      Optional<Boolean> res = checkPolicy();
-      if (!res.isPresent()) { // Not checked.
-        return direct_statement.executeQuery();
-      }
-      if (!res.get()) {
+      if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
       return new ResultSetWrapper(direct_statement.executeQuery());
     }
 
-    /**
-     * Checks query compliance if applicable.
-     * @return If the query needs to be checked, checks it and returns compliance as a boolean.  If the query need not
-     * be checked, returns NULL.
-     */
-    public Optional<Boolean> checkPolicy() {
-//      return Optional.empty();
-
+    public boolean checkPolicy() {
       System.out.println("checkPolicy: " + parser_result.getParsedSql() + "\t" + Arrays.toString(values));
-      if (!shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        System.out.println("\t(Not checked)");
-        return Optional.empty();
-      }
-
       PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, paramNames);
       current_sequence.addToTrace(new QueryWithResult(privacy_query));
       final long startTime = System.currentTimeMillis();
       try {
-        return Optional.of(query_checker.checkPolicy(current_sequence));
+        return query_checker.checkPolicy(current_sequence);
+      }
+      catch (Exception e) {
+        System.out.println("\t| EXCEPTION:\t" + e);
+        throw e;
       } finally {
         final long endTime = System.currentTimeMillis();
         System.out.println("\t+ Policy checking:\t" + (endTime - startTime));
@@ -1569,9 +1560,7 @@ public class PrivacyConnection implements Connection {
     @Override
     public void clearParameters() throws SQLException {
       direct_statement.clearParameters();
-      for (int i = 0; i < values.length; ++i) {
-          values[i] = null;
-      }
+      Arrays.fill(values, null);
     }
 
     @Override
@@ -1587,9 +1576,7 @@ public class PrivacyConnection implements Connection {
     @Override
     public boolean execute() throws SQLException {
       System.out.println("PrivacyPreparedStatement.execute");
-      Optional<Boolean> res = checkPolicy();
-      isLastQueryChecked = res.isPresent();
-      if (res.isPresent() && !res.get()) {
+      if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
       return direct_statement.execute();
@@ -1850,8 +1837,8 @@ public class PrivacyConnection implements Connection {
       System.out.println("PrivacyPreparedStatement.getResultSet");
       // TODO(zhangwen): Is this right?
       ResultSet rs = direct_statement.getResultSet();
-      if (rs == null || !isLastQueryChecked) {
-        return rs;
+      if (rs == null) {
+        return null;
       }
       return new ResultSetWrapper(rs);
     }

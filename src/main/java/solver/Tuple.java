@@ -47,6 +47,9 @@ public class Tuple extends ArrayList<Expr> {
             throw new UnsupportedOperationException("float loading todo");
         } else if (value instanceof String) {
             return context.mkString((String) value);
+        } else if (value == null) {
+            // FIXME(zhangwen): handle NULL properly.
+            return null;
         } else {
             throw new UnsupportedOperationException("unknown type for constant loading: " + value);
         }

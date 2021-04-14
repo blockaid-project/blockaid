@@ -28,9 +28,9 @@ public class PrivacyParser implements Parser {
     private static final Logger LOG = LoggerFactory.getLogger(PrivacyParser.class);
     private final QueryContext context;
 
-    public PrivacyParser(Properties info) throws PrivacyException
+    public PrivacyParser(QueryContext ctx)
     {
-        this.context = new QueryContext(info);
+       this.context = ctx;
     }
 
     public PrivacyParserResult parse(String sql) throws SQLException {

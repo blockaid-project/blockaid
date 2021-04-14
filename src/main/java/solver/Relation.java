@@ -2,19 +2,36 @@ package solver;
 
 import com.microsoft.z3.*;
 
+import java.util.Arrays;
 import java.util.List;
 
 public class Relation {
+    // TODO(zhangwen): We can now remove the "context" argument from the methods, right?
+    Context context;
     Function function;
-
     Sort[] signature;
 
-    public Relation(Function function, Sort[] signature) {
+    public Relation(Context context, Function function, Sort[] signature) {
+        this.context = context;
         this.function = function;
         this.signature = signature;
     }
 
     public BoolExpr apply(Expr... args) {
+        // FIXME(zhangwen): handle SQL NULL properly.
+        // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
+        // NULL, this is... safe?  At least not blatantly unsafe.  I need to think through this...
+        if (Arrays.asList(args).contains(null)) {
+            Expr[] convertedArgs = new Expr[args.length];
+            for (int i = 0; i < args.length; ++i) {
+                if (args[i] != null) {
+                    convertedArgs[i] = args[i];
+                } else {
+                    convertedArgs[i] = context.mkFreshConst("n", signature[i]);
+                }
+            }
+            args = convertedArgs;
+        }
         Expr expr = this.function.apply(args);
         assert expr instanceof BoolExpr;
         return (BoolExpr) expr;

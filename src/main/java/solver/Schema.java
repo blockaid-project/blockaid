@@ -28,7 +28,7 @@ public class Schema {
 
             Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
             FuncDecl func = context.mkFreshFuncDecl("v", colTypes, context.getBoolSort());
-            instance.put(relationName, new Relation(new Z3Function(func), colTypes));
+            instance.put(relationName, new Relation(context, new Z3Function(func), colTypes));
 
             // Apply per-column constraints.
             Tuple tuple = this.makeFreshTuple(context, relationName);

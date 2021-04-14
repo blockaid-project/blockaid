@@ -18,15 +18,7 @@ public class Policy {
     private ParsedPSJ parsedPSJ;
     private boolean useSuperset;
 
-    public Policy(Properties info, SchemaPlus schema, String sqlPolicy) {
-        QueryContext context = null;
-        try {
-            context = new QueryContext(info);
-        } catch (PrivacyException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
-
+    public Policy(QueryContext context, SchemaPlus schema, String sqlPolicy) {
         parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), schema, Collections.emptyList(), Collections.emptyList());
         useSuperset = false;
     }

@@ -28,7 +28,9 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlus schema, Object[] parameters, List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
         reduceQuery();
-        parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(parameters), paramNames);
+        // `this.parameters` and `this.paramNames` are copies made in `super`.
+        parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(this.parameters), this.paramNames);
+        System.out.println("PrivacyQuerySelect: " + parsedSql.parsedSql + ", " + parsedPSJ);
     }
 
     private SqlSelect getSelectNode(ParserResult result) {
@@ -56,7 +58,6 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     @Override
     public void reduceQuery(){
         SqlSelect select = getSelectNode(parsedSql);
-        System.out.println("\t\t| reduceQuery: " + parsedSql + ", " + select);
         where = select.getWhere();
         from =  select.getFrom();
         selectAttributes = select.getSelectList();

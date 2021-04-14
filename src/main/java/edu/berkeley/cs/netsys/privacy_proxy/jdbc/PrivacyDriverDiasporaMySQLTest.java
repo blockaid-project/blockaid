@@ -61,50 +61,52 @@ public class PrivacyDriverDiasporaMySQLTest {
         System.out.println(proxyUrl);
 
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            for (int i = 1; i <= 2; i++) {
-                String username = null;
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("SET @_MY_UID = 2");
+            }
 
-//                final String query1 = "SELECT users.* FROM users WHERE id = ?_MY_UID";
-//                final String query1 = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?";
-                final String query1 = "SELECT  1 AS one FROM `users` WHERE `users`.`username` = ? AND `users`.`id` != ? LIMIT ?";
-                System.out.println(query1);
-                try (PrivacyConnection.PrivacyPreparedStatement stmt =
-                             (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query1)) {
+            {
+                final String query1 = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?";
+                try (PreparedStatement stmt = conn.prepareStatement(query1)) {
                     stmt.setInt(1, 2);
                     stmt.setInt(2, 1);
                     stmt.execute();
                     try (ResultSet rs = stmt.getResultSet()) {
                         while (rs.next()) {
-                            username = rs.getString("username");
-                            System.out.println("\tusername:\t" + username);
                         }
                     }
                 }
-
-//                if (username == null) {
-//                    System.out.println("\tFAILED: query returned empty");
-//                    return;
-//                }
-//
-//                String query2 = "SELECT email FROM users WHERE username = ??";
-//                System.out.println(query2);
-//                try (PrivacyConnection.PrivacyPreparedStatement stmt =
-//                             (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query2)) {
-//                    stmt.setString(1, username);
-//                    stmt.execute();
-//                    try (ResultSet rs = stmt.getResultSet()) {
-//                        while (rs.next()) {
-//                            System.out.println("\temail:\t" + rs.getString("email"));
-//                        }
-//                    } catch (SQLException ex) {
-//                        System.out.println("\tFAILED:\t" + ex);
-//                    }
-//                }
-//
-//                System.out.println();
-
-                conn.resetSequence();
             }
+
+            {
+                final String query2 = "SELECT  `people`.* FROM `people` WHERE `people`.`guid` = ? LIMIT ?";
+                try (PreparedStatement stmt = conn.prepareStatement(query2)) {
+                    stmt.setString(1, "3919c1d07ae60139ec3e5db4b3e77b69");
+                    stmt.setInt(2, 1);
+                    stmt.execute();
+                    try (ResultSet rs = stmt.getResultSet()) {
+                        while (rs.next()) {
+                        }
+                    }
+                }
+            }
+
+            {
+                final String query3 = "SELECT `notifications`.* FROM `notifications` WHERE `notifications`.`recipient_id` = ? AND `notifications`.`target_type` = ? AND `notifications`.`target_id` = ? AND `notifications`.`unread` = ?";
+                try (PreparedStatement stmt = conn.prepareStatement(query3)) {
+                    stmt.setInt(1, 2);
+                    stmt.setString(2, "Person");
+                    stmt.setInt(3, 3);
+                    stmt.setInt(4, 1);
+                    stmt.execute();
+                    try (ResultSet rs = stmt.getResultSet()) {
+                        while (rs.next()) {
+                        }
+                    }
+                }
+            }
+
+            conn.resetSequence();
         }
     }
 
