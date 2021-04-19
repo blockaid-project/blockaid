@@ -9,6 +9,7 @@ import planner.PrivacyTable;
 import solver.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class ParsedPSJ {
     private List<String> relations;
@@ -16,57 +17,100 @@ public class ParsedPSJ {
     private List<String> thetaColumns;
     private List<Object> parameters;
     private List<String> paramNames;
-    private SqlBasicCall theta;
+    private List<SqlBasicCall> theta;
+    private List<Boolean> resultBitmap;
 
-    public ParsedPSJ(SqlNode parsedSql, SchemaPlus schema, List<Object> parameters, List<String> paramNames) {
+    public ParsedPSJ(SqlNode parsedSql, SchemaPlusWithKey schema, List<Object> parameters, List<String> paramNames) {
         projectColumns = new ArrayList<>();
         thetaColumns = new ArrayList<>();
         this.parameters = parameters;
         this.paramNames = paramNames;
+        this.theta = new ArrayList<>();
+        this.resultBitmap = new ArrayList<>();
 
         SqlSelect sqlSelect = (SqlSelect) parsedSql;
         SqlNode fromClause = sqlSelect.getFrom();
         if (fromClause.getKind() != SqlKind.JOIN) {
             List<String> names = ((SqlIdentifier) sqlSelect.getFrom()).names;
             String relation = names.get(names.size() - 1);
-            relations = Collections.singletonList(relation);
+            relations = Collections.singletonList(relation.toUpperCase());
         } else {
             relations = extractRelationNames((SqlJoin) fromClause);
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
+            // ignore unary function calls and use whatever they're called with instead
+            // TODO: add id (SUM)
+            boolean addPrimaryKey = false;
+            while (sn instanceof SqlBasicCall) {
+                if (((SqlBasicCall) sn).getOperator() instanceof SqlAsOperator) {
+                    assert ((SqlBasicCall) sn).operand(0) instanceof SqlLiteral; // only literal aliases
+                    sn = ((SqlBasicCall) sn).operand(0);
+                    continue;
+                }
+                assert ((SqlBasicCall) sn).operandCount() == 1; // only supporting unary functions
+                sn = ((SqlBasicCall) sn).getOperands()[0];
+                this.resultBitmap = null;
+                addPrimaryKey = true;
+            }
+
             if (sn instanceof SqlLiteral) {
+                resultBitmap.add(false);
                 continue;
             }
+
             SqlIdentifier identifier = (SqlIdentifier) sn;
-            if (identifier.names.get(identifier.names.size() - 1).equals("")) {
+
+            if (addPrimaryKey) {
                 if (identifier.names.size() == 1) {
                     for (String relation : relations) {
-                        for (PrivacyColumn column : ((PrivacyTable) schema.getTable(relation)).getColumns()) {
-                            projectColumns.add(relation + "." + column.name.toUpperCase());
+                        for (String column : schema.primaryKeys.get(relation)) {
+                            projectColumns.add((relation + "." + column).toUpperCase());
                         }
                     }
                 } else {
-                    String relation = identifier.names.get(identifier.names.size() - 2);
-                    for (PrivacyColumn column : ((PrivacyTable) schema.getTable(relation)).getColumns()) {
-                        projectColumns.add(relation + "." + column.name.toUpperCase());
+                    String relation = identifier.names.get(0).toUpperCase();
+                    for (String column : schema.primaryKeys.get(relation)) {
+                        projectColumns.add((relation + "." + column).toUpperCase());
+                    }
+                }
+            }
+
+            if (identifier.names.get(identifier.names.size() - 1).equals("")) {
+                if (identifier.names.size() == 1) {
+                    for (String relation : relations) {
+                        for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
+                            addProjectColumn((relation + "." + column.name).toUpperCase());
+                        }
+                    }
+                } else {
+                    String relation = identifier.names.get(identifier.names.size() - 2).toUpperCase();
+                    for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
+                        addProjectColumn((relation + "." + column.name).toUpperCase());
                     }
                 }
             } else {
-                projectColumns.add(quantifyName(identifier));
+                addProjectColumn(quantifyName(identifier));
             }
         }
 
         // not WHERE TRUE, WHERE FALSE
         if (sqlSelect.getWhere() != null && sqlSelect.getWhere().getKind() != SqlKind.LITERAL) {
-            theta = (SqlBasicCall) sqlSelect.getWhere();
-            if (theta != null) {
-                addThetaColumns(theta);
+            SqlBasicCall mainTheta = (SqlBasicCall) sqlSelect.getWhere();
+            if (mainTheta != null) {
+                addTheta(mainTheta);
             }
         }
     }
 
+    private void addProjectColumn(String column) {
+        projectColumns.add(column);
+        if (resultBitmap != null) {
+            resultBitmap.add(true);
+        }
+    }
+
     private List<String> extractRelationNames(SqlJoin join) {
-        if (join.getJoinType() != JoinType.COMMA || join.getCondition() != null) {
+        if (join.getJoinType() != JoinType.COMMA && join.getJoinType() != JoinType.INNER) {
             throw new RuntimeException("unhandled join type");
         }
         SqlNode left = join.getLeft();
@@ -76,22 +120,34 @@ public class ParsedPSJ {
             relations.addAll(extractRelationNames((SqlJoin) left));
         } else {
             SqlIdentifier identifier = (SqlIdentifier) left;
-            relations.add(identifier.names.get(identifier.names.size() - 1));
+            relations.add(identifier.names.get(identifier.names.size() - 1).toUpperCase());
         }
         if (right.getKind() == SqlKind.JOIN) {
             relations.addAll(extractRelationNames((SqlJoin) right));
         } else {
             SqlIdentifier identifier = (SqlIdentifier) right;
-            relations.add(identifier.names.get(identifier.names.size() - 1));
+            relations.add(identifier.names.get(identifier.names.size() - 1).toUpperCase());
+        }
+
+        if (join.getCondition() != null && join.getCondition().getKind() != SqlKind.LITERAL) {
+            addTheta((SqlBasicCall) join.getCondition());
         }
         return relations;
     }
 
-    private void addThetaColumns(SqlBasicCall predicate) {
+    private void addTheta(SqlBasicCall predicate) {
+        addTheta(predicate, true);
+    }
+
+    private void addTheta(SqlBasicCall predicate, boolean addToList) {
+        if (addToList) {
+            theta.add(predicate);
+        }
+
         SqlNode left = predicate.operand(0);
         SqlNode right = predicate.operand(1);
         if (left instanceof SqlBasicCall) {
-            addThetaColumns((SqlBasicCall) left);
+            addTheta((SqlBasicCall) left, false);
         } else if (left instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) left);
             if (!name.startsWith("@")) {
@@ -99,7 +155,7 @@ public class ParsedPSJ {
             }
         }
         if (right instanceof SqlBasicCall) {
-            addThetaColumns((SqlBasicCall) right);
+            addTheta((SqlBasicCall) right, false);
         } else if (right instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) right);
             if (!name.startsWith("@")) {
@@ -139,6 +195,19 @@ public class ParsedPSJ {
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall) {
             Expr left = getPredicate(context, ((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
+
+            if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
+                SqlNodeList values = ((SqlBasicCall) theta).operand(1);
+                BoolExpr[] exprs = values.getList().stream()
+                        .map(n -> context.mkEq(left, getPredicate(context, n, symbolMap, params, paramNames, schema)))
+                        .toArray(BoolExpr[]::new);
+                BoolExpr expr = context.mkOr(exprs);
+                if (theta.getKind() == SqlKind.NOT_IN) {
+                    expr = context.mkNot(expr);
+                }
+                return expr;
+            }
+
             Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (theta.getKind() == SqlKind.AND) {
                 return context.mkAnd((BoolExpr) left, (BoolExpr) right);
@@ -208,7 +277,11 @@ public class ParsedPSJ {
             Collections.reverse(params);
             List<String> names = new ArrayList<>(paramNames);
             Collections.reverse(names);
-            return (BoolExpr) getPredicate(context, theta, symbolMap, params, names, schema);
+            BoolExpr[] exprs = new BoolExpr[theta.size()];
+            for (int i = 0; i < theta.size(); ++i) {
+                exprs[i] = (BoolExpr) getPredicate(context, theta.get(i), symbolMap, params, names, schema);
+            }
+            return context.mkAnd(exprs);
         } else {
             return context.mkTrue();
         }
@@ -220,6 +293,10 @@ public class ParsedPSJ {
 
     public Query getSolverQuery(Schema schema) {
         return new SolverQuery(schema);
+    }
+
+    public List<Boolean> getResultBitmap() {
+        return resultBitmap == null ? Collections.emptyList() : resultBitmap;
     }
 
     private class SolverQuery extends PSJ {

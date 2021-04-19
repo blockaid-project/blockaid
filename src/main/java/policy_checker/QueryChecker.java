@@ -10,6 +10,7 @@ import planner.PrivacyTable;
 import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
+import sql.SchemaPlusWithKey;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -27,7 +28,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    private static long SOLVE_TIMEOUT = 15000; // ms
+    public static long SOLVE_TIMEOUT = 15000; // ms
 
     private ArrayList<Policy> policySet;
     private List<Set<String>> preapprovedSets;
@@ -41,7 +42,7 @@ public class QueryChecker {
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
     // TODO read pk/fk from schema instead
-    public QueryChecker(ArrayList<Policy> policySet, SchemaPlus rawSchema, String[] deps, String[] pks, String[] fks)
+    public QueryChecker(ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps, String[] uks, String[] fks)
     {
         this.policySet = policySet;
         this.policyDecisionCacheCoarse = CacheBuilder.newBuilder()
@@ -65,8 +66,8 @@ public class QueryChecker {
         this.context = new Context();
 
         Map<String, List<Column>> relations = new HashMap<>();
-        for (String tableName : rawSchema.getTableNames()) {
-            PrivacyTable table = (PrivacyTable) rawSchema.getTable(tableName);
+        for (String tableName : rawSchema.schema.getTableNames()) {
+            PrivacyTable table = (PrivacyTable) rawSchema.schema.getTable(tableName);
             List<Column> columns = new ArrayList<>();
             for (PrivacyColumn column : table.getColumns()) {
                 Sort type = Schema.getSortFromSqlType(context, column.type);
@@ -76,9 +77,9 @@ public class QueryChecker {
         }
 
         List<Dependency> dependencies = new ArrayList<>();
-        for (String pk : pks) {
-            pk = pk.toUpperCase();
-            String[] parts = pk.split(":", 2);
+        for (String uk : uks) {
+            uk = uk.toUpperCase();
+            String[] parts = uk.split(":", 2);
             String[] columns = parts[1].split(",");
             dependencies.add(new PrimaryKeyDependency(parts[0], Arrays.asList(columns)));
         }
@@ -196,6 +197,9 @@ public class QueryChecker {
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {
         Set<String> projectColumns = query.getProjectColumns();
+        Set<String> thetaColumns = query.getThetaColumns();
+        projectColumns.addAll(thetaColumns);
+
         for (Set<String> s : preapprovedSets) {
             if (containsAll(s, projectColumns)) {
                 return true;

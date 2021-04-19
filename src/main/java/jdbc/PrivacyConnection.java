@@ -1,13 +1,9 @@
 package jdbc;
 
-import org.apache.calcite.avatica.SqlType;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.*;
-import planner.PrivacyTable;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
-import solver.Schema;
 import sql.*;
 
 import java.io.InputStream;
@@ -27,7 +23,7 @@ public class PrivacyConnection implements Connection {
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
   public QuerySequence current_sequence;
-  private SchemaPlus schema;
+  private SchemaPlusWithKey schema;
 
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
     this.direct_connection = direct_connection;
@@ -35,13 +31,28 @@ public class PrivacyConnection implements Connection {
     info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
     this.parser = new ParserFactory(info).getParser(info);
 
-    this.schema = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
+    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
 
-    this.policy_list = new ArrayList<>();
-    set_policy(info);
     String deps = info.getProperty("deps");
     String pks = info.getProperty("pk");
     String fks = info.getProperty("fk");
+
+    Map<String, List<String>> primaryKeys = new HashMap<>();
+    if (!pks.isEmpty()) {
+      for (String pk : pks.split("\n")) {
+        pk = pk.toUpperCase();
+        String[] parts = pk.split(":", 2);
+        String[] columns = parts[1].split(",");
+        if (!primaryKeys.containsKey(parts[0])) {
+          primaryKeys.put(parts[0], Arrays.asList(columns));
+        }
+      }
+    }
+    schema = new SchemaPlusWithKey(schemaPlus, primaryKeys);
+
+    this.policy_list = new ArrayList<>();
+    set_policy(info);
+
     this.query_checker = new QueryChecker(
             this.policy_list,
             this.schema,
@@ -354,20 +365,13 @@ public class PrivacyConnection implements Connection {
     private ParserResult parser_result;
     private List<String> param_names;
     private Object[] values;
-    private List<Boolean> is_literal;
+    private PrivacyQuerySelect privacy_query = null;
 
     PrivacyPreparedStatement(String sql, List<String> param_names) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
       parser_result = parser.parse(sql);
-      direct_statement = direct_connection.prepareStatement(sql);
+      direct_statement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
       this.param_names = param_names;
-
-      is_literal = new ArrayList<>();
-      SqlNode sqlNode = parser_result.getSqlNode();
-      SqlSelect sqlSelect = (SqlSelect) (sqlNode instanceof SqlOrderBy ? ((SqlOrderBy) sqlNode).query : sqlNode);
-      for (SqlNode sn : sqlSelect.getSelectList()) {
-        is_literal.add(sn instanceof SqlLiteral);
-      }
     }
 
     @Override
@@ -379,7 +383,7 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() throws SQLException {
-      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
+      privacy_query = (PrivacyQuerySelect) PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
       current_sequence.add(new QueryWithResult(privacy_query));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
         if (!query_checker.checkPolicy(current_sequence)) {
@@ -394,8 +398,9 @@ public class PrivacyConnection implements Connection {
       if (current.tuples == null) {
         current.tuples = new ArrayList<>();
       }
+      List<Boolean> resultBitmap = ((PrivacyQuerySelect) current.query).getResultBitmap();
       for (int i = row.size(); i-- > 0; ) {
-        if (is_literal.get(i)) {
+        if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);
         }
       }
@@ -415,39 +420,41 @@ public class PrivacyConnection implements Connection {
         for (int i = 1; i <= columnCount; ++i) {
           columnTypes.add(metaData.getColumnType(i));
         }
+
+        while (resultSet.next()) {
+          List<Object> row = new ArrayList<>();
+          for (int i = 1; i <= columnTypes.size(); ++i) {
+            switch (columnTypes.get(i - 1)) {
+              case Types.INTEGER:
+              case Types.BIGINT:
+                row.add(resultSet.getInt(i));
+                break;
+              case Types.CLOB:
+                row.add(resultSet.getString(i));
+                break;
+              case Types.DOUBLE:
+                row.add(resultSet.getDouble(i));
+                break;
+              case Types.BOOLEAN:
+                row.add(resultSet.getBoolean(i));
+                break;
+              case Types.DATE:
+              case Types.TIMESTAMP:
+                // TODO fix this
+                row.add("placeholder");
+                break;
+              default:
+                throw new UnsupportedOperationException("unsupported type");
+            }
+          }
+          addRow(row);
+        }
+        resultSet.beforeFirst();
       }
 
       @Override
       public boolean next() throws SQLException {
-        if (!resultSet.next()) {
-          return false;
-        }
-        List<Object> row = new ArrayList<>();
-        for (int i = 1; i <= columnTypes.size(); ++i) {
-          switch (columnTypes.get(i - 1)) {
-            case Types.INTEGER:
-              row.add(resultSet.getInt(i));
-              break;
-            case Types.CLOB:
-              row.add(resultSet.getString(i));
-              break;
-            case Types.DOUBLE:
-              row.add(resultSet.getDouble(i));
-              break;
-            case Types.BOOLEAN:
-              row.add(resultSet.getBoolean(i));
-              break;
-            case Types.DATE:
-            case Types.TIMESTAMP:
-              // TODO fix this
-              row.add("placeholder");
-              break;
-            default:
-              throw new UnsupportedOperationException("unsupported type");
-          }
-        }
-        addRow(row);
-        return true;
+        return resultSet.next();
       }
 
       @Override
@@ -1986,14 +1993,11 @@ public class PrivacyConnection implements Connection {
   }
 
   private class PrivacyStatement implements Statement {
-    private Statement direct_statement;
     private Statement active_statment;
 
     private PrivacyStatement() throws SQLException {
-      this.direct_statement = direct_connection.createStatement();
-      this.active_statment = this.direct_statement;
+      this.active_statment = direct_connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
     }
-
 
     @Override
     public ResultSet executeQuery(String s) throws SQLException {

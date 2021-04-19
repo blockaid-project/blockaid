@@ -27,6 +27,9 @@ public class Relation {
         }
         BoolExpr lhs = this.apply(syms);
         BoolExpr rhs = other.apply(syms);
+        if (syms.length == 0) {
+            return context.mkImplies(lhs, rhs);
+        }
         return context.mkForall(syms, context.mkImplies(lhs, rhs), 1, null, null, null, null);
     }
 
@@ -53,6 +56,9 @@ public class Relation {
         }
         BoolExpr lhs = this.apply(syms);
         BoolExpr rhs = other.apply(syms);
+        if (syms.length == 0) {
+            return context.mkEq(lhs, rhs);
+        }
         return context.mkForall(syms, context.mkEq(lhs, rhs), 1, null, null, null, null);
     }
 }
