@@ -8,12 +8,12 @@ import java.util.List;
 
 public class PrivacyQueryFactory {
 
-    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlus schemaPlus)
+    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema)
     {
-        return createPrivacyQuery(result, schemaPlus, new Object[0], Collections.emptyList());
+        return createPrivacyQuery(result, schema, new Object[0], Collections.emptyList());
     }
 
-    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlus schemaPlus, Object[] parameters, List<String> paramNames)
+    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames)
     {
         if (result == null){
             return null;
@@ -21,7 +21,7 @@ public class PrivacyQueryFactory {
         switch(result.getKind()) {
             case SELECT:
             case ORDER_BY:
-                return new PrivacyQuerySelect(result, schemaPlus, parameters, paramNames);
+                return new PrivacyQuerySelect(result, schema, parameters, paramNames);
             default:
                 throw new AssertionError("unexpected");
         }

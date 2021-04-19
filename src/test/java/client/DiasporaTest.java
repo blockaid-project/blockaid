@@ -134,29 +134,26 @@ public class DiasporaTest {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
+        QueryChecker.ENABLE_PRECHECK = false;
+
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);
 
-        String query = "INSERT INTO users(id, username) VALUES (??, ??)";
+        String query = "INSERT INTO users(id, username) VALUES (?, ?)";
         PreparedStatement s = conn.prepareStatement(query);
         s.setInt(1, 1);
         s.setString(2, "aaaa");
         s.execute();
 
-        for (int i = 0; i < 1; i++) {
-            query = "SELECT username FROM users WHERE id = ?_MY_UID";
-            PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-            p.setInt(1, 1);
-            ResultSet resultSet = p.executeQuery();
-            while (resultSet.next()) { /* do nothing */ }
-            ((PrivacyConnection) conn).resetSequence();
-        }
+        query = "SELECT username FROM users WHERE users.id NOT IN (?_MY_UID)";
+        PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+        p.setInt(1, 1);
+        p.executeQuery();
 
-//        query = "SELECT username FROM users WHERE username = ??";
-//        p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-//        p.setString(1, "aaaa");
-//        resultSet = p.executeQuery();
-//        while (resultSet.next()) { /* do nothing */ }
+        query = "SELECT username FROM users WHERE username = ?";
+        p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+        p.setString(1, "aaaa");
+        p.executeQuery();
     }
 
     @Test
@@ -198,8 +195,7 @@ public class DiasporaTest {
             System.err.println("query prepare time: " + (endTime - startTime) / 1000000.0);
             startTime = System.nanoTime();
 
-            ResultSet resultSet = p.executeQuery();
-            while (resultSet.next()) { /* do nothing */ }
+            p.executeQuery();
 
             endTime = System.nanoTime();
             System.err.println("query run time: " + (endTime - startTime) / 1000000.0);
@@ -213,5 +209,96 @@ public class DiasporaTest {
             y += x;
         }
         System.err.println("average query run time: " + (((float) y) / times.size()) / 1000000.0);
+    }
+
+    @Test
+    public void testDiasporaTraceQueries() throws Exception {
+        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("org.h2.Driver");
+
+        QueryChecker.ENABLE_CACHING = true;
+        QueryChecker.ENABLE_PRECHECK = true;
+        QueryChecker.SOLVE_TIMEOUT = 100;
+
+        Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
+        conn.setAutoCommit(true);
+
+        String[] queries = new String[]{
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 1 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 10 AND `share_visibilities`.`user_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = 1 LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 10 AND `posts`.`author_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT `mentions`.`id` FROM `mentions` WHERE `mentions`.`mentions_container_id` = 10 AND `mentions`.`mentions_container_type` = 'Post' AND `mentions`.`person_id` = 1",
+                "SELECT `mentions`.`id` FROM `mentions` INNER JOIN `comments` ON `mentions`.`mentions_container_id` = `comments`.`id` AND `mentions`.`mentions_container_type` = 'Comment' WHERE `comments`.`commentable_id` = 10 AND `comments`.`commentable_type` = 'Post'",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 10 AND `mentions`.`mentions_container_type` = 'Post'",
+                "SELECT `people`.* FROM `people` WHERE `people`.`id` = 2",
+                "SELECT `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 2",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`id` = 1 LIMIT 1",
+                "SELECT  `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 1 LIMIT 1",
+                "SELECT `photos`.* FROM `photos` WHERE `photos`.`status_message_guid` = '78ff2810603c01392a5d0665b8726074'",
+                "SELECT  `locations`.* FROM `locations` WHERE `locations`.`status_message_id` = 10 LIMIT 1",
+                "SELECT  `polls`.* FROM `polls` WHERE `polls`.`status_message_id` = 10 LIMIT 1",
+                "SELECT  1 AS one_ FROM `participations` WHERE `participations`.`author_id` = 1 AND `participations`.`target_id` = 10 LIMIT 1",
+                "SELECT  `likes`.* FROM `likes` WHERE `likes`.`target_id` = 10 AND `likes`.`target_type` = 'Post' AND `likes`.`positive` = TRUE AND `likes`.`author_id` = 1 LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`type` IN ('Reshare') AND `posts`.`root_guid` = '78ff2810603c01392a5d0665b8726074' AND `posts`.`author_id` = 1 LIMIT 1",
+                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 10 AND `share_visibilities`.`user_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 10 AND `posts`.`author_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `likes`.* FROM `likes` WHERE `likes`.`target_id` = 10 AND `likes`.`target_type` = 'Post' AND `likes`.`positive` = TRUE ORDER BY author_id = 1 DESC LIMIT 30",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`type` IN ('Reshare') AND `posts`.`root_guid` = '78ff2810603c01392a5d0665b8726074' ORDER BY author_id = 1 DESC LIMIT 30",
+                "SELECT `tags`.* FROM `tags` INNER JOIN `taggings` ON `tags`.`id` = `taggings`.`tag_id` WHERE `taggings`.`taggable_id` = 10 AND `taggings`.`taggable_type` = 'Post' AND `taggings`.`context` = 'tags'",
+                "SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = 1 AND `notifications`.`unread` = TRUE",
+                "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = 1",
+                "SELECT  1 AS one_ FROM `roles` WHERE `roles`.`person_id` = 1 AND `roles`.`name` = 'admin' LIMIT 1",
+                "SELECT  1 AS one_ FROM `roles` WHERE `roles`.`name` IN ('moderator', 'admin') AND `roles`.`person_id` = 1 LIMIT 1",
+                "SELECT `aspects`.* FROM `aspects` WHERE `aspects`.`user_id` = 1 ORDER BY order_id ASC",
+                "SELECT `services`.* FROM `services` WHERE `services`.`user_id` = 1",
+                "SELECT COUNT(*) FROM `contacts` WHERE `contacts`.`user_id` = 1 AND `contacts`.`receiving` = TRUE",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 1 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = 1",
+                "SELECT  `notifications`.* FROM `notifications` WHERE `notifications`.`recipient_id` = 1 ORDER BY updated_at desc LIMIT 10 OFFSET 0",
+                "SELECT `posts`.* FROM `posts` WHERE `posts`.`id` IN (10, 7, 1)",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`id` = 2",
+                "SELECT `people`.* FROM `people` WHERE `people`.`id` = 2",
+                //"SELECT `notification_actors`.* FROM `notification_actors` WHERE `notification_actors`.`notification_id` IN (11, 10, 8, 7, 3, 2, 1)",
+                "SELECT `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 2",
+                "SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = 1 AND `notifications`.`unread` = TRUE",
+                "SELECT `notifications`.* FROM `notifications` WHERE `notifications`.`recipient_id` = 1 AND `notifications`.`unread` = TRUE",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = 1 LIMIT 1",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`id` = 1 LIMIT 1",
+                "SELECT  `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 1 LIMIT 1",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 10 AND `mentions`.`mentions_container_type` = 'Post'",
+                "SELECT  `comments`.* FROM `comments` WHERE `comments`.`id` = 3 LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 10 LIMIT 1",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 7 AND `mentions`.`mentions_container_type` = 'Post'",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 1 AND `mentions`.`mentions_container_type` = 'Post'",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 1 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 10 AND `share_visibilities`.`user_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = 1 LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 10 AND `posts`.`author_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT `comments`.* FROM `comments` WHERE `comments`.`commentable_id` = 10 AND `comments`.`commentable_type` = 'Post' ORDER BY created_at ASC",
+                "SELECT `people`.* FROM `people` WHERE `people`.`id` = 2",
+                "SELECT `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 2",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 3 AND `mentions`.`mentions_container_type` = 'Comment'",
+                "SELECT `people`.* FROM `people` WHERE `people`.`id` = 1",
+                "SELECT `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 1",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 4 AND `mentions`.`mentions_container_type` = 'Comment'",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 1 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 10 AND `share_visibilities`.`user_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = 1 LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 10 AND `posts`.`author_id` = 1 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT `comments`.* FROM `comments` WHERE `comments`.`commentable_id` = 10 AND `comments`.`commentable_type` = 'Post' ORDER BY created_at ASC",
+                "SELECT `people`.* FROM `people` WHERE `people`.`id` = 2",
+                "SELECT `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 2",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 3 AND `mentions`.`mentions_container_type` = 'Comment'",
+                "SELECT `people`.* FROM `people` WHERE `people`.`id` = 1",
+                "SELECT `profiles`.* FROM `profiles` WHERE `profiles`.`person_id` = 1",
+                "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = 4 AND `mentions`.`mentions_container_type` = 'Comment'",
+        };
+
+        for (String query : queries) {
+            System.err.println(query);
+            PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+            p.checkPolicy();
+        }
     }
 }

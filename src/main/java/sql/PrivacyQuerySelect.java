@@ -21,11 +21,11 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     private SqlNodeList selectAttributes;
     private ParsedPSJ parsedPSJ;
 
-    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlus schema) {
+    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema) {
         this(parsedSql, schema, new Object[0], Collections.emptyList());
     }
 
-    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlus schema, Object[] parameters, List<String> paramNames) {
+    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
         reduceQuery();
         // `this.parameters` and `this.paramNames` are copies made in `super`.
@@ -66,6 +66,10 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     @Override
     public Query getSolverQuery(Schema schema) {
         return parsedPSJ.getSolverQuery(schema);
+    }
+
+    public List<Boolean> getResultBitmap() {
+        return parsedPSJ.getResultBitmap();
     }
 
     public SqlNode getWhere() {return where;}

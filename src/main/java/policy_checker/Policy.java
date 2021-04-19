@@ -11,6 +11,7 @@ import solver.Schema;
 import sql.ParsedPSJ;
 import sql.PrivacyException;
 import sql.QueryContext;
+import sql.SchemaPlusWithKey;
 
 import java.util.*;
 
@@ -18,7 +19,7 @@ public class Policy {
     private ParsedPSJ parsedPSJ;
     private boolean useSuperset;
 
-    public Policy(QueryContext context, SchemaPlus schema, String sqlPolicy) {
+    public Policy(QueryContext context, SchemaPlusWithKey schema, String sqlPolicy) {
         parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), schema, Collections.emptyList(), Collections.emptyList());
         useSuperset = false;
     }
