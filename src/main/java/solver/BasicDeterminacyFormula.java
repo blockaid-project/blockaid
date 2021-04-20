@@ -20,6 +20,7 @@ public class BasicDeterminacyFormula extends DeterminacyFormula {
         if (inst2.constraint != null) {
             clauses.add(inst2.constraint);
         }
+        assert views.size() > 0;
         for (Query v : views) {
             clauses.add(v.apply(context, inst1).equalsExpr(context, v.apply(context, inst2)));
         }

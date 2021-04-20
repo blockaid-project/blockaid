@@ -23,6 +23,7 @@ public class PrimaryKeyDependency implements Dependency {
         Tuple tup2 = schema.makeFreshTuple(context, relationName);
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
+        assert !columnNames.isEmpty();
         BoolExpr[] agreeFormulaExprs = new BoolExpr[columnNames.size()];
         int index = 0;
         for (int i = 0; i < allColumnNames.size(); ++i) {

@@ -42,6 +42,9 @@ public class Relation {
     }
 
     public BoolExpr doesContain(Context context, List<Tuple> other) {
+        if (other.size() == 0) {
+            return context.mkTrue();
+        }
         BoolExpr[] syms = new BoolExpr[other.size()];
         for (int i = 0; i < other.size(); ++i) {
             syms[i] = this.apply(other.get(i).toArray(new Expr[0]));

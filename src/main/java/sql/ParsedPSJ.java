@@ -150,7 +150,7 @@ public class ParsedPSJ {
             addTheta((SqlBasicCall) left, false);
         } else if (left instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) left);
-            if (!name.startsWith("@")) {
+            if (!name.startsWith("!")) {
                 thetaColumns.add(name);
             }
         }
@@ -158,7 +158,7 @@ public class ParsedPSJ {
             addTheta((SqlBasicCall) right, false);
         } else if (right instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) right);
-            if (!name.startsWith("@")) {
+            if (!name.startsWith("!")) {
                 thetaColumns.add(name);
             }
         }
@@ -169,7 +169,7 @@ public class ParsedPSJ {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {
                 return symbolMap.get(name);
-            } else if (!name.startsWith("@")) {
+            } else if (!name.startsWith("!")) {
                 String[] parts = name.split("\\.", 2);
                 assert parts.length == 2;
                 List<Column> columns = schema.getColumns(parts[0]);
@@ -229,9 +229,9 @@ public class ParsedPSJ {
         } else if (theta instanceof SqlDynamicParam) {
             Object param = params.get(params.size() - 1);
             params.remove(params.size() - 1);
-            String name = "@" + paramNames.get(paramNames.size() - 1);
+            String name = "!" + paramNames.get(paramNames.size() - 1);
             paramNames.remove(paramNames.size() - 1);
-            if (name.equals("@?")) {
+            if (name.equals("!?")) {
                 return Tuple.getExprFromObject(context, param);
             } else {
                 if (symbolMap.containsKey(name)) {
@@ -248,7 +248,7 @@ public class ParsedPSJ {
         List<String> names = identifier.names;
         if (names.size() == 1) {
             if (names.get(0).startsWith("_")) {
-                return "@" + names.get(0);
+                return "!" + names.get(0);
             }
             if (relations.size() != 1) {
                 throw new UnsupportedOperationException("joins must only use fully-specified column names");
@@ -272,7 +272,7 @@ public class ParsedPSJ {
     }
 
     public BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap, Schema schema) {
-        if (theta != null) {
+        if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
             List<String> names = new ArrayList<>(paramNames);

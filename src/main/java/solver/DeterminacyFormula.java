@@ -47,6 +47,9 @@ public abstract class DeterminacyFormula {
                 exprs.add(r2.doesContain(context, tuples));
             }
         }
+        if (exprs.isEmpty()) {
+            return context.mkTrue();
+        }
         return context.mkAnd(exprs.toArray(new BoolExpr[0]));
     }
 
