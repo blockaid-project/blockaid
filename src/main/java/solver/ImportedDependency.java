@@ -20,14 +20,14 @@ public class ImportedDependency implements Dependency {
         List<Symbol> funcSymbols = new ArrayList<>();
         List<FuncDecl> funcDecls = new ArrayList<>();
         for (String constant : constants) {
-            funcSymbols.add(context.mkSymbol("@" + constant));
-            funcDecls.add(context.mkFuncDecl("@" + constant, new Sort[0], context.getIntSort()));
+            funcSymbols.add(context.mkSymbol("!" + constant));
+            funcDecls.add(context.mkFuncDecl("!" + constant, new Sort[0], context.getIntSort()));
         }
         for (Map.Entry<String, Relation> e : instance.entrySet()) {
             Function function = e.getValue().function;
             assert function instanceof Z3Function;
             FuncDecl funcDecl = ((Z3Function) function).functionDecl;
-            funcSymbols.add(context.mkSymbol("@" + e.getKey()));
+            funcSymbols.add(context.mkSymbol("!" + e.getKey()));
             funcDecls.add(funcDecl);
         }
         return context.mkAnd(context.parseSMTLIB2String(

@@ -1,5 +1,5 @@
 -- additional dependencies, one per line
--- |(assert (forall ((_v!1 Int) (_v!2 Int)) (= (@FRIENDS _v!1 _v!2) (@FRIENDS _v!2 _v!1))))
+-- |(assert (forall ((_v!1 Int) (_v!2 Int)) (= (!FRIENDS _v!1 _v!2) (!FRIENDS _v!2 _v!1))))
 -- pi_id(users) is contained in pi_owner_id(people)
 |(assert
   (forall
@@ -13,7 +13,7 @@
                (_u!remove_after String) (_u!export String) (_u!exported_at String) (_u!exporting Bool) (_u!strip_exif Bool) (_u!exported_photos_file String)
                (_u!exported_photos_at String) (_u!exporting_photos Bool) (_u!color_theme String) (_u!post_default_public Bool) (_u!consumed_timestep Int)
                (_u!otp_required_for_login Bool) (_u!otp_backup_codes String) (_u!plain_otp_secret String))
-              (@USERS _v!id _u!username _u!serialized_private_key _u!getting_started _u!disable_mail _u!language _u!email _u!encrypted_password _u!reset_password_token
+              (!USERS _v!id _u!username _u!serialized_private_key _u!getting_started _u!disable_mail _u!language _u!email _u!encrypted_password _u!reset_password_token
                             _u!remember_created_at _u!sign_in_count _u!current_sign_in_at _u!last_sign_in_at _u!current_sign_in_ip _u!last_sign_in_ip _u!created_at
                             _u!updated_at _u!invited_by_id _u!authentication_token _u!unconfirmed_email _u!confirm_email_token _u!locked_at _u!show_community_spotlight_in_stream
                             _u!auto_follow_back _u!auto_follow_back_aspect_id _u!hidden_shareables _u!reset_password_sent_at _u!last_seen _u!remove_after _u!export _u!exported_at
@@ -21,7 +21,7 @@
                             _u!otp_required_for_login _u!otp_backup_codes _u!plain_otp_secret))
       (exists ((_p!id Int) (_p!guid String) (_p!diaspora_handle String) (_p!serialized_public_key String) (_p!created_at String) (_p!updated_at String)
                (_p!closed_account Bool) (_p!fetch_status Int) (_p!pod_id Int))
-              (@PEOPLE _p!id _p!guid _p!diaspora_handle _p!serialized_public_key _v!id _p!created_at _p!updated_at _p!closed_account _p!fetch_status _p!pod_id)))));
+              (!PEOPLE _p!id _p!guid _p!diaspora_handle _p!serialized_public_key _v!id _p!created_at _p!updated_at _p!closed_account _p!fetch_status _p!pod_id)))));
 
 -- reshare_constraints: (assert (forall (posts tuple t) (=> (and (t in posts) (= t.type C_RESHARE)) (and t.public (exists (posts tuple tr) (and (tr in posts) (= t.root_guid tr.guid) tr.public))))))
 |(assert
@@ -31,7 +31,7 @@
      (_t!open_graph_cache_id Int) (_t!tumblr_ids String))
     (=>
       (and
-        (@POSTS _t!id _t!author_id _t!public _t!guid _t!type _t!text _t!created_at _t!updated_at _t!provider_display_name _t!root_guid _t!likes_count _t!comments_count _t!o_embed_cache_id
+        (!POSTS _t!id _t!author_id _t!public _t!guid _t!type _t!text _t!created_at _t!updated_at _t!provider_display_name _t!root_guid _t!likes_count _t!comments_count _t!o_embed_cache_id
                 _t!reshares_count _t!interacted_at _t!tweet_id _t!open_graph_cache_id _t!tumblr_ids)
         (= _t!type "Reshare"))
       (and
@@ -41,7 +41,7 @@
                (_tr!root_guid String) (_tr!likes_count Int) (_tr!comments_count Int) (_tr!o_embed_cache_id Int) (_tr!reshares_count Int) (_tr!interacted_at String) (_tr!tweet_id String)
                (_tr!open_graph_cache_id Int) (_tr!tumblr_ids String))
           (and
-            (@POSTS _tr!id _tr!author_id _tr!public _tr!guid _tr!type _tr!text _tr!created_at _tr!updated_at _tr!provider_display_name _tr!root_guid _tr!likes_count _tr!comments_count _tr!o_embed_cache_id
+            (!POSTS _tr!id _tr!author_id _tr!public _tr!guid _tr!type _tr!text _tr!created_at _tr!updated_at _tr!provider_display_name _tr!root_guid _tr!likes_count _tr!comments_count _tr!o_embed_cache_id
                     _tr!reshares_count _tr!interacted_at _tr!tweet_id _tr!open_graph_cache_id _tr!tumblr_ids)
             (and
               (= _t!id _tr!id)

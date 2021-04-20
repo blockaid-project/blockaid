@@ -61,6 +61,9 @@ public abstract class DeterminacyFormula {
             ));
         }
 
+        if (exprs.isEmpty()) {
+            return context.mkTrue();
+        }
         return context.mkAnd(exprs.toArray(new BoolExpr[0]));
     }
 

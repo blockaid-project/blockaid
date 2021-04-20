@@ -27,6 +27,9 @@ public class Tuple extends ArrayList<Expr> {
 
     BoolExpr tupleEqual(Context context, Tuple other) {
         assert size() == other.size();
+        if (isEmpty()) {
+            return context.mkTrue();
+        }
 
         BoolExpr[] exprs = new BoolExpr[size()];
         for (int i = 0; i < size(); ++i) {
