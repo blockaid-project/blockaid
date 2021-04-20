@@ -84,7 +84,7 @@ public class ParsedPSJ {
                         }
                     }
                 } else {
-                    String relation = identifier.names.get(identifier.names.size() - 2).toUpperCase();
+                    String relation = identifier.names.get(identifier.names.size() - 2);
                     for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
                         addProjectColumn((relation + "." + column.name).toUpperCase());
                     }
