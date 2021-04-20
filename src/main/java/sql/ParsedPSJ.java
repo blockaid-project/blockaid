@@ -190,7 +190,7 @@ public class ParsedPSJ {
             } else if (literal.getTypeName() == SqlTypeName.INTEGER || literal.getTypeName() == SqlTypeName.DECIMAL) {
                 return context.mkInt(literal.intValue(true));
             } else if (literal.getTypeName() == SqlTypeName.CHAR) {
-                return context.mkString(literal.toString());
+                return context.mkString(literal.getValueAs(String.class));
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall) {
