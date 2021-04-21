@@ -63,7 +63,7 @@ public abstract class DeterminacyFormula {
         return solver;
     }
 
-    public String generateSMT(QuerySequence queries) {
+    public synchronized String generateSMT(QuerySequence queries) {
         Expr[] constants = makeFormulaConstants(queries);
         StringBuilder stringBuilder = new StringBuilder();
         for (Expr constant : constants) {

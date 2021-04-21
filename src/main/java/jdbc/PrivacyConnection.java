@@ -53,7 +53,7 @@ public class PrivacyConnection implements Connection {
     this.policy_list = new ArrayList<>();
     set_policy(info);
 
-    this.query_checker = new QueryChecker(
+    this.query_checker = QueryChecker.getInstance(
             this.policy_list,
             this.schema,
             deps.isEmpty() ? new String[0] : deps.split("\n"),

@@ -186,6 +186,57 @@ public class DiasporaTest {
     }
 
     @Test
+    public void runMultipleThread() throws Exception {
+        QueryChecker.ENABLE_PRECHECK = false;
+        QueryChecker.SOLVE_TIMEOUT = 30000;
+
+        Thread a = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Class.forName("jdbc.PrivacyDriver");
+                    Class.forName("org.h2.Driver");
+
+                    Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
+                    conn.setAutoCommit(true);
+
+                    String query = "SELECT username FROM users WHERE id = ?_MY_UID";
+                    PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+                    p.setInt(1, 1);
+                    assertTrue(p.checkPolicy());
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        Thread b = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Class.forName("jdbc.PrivacyDriver");
+                    Class.forName("org.h2.Driver");
+
+                    Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
+                    conn.setAutoCommit(true);
+
+                    String query = "SELECT username FROM users WHERE id <> ?_MY_UID";
+                    PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
+                    p.setInt(1, 1);
+                    assertTrue(p.checkPolicy());
+                } catch (Throwable e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        a.start();
+        b.start();
+        a.join();
+        b.join();
+    }
+
+    @Test
     public void testDiasporaTraceQueries() throws Exception {
         Class.forName("jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
