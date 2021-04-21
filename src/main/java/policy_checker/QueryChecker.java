@@ -235,8 +235,8 @@ public class QueryChecker {
         // regular check
         smt = this.determinacyFormula.generateSMT(queries);
         executors.add(new Z3Executor(smt, latch, true, true));
-//        executors.add(new VampireCascExecutor(smt, latch, true, true));
-//        executors.add(new VampireFMBExecutor(smt, latch, true, true));
+        executors.add(new VampireCascExecutor(smt, latch, true, true));
+        executors.add(new VampireFMBExecutor(smt, latch, true, true));
         executors.add(new CVC4Executor(smt, latch, true, true));
 
         for (SMTExecutor executor : executors) {
