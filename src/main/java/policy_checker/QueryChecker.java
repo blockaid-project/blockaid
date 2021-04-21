@@ -43,8 +43,17 @@ public class QueryChecker {
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
+    private static QueryChecker instance = null;
+
+    public static QueryChecker getInstance(ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps, String[] uks, String[] fks) {
+        if (instance == null) {
+            instance = new QueryChecker(policySet, rawSchema, deps, uks, fks);
+        }
+        return instance;
+    }
+
     // TODO read pk/fk from schema instead
-    public QueryChecker(ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps, String[] uks, String[] fks)
+    private QueryChecker(ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps, String[] uks, String[] fks)
     {
         this.policySet = policySet;
         this.policyDecisionCacheCoarse = CacheBuilder.newBuilder()

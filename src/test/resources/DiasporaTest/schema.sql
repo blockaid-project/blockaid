@@ -228,7 +228,7 @@ CREATE TABLE conversation_visibilities(
     id INT PRIMARY KEY NOT NULL,
     conversation_id INT,
     person_id INT,
-    unread BOOL,
+    unread INT,
     created_at DATETIME,
     updated_at DATETIME
 );

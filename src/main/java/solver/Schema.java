@@ -112,9 +112,9 @@ public class Schema {
             case Types.LONGVARCHAR:
             case Types.CLOB:
                 return context.getStringSort();
-            case Types.TIMESTAMP: // TODO
+            case Types.TIMESTAMP:
             case Types.DATE:
-                return context.getStringSort();
+                return context.getIntSort();
             default:
                 throw new UnsupportedOperationException("bad column type: " + type);
         }

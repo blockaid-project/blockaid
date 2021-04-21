@@ -74,7 +74,7 @@ public abstract class DeterminacyFormula {
         return solver;
     }
 
-    public String generateSMT(QuerySequence queries) {
+    public synchronized String generateSMT(QuerySequence queries) {
 //        System.out.println("\t| Make SMT:");
 
         MyZ3Context myContext = (MyZ3Context) context;
