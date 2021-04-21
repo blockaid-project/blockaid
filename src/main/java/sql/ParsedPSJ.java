@@ -8,7 +8,11 @@ import planner.PrivacyColumn;
 import planner.PrivacyTable;
 import solver.*;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class ParsedPSJ {
@@ -30,8 +34,19 @@ public class ParsedPSJ {
 
         SqlSelect sqlSelect = (SqlSelect) parsedSql;
         SqlNode fromClause = sqlSelect.getFrom();
+        // innermost subquery while no joins in from
+        while (fromClause.getKind() == SqlKind.AS && (((SqlBasicCall) fromClause).operand(0) instanceof SqlSelect || ((SqlBasicCall) fromClause).operand(0) instanceof SqlOrderBy)) {
+            if (((SqlBasicCall) fromClause).operand(0) instanceof SqlOrderBy) {
+                sqlSelect = (SqlSelect) ((SqlOrderBy) ((SqlBasicCall) fromClause).operand(0)).query;
+            } else {
+                sqlSelect = ((SqlBasicCall) fromClause).operand(0);
+            }
+            fromClause = sqlSelect.getFrom();
+            this.resultBitmap = null;
+        }
         if (fromClause.getKind() != SqlKind.JOIN) {
-            List<String> names = ((SqlIdentifier) sqlSelect.getFrom()).names;
+            assert fromClause instanceof SqlIdentifier;
+            List<String> names = ((SqlIdentifier) fromClause).names;
             String relation = names.get(names.size() - 1);
             relations = Collections.singletonList(relation.toUpperCase());
         } else {
@@ -197,9 +212,10 @@ public class ParsedPSJ {
             Expr left = getPredicate(context, ((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
 
             if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
+                final Expr left1 = left;
                 SqlNodeList values = ((SqlBasicCall) theta).operand(1);
                 BoolExpr[] exprs = values.getList().stream()
-                        .map(n -> context.mkEq(left, getPredicate(context, n, symbolMap, params, paramNames, schema)))
+                        .map(n -> context.mkEq(left1, getPredicate(context, n, symbolMap, params, paramNames, schema)))
                         .toArray(BoolExpr[]::new);
                 BoolExpr expr = context.mkOr(exprs);
                 if (theta.getKind() == SqlKind.NOT_IN) {
@@ -209,6 +225,19 @@ public class ParsedPSJ {
             }
 
             Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
+            if (left instanceof ArithExpr && right instanceof SeqExpr) {
+                try {
+                    right = context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime());
+                } catch (ParseException e) {
+                    // do nothing
+                }
+            } else if (right instanceof ArithExpr && left instanceof SeqExpr) {
+                try {
+                    left = context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(left.getString()).getTime());
+                } catch (ParseException e) {
+                    // do nothing
+                }
+            }
             if (theta.getKind() == SqlKind.AND) {
                 return context.mkAnd((BoolExpr) left, (BoolExpr) right);
             } else if (theta.getKind() == SqlKind.OR) {
