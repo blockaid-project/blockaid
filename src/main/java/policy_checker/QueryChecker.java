@@ -4,7 +4,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.microsoft.z3.*;
-import org.apache.calcite.schema.SchemaPlus;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
 import solver.*;
@@ -12,6 +11,9 @@ import sql.PrivacyQuery;
 import sql.QuerySequence;
 import sql.SchemaPlusWithKey;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -28,7 +30,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 15000; // ms
+    public static long SOLVE_TIMEOUT = 5000; // ms
 
     private ArrayList<Policy> policySet;
     private List<Set<String>> preapprovedSets;
@@ -63,7 +65,7 @@ public class QueryChecker {
                     }
                 });
 
-        this.context = new Context();
+        this.context = new MyZ3Context();
 
         Map<String, List<Column>> relations = new HashMap<>();
         for (String tableName : rawSchema.schema.getTableNames()) {
@@ -219,17 +221,28 @@ public class QueryChecker {
 
         List<SMTExecutor> executors = new ArrayList<>();
 
-        String smt;
         // fast check
-        smt = this.fastCheckDeterminacyFormula.generateSMT(queries);
-        executors.add(new Z3Executor(smt, latch, false, true));
+        String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
+        executors.add(new Z3Executor(fastCheckSMT, latch, false, true));
+
+        try {
+            Files.write(Paths.get("/tmp/fast_unsat.smt2"), fastCheckSMT.getBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         // regular check
-        smt = this.determinacyFormula.generateSMT(queries);
-        executors.add(new Z3Executor(smt, latch, true, true));
+        String regularSMT = this.determinacyFormula.generateSMT(queries);
+        executors.add(new Z3Executor(regularSMT, latch, true, true));
 //        executors.add(new VampireCascExecutor(smt, latch, true, true));
 //        executors.add(new VampireFMBExecutor(smt, latch, true, true));
-//        executors.add(new CVC4Executor(smt, latch, true, true));
+        executors.add(new CVC4Executor(regularSMT, latch, true, true));
+
+        try {
+            Files.write(Paths.get("/tmp/regular.smt2"), regularSMT.getBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         final long startTime = System.currentTimeMillis();
         for (SMTExecutor executor : executors) {

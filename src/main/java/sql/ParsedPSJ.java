@@ -79,13 +79,14 @@ public class ParsedPSJ {
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
                 if (identifier.names.size() == 1) {
                     for (String relation : relations) {
-                        for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
+//                        System.out.println("***\t" + relation + ", " + schema.schema.getTableNames());
+                        for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
                             addProjectColumn((relation + "." + column.name).toUpperCase());
                         }
                     }
                 } else {
                     String relation = identifier.names.get(identifier.names.size() - 2);
-                    for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
+                    for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
                         addProjectColumn((relation + "." + column.name).toUpperCase());
                     }
                 }

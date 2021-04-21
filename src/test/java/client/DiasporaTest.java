@@ -213,7 +213,7 @@ public class DiasporaTest {
 
     @Test
     public void testDiasporaTraceQueries() throws Exception {
-        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
         QueryChecker.ENABLE_CACHING = true;

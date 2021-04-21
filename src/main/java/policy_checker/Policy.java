@@ -2,6 +2,7 @@ package policy_checker;
 
 import com.microsoft.z3.*;
 import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.config.Lex;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -35,6 +36,7 @@ public class Policy {
                         .setQuotedCasing(config.quotedCasing())
                         .setUnquotedCasing(config.unquotedCasing())
                         .setQuoting(config.quoting())
+                        .setLex(Lex.MYSQL)
                         .build());
         SqlNode sqlNode;
         try {

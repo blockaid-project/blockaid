@@ -5,18 +5,18 @@ SELECT users.* FROM users WHERE users.id = _MY_UID;
 SELECT people.* FROM people WHERE people.owner_id = _MY_UID;
 SELECT profiles.* FROM profiles, people WHERE profiles.person_id = people.id AND people.owner_id = _MY_UID;
 -- visible_posts
-SELECT posts.* FROM posts WHERE posts."public" <> FALSE;
+SELECT posts.* FROM posts WHERE posts.`public` = 1;
 SELECT posts.* FROM posts, people WHERE posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT posts.* FROM posts, share_visibilities WHERE share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 -- visible_comments
-SELECT comments.* FROM comments, posts WHERE comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND posts."public" <> FALSE;
+SELECT comments.* FROM comments, posts WHERE comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND posts.`public` = 1;
 SELECT comments.* FROM comments, posts, people WHERE comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT comments.* FROM comments, posts, share_visibilities  WHERE comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 -- visible_mentions
-SELECT mentions.* FROM mentions, posts WHERE mentions.mentions_container_type = 'Post' AND mentions.mentions_container_id = posts.id AND posts."public" <> FALSE;
+SELECT mentions.* FROM mentions, posts WHERE mentions.mentions_container_type = 'Post' AND mentions.mentions_container_id = posts.id AND posts.`public` = 1;
 SELECT mentions.* FROM mentions, posts, people WHERE mentions.mentions_container_type = 'Post' AND mentions.mentions_container_id = posts.id AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT mentions.* FROM mentions, posts, share_visibilities WHERE mentions.mentions_container_type = 'Post' AND mentions.mentions_container_id = posts.id AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
-SELECT mentions.* FROM mentions, comments, posts WHERE mentions.mentions_container_type = 'Comment' AND mentions.mentions_container_id = comments.id AND comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND posts."public" <> FALSE;
+SELECT mentions.* FROM mentions, comments, posts WHERE mentions.mentions_container_type = 'Comment' AND mentions.mentions_container_id = comments.id AND comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND posts.`public` = 1;
 SELECT mentions.* FROM mentions, comments, posts, people WHERE mentions.mentions_container_type = 'Comment' AND mentions.mentions_container_id = comments.id AND comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT mentions.* FROM mentions, comments, posts, share_visibilities  WHERE mentions.mentions_container_type = 'Comment' AND mentions.mentions_container_id = comments.id AND comments.commentable_type = 'Post' AND comments.commentable_id = posts.id AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 
@@ -31,20 +31,20 @@ SELECT profiles.* FROM profiles;
 SELECT profiles.id, profiles.bio, profiles.location, profiles.gender, profiles.birthday FROM profiles;
 
 -- visible_photos
-SELECT photos.* FROM photos, people WHERE photos.author_id = people.id AND photos.pending = FALSE AND people.owner_id = _MY_UID;
-SELECT photos.* FROM photos WHERE photos.public <> FALSE AND photos.pending = FALSE;
-SELECT photos.* FROM photos, share_visibilities WHERE share_visibilities.shareable_id = photos.id AND share_visibilities.shareable_type = 'Photo' AND share_visibilities.user_id = _MY_UID AND photos.pending = FALSE;
-SELECT photos.* FROM photos, posts WHERE photos.status_message_guid = posts.guid AND posts."public" <> FALSE;
+SELECT photos.* FROM photos, people WHERE photos.author_id = people.id AND photos.pending = 0 AND people.owner_id = _MY_UID;
+SELECT photos.* FROM photos WHERE photos.public = 1 AND photos.pending = 0;
+SELECT photos.* FROM photos, share_visibilities WHERE share_visibilities.shareable_id = photos.id AND share_visibilities.shareable_type = 'Photo' AND share_visibilities.user_id = _MY_UID AND photos.pending = 0;
+SELECT photos.* FROM photos, posts WHERE photos.status_message_guid = posts.guid AND posts.`public` = 1;
 SELECT photos.* FROM photos, posts, people WHERE photos.status_message_guid = posts.guid AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT photos.* FROM photos, posts, share_visibilities WHERE photos.status_message_guid = posts.guid AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 
 -- visible_locations
-SELECT locations.* FROM locations, posts WHERE locations.status_message_id = posts.id AND posts."public" <> FALSE;
+SELECT locations.* FROM locations, posts WHERE locations.status_message_id = posts.id AND posts.`public` = 1;
 SELECT locations.* FROM locations, posts, people WHERE locations.status_message_id = posts.id AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT locations.* FROM locations, posts, share_visibilities WHERE locations.status_message_id = posts.id AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 
 -- visible_polls
-SELECT polls.* FROM polls, posts WHERE polls.status_message_id = posts.id AND posts."public" <> FALSE;
+SELECT polls.* FROM polls, posts WHERE polls.status_message_id = posts.id AND posts.`public` = 1;
 SELECT polls.* FROM polls, posts, people WHERE polls.status_message_id = posts.id AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT polls.* FROM polls, posts, share_visibilities WHERE polls.status_message_id = posts.id AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 
@@ -52,16 +52,16 @@ SELECT polls.* FROM polls, posts, share_visibilities WHERE polls.status_message_
 SELECT participations.* FROM participations, people WHERE participations.author_id = people.id AND people.owner_id = _MY_UID;
 
 -- visible_likes
-SELECT likes.* FROM likes, posts WHERE likes.target_id = posts.id AND likes.target_type = 'Post' AND posts."public" <> FALSE;
+SELECT likes.* FROM likes, posts WHERE likes.target_id = posts.id AND likes.target_type = 'Post' AND posts.`public` = 1;
 SELECT likes.* FROM likes, posts, people WHERE likes.target_id = posts.id AND likes.target_type = 'Post' AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT likes.* FROM likes, posts, share_visibilities WHERE likes.target_id = posts.id AND likes.target_type = 'Post' AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 
 -- visible_tags
-SELECT tags.*, taggings.* FROM tags, taggings, posts WHERE tags.id = taggings.tag_id AND taggings.taggable_id = posts.id AND taggings.taggable_type = 'Post' AND posts."public" <> FALSE;
+SELECT tags.*, taggings.* FROM tags, taggings, posts WHERE tags.id = taggings.tag_id AND taggings.taggable_id = posts.id AND taggings.taggable_type = 'Post' AND posts.`public` = 1;
 SELECT tags.*, taggings.* FROM tags, taggings, posts, people WHERE tags.id = taggings.tag_id AND taggings.taggable_id = posts.id AND taggings.taggable_type = 'Post' AND posts.author_id = people.id AND people.owner_id = _MY_UID;
 SELECT tags.*, taggings.* FROM tags, taggings, posts, share_visibilities WHERE tags.id = taggings.tag_id AND taggings.taggable_id = posts.id AND taggings.taggable_type = 'Post' AND share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' AND share_visibilities.user_id = _MY_UID;
 
--- visible_notificatoins
+-- visible_notifications
 SELECT notifications.* FROM notifications WHERE notifications.recipient_id = _MY_UID;
 
 -- visible_conv
@@ -69,10 +69,11 @@ SELECT conversations.* FROM conversations, people WHERE conversations.author_id 
 SELECT conversation_visibilities.* FROM conversation_visibilities, people WHERE conversation_visibilities.person_id = people.id AND people.owner_id = _MY_UID;
 
 -- visible_roles
-SELECT roles.* FROM roles, people WHERE roles.person_id = people.id AND people.id = _MY_UID;
+SELECT roles.* FROM roles, people WHERE roles.person_id = people.id AND people.owner_id = _MY_UID;
 
 -- visible_mine
 SELECT aspects.* FROM aspects WHERE aspects.user_id = _MY_UID;
+SELECT blocks.* FROM blocks WHERE blocks.user_id = _MY_UID;
 SELECT services.* FROM services WHERE services.user_id = _MY_UID;
 SELECT contacts.* FROM contacts WHERE contacts.user_id = _MY_UID;
 SELECT user_preferences.* FROM user_preferences WHERE user_preferences.user_id = _MY_UID;
@@ -87,7 +88,7 @@ SELECT share_visibilities.id, share_visibilities.shareable_id, share_visibilitie
 SELECT mentions.* FROM mentions, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
 SELECT comments.* FROM comments, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
 SELECT profiles.* FROM profiles, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
-SELECT photos.id, photos.author_id, photos."public", photos.guid, photos.pending, photos.text, photos.remote_photo_path, photos.remote_photo_name, photos.random_string, photos.processed_image, photos.created_at, photos.updated_at, photos.unprocessed_image, photos.status_message_guid, photos.height, photos.width FROM photos, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
+SELECT photos.id, photos.author_id, photos.`public`, photos.guid, photos.pending, photos.text, photos.remote_photo_path, photos.remote_photo_name, photos.random_string, photos.processed_image, photos.created_at, photos.updated_at, photos.unprocessed_image, photos.status_message_guid, photos.height, photos.width FROM photos, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
 SELECT locations.* FROM locations, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
 SELECT polls.* FROM polls, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';
 SELECT participations.* FROM participations, roles, people WHERE roles.person_id = people.id AND roles.name = 'admin';

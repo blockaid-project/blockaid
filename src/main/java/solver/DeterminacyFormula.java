@@ -8,10 +8,7 @@ import com.microsoft.z3.Solver;
 import sql.QuerySequence;
 import sql.QueryWithResult;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public abstract class DeterminacyFormula {
@@ -54,7 +51,7 @@ public abstract class DeterminacyFormula {
 
         // Constrain constant values.
         for (Map.Entry<String, Integer> entry : queries.getConstMap().entrySet()) {
-            StringSymbol nameSymbol = context.mkSymbol("@" + entry.getKey());
+            StringSymbol nameSymbol = context.mkSymbol("!" + entry.getKey());
             exprs.add(context.mkEq(
                     context.mkConst(nameSymbol, context.getIntSort()),
                     context.mkInt(entry.getValue())
@@ -78,13 +75,64 @@ public abstract class DeterminacyFormula {
     }
 
     public String generateSMT(QuerySequence queries) {
-        Expr[] constants = makeFormulaConstants(queries);
+//        System.out.println("\t| Make SMT:");
+
+        MyZ3Context myContext = (MyZ3Context) context;
+        myContext.startTrackingConsts();
+        BoolExpr bodyFormula = makeFormula(queries, makeFormulaConstants(queries));
+        myContext.stopTrackingConsts();
+
+//        long startTime = System.currentTimeMillis();
+//        Expr[] constants = makeFormulaConstants(queries);
+//        BoolExpr bodyFormula = makeFormula(queries, constants);
+//        long endTime = System.currentTimeMillis();
+//        System.out.println("\t\t| Make formula:\t" + (endTime - startTime));
+//
+//        startTime = System.currentTimeMillis();
+//        Solver solver = context.mkSolver();
+//        solver.add(bodyFormula);
+//        endTime = System.currentTimeMillis();
+//        System.out.println("\t\t| Add formula:\t" + (endTime - startTime));
+//
+//        startTime = System.currentTimeMillis();
+//        String bodySMT = solver.toString();
+//        endTime = System.currentTimeMillis();
+//        System.out.println("\t\t| toString:\t" + (endTime - startTime));
+//
+//        startTime = System.currentTimeMillis();
+//
+//        StringBuilder sb = new StringBuilder();
+//        sb.append(preparedExprSMT);
+//
+//        boolean shouldIncludeLine = true;
+//        // FIXME(zhangwen): Hack-- Removing duplicate `declare-fun` commands; relies on Z3's output format.
+//        for (String line : bodySMT.split("\\R")) {
+//            if (line.startsWith("(")) { // Start of a new command.
+//                shouldIncludeLine = true;
+//                if (line.startsWith("(declare-fun")) {
+//                    String name = line.split("\\s+")[1];
+//                    if (declaredFuncsInPrepared.contains(name)) {
+//                        shouldIncludeLine = false;
+//                    }
+//                }
+//            }
+//            if (shouldIncludeLine) {
+//                sb.append(line);
+//            }
+//        }
+//        String formulaSMT = sb.toString();
+//
+//        endTime = System.currentTimeMillis();
+//        System.out.println("\t\t| de-dup:\t" + (endTime - startTime));
+//
+//        return formulaSMT;
+
         StringBuilder stringBuilder = new StringBuilder();
-        for (Expr constant : constants) {
+        for (Expr constant : myContext.getConsts()) {
             stringBuilder.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
         }
         stringBuilder.append(this.preparedExprSMT);
-        stringBuilder.append("(assert ").append(makeFormula(queries, constants)).append(")");
+        stringBuilder.append("(assert ").append(bodyFormula).append(")");
         return stringBuilder.toString();
     }
 }

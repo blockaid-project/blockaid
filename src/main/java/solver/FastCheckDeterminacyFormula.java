@@ -27,14 +27,14 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
     }
 
+    /**
+     *  Makes SMT formula for fast check: either "determinacy holds" or "I don't know".
+     *
+     *  Currently only supports PSJ / union of PSJ.
+     *  TODO(zhangwen): Contrary to what I wrote, this formula supports any query, right?
+     */
     @Override
     public Expr[] makeFormulaConstants(QuerySequence queries) {
-        /**
-         *  Makes SMT formula for fast check: either "determinacy holds" or "I don't know".
-         *
-         *  Currently only supports PSJ / union of PSJ.
-         *  TODO(zhangwen): Contrary to what I wrote, this formula supports any query, right?
-         */
         Query query = queries.lastInTrace().query.getSolverQuery(schema);
         Sort[] headTypes = query.headTypes();
         Expr[] freshConsts = new Expr[headTypes.length];

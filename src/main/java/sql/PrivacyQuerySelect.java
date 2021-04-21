@@ -30,7 +30,7 @@ public class PrivacyQuerySelect extends PrivacyQuery {
         reduceQuery();
         // `this.parameters` and `this.paramNames` are copies made in `super`.
         parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(this.parameters), this.paramNames);
-        System.out.println("PrivacyQuerySelect: " + parsedSql.parsedSql + ", " + parsedPSJ);
+//        System.out.println("PrivacyQuerySelect: " + parsedSql.parsedSql + ", " + parsedPSJ);
     }
 
     private SqlSelect getSelectNode(ParserResult result) {

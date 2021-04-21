@@ -77,9 +77,33 @@ public class PrivacyConnection implements Connection {
     }
   }
 
-  private boolean shouldApplyPolicy(String query) throws SQLException {
-    SqlKind kind = parser.parse(query).getSqlNode().getKind();
-    return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY);
+  /**
+   * Parses SQL query and determines whether to apply policies to it.
+   * @param query the query to parse.
+   * @return parsed query if policies are applicable, empty otherwise.
+   * @throws SQLException if parsing fails.
+   */
+  private Optional<ParserResult> shouldApplyPolicy(String query) throws SQLException {
+    if (query.toUpperCase().startsWith("UPDATE")) {
+      // The Calcite parser doesn't like our updates--
+      // org.apache.calcite.sql.parser.impl.ParseException: Encountered "." at line 1, column 43.
+      // Was expecting: "=" ... : UPDATE `notifications` SET `notifications`.`unread` = 0 WHERE
+      // `notifications`.`recipient_id` = ? AND `notifications`.`target_type` = ?
+      // AND `notifications`.`target_id` = ? AND `notifications`.`unread` = ?
+      return Optional.empty();
+    }
+
+    // FIXME(zhangwen): HACK-- As Eric reported, Calcite doesn't like "one", and so we append an underscore to it.
+    query = query.replace("1 AS one", "1 AS one_");
+    ParserResult parser_result = parser.parse(query);
+
+    SqlKind kind = parser_result.getSqlNode().getKind();
+    if (kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY)) {
+      // These are the types of queries we do handle.
+      return Optional.of(parser_result);
+    }
+
+    return Optional.empty();
   }
 
   public void resetSequence() {
@@ -107,11 +131,12 @@ public class PrivacyConnection implements Connection {
     s = matcher.replaceAll("?");
     // FIXME(zhangwen): We'll get rid of any LIMIT clause, but we keep any parameters used by the LIMIT clause.  Bad?
 
-    if (shouldApplyPolicy(s)) {
-      return new PrivacyPreparedStatement(s, paramNames);
-    } else {
+    Optional<ParserResult> parser_result = shouldApplyPolicy(s);
+    if (!parser_result.isPresent()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
     }
+
+    return new PrivacyPreparedStatement(s, parser_result.get(), paramNames);
   }
 
   @Override
@@ -404,9 +429,9 @@ public class PrivacyConnection implements Connection {
     private Object[] values;
     private PrivacyQuerySelect privacy_query = null;
 
-    PrivacyPreparedStatement(String sql, List<String> param_names) throws SQLException {
+    PrivacyPreparedStatement(String sql, ParserResult pr, List<String> param_names) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
-      parser_result = parser.parse(sql);
+      this.parser_result = pr;
       direct_statement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
       this.param_names = param_names;
     }
@@ -438,6 +463,7 @@ public class PrivacyConnection implements Connection {
     }
 
     public void addRow(List<Object> row) {
+//        System.out.println("\t| Returned row:\t" + row);
       QueryWithResult current = current_sequence.lastInTrace();
       if (current.tuples == null) {
         current.tuples = new ArrayList<>();
@@ -482,6 +508,7 @@ public class PrivacyConnection implements Connection {
               case Types.CLOB:
                 row.add(resultSet.getString(i));
                 break;
+              case Types.DECIMAL:
               case Types.DOUBLE:
                 row.add(resultSet.getDouble(i));
                 break;
@@ -494,7 +521,7 @@ public class PrivacyConnection implements Connection {
                 row.add("placeholder");
                 break;
               default:
-                throw new UnsupportedOperationException("unsupported type");
+                throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
             }
           }
           addRow(row);
@@ -1601,7 +1628,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public boolean execute() throws SQLException {
-      System.out.println("PrivacyPreparedStatement.execute");
+//      System.out.println("PrivacyPreparedStatement.execute");
       if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
@@ -1860,7 +1887,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ResultSet getResultSet() throws SQLException {
-      System.out.println("PrivacyPreparedStatement.getResultSet");
+//      System.out.println("PrivacyPreparedStatement.getResultSet");
       // TODO(zhangwen): Is this right?
       ResultSet rs = direct_statement.getResultSet();
       if (rs == null) {
@@ -2245,15 +2272,17 @@ public class PrivacyConnection implements Connection {
       String name = matcher.group(1);
       String value = matcher.group(2);
       System.out.println("=== processSetConst: " + name + " = " + value);
+      // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
+      resetSequence();
       current_sequence.setConstValue(name, Integer.valueOf(value));
 
-      // Still execute the query on `active_statement`, so that proper state is maintained about this execution.
-      return Optional.of(active_statment.execute(query));
+      // TODO(zhangwen): Can I get away with not actually executing this command?
+      return Optional.of(false);
     }
 
     @Override
     public boolean execute(String s, int i) throws SQLException {
-      System.out.println("=== PrivacyStatement.execute: " + s);
+//      System.out.println("=== PrivacyStatement.execute: " + s);
       Optional<Boolean> r = processSetConst(s);
       if (r.isPresent()) {
         return r.get();
