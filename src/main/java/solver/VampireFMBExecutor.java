@@ -33,7 +33,6 @@ public class VampireFMBExecutor extends SMTExecutor {
     }
 
     private static String handleStrings(String smt) {
-        System.err.println("(define-sort String () Int)" + processStringsInFormula(smt));
         return "(define-sort String () Int)" + processStringsInFormula(smt);
     }
 }
