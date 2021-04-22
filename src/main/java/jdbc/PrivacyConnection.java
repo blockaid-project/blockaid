@@ -439,9 +439,10 @@ public class PrivacyConnection implements Connection {
                 row.add(resultSet.getBoolean(i));
                 break;
               case Types.DATE:
+                row.add(resultSet.getDate(i).getTime());
+                break;
               case Types.TIMESTAMP:
-                // TODO fix this
-                row.add("placeholder");
+                row.add(resultSet.getTimestamp(i).getTime());
                 break;
               default:
                 throw new UnsupportedOperationException("unsupported type");
