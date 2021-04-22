@@ -1,24 +1,12 @@
 package sql;
 
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
-import com.microsoft.z3.Expr;
-import org.apache.calcite.config.CalciteConnectionConfig;
-import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.parser.SqlParser;
-import solver.PSJ;
 import solver.Query;
 import solver.Schema;
-import solver.Tuple;
 
 import java.util.*;
 
 public class PrivacyQuerySelect extends PrivacyQuery {
-    private SqlNode where;
-    private SqlNode from;
-    private SqlNodeList selectAttributes;
     private ParsedPSJ parsedPSJ;
 
     public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema) {
@@ -27,7 +15,6 @@ public class PrivacyQuerySelect extends PrivacyQuery {
 
     public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
-        reduceQuery();
         // `this.parameters` and `this.paramNames` are copies made in `super`.
         parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(this.parameters), this.paramNames);
 //        System.out.println("PrivacyQuerySelect: " + parsedSql.parsedSql + ", " + parsedPSJ);
@@ -41,10 +28,6 @@ public class PrivacyQuerySelect extends PrivacyQuery {
         }
     }
 
-    public boolean checkPolicySchema(){
-        return true;
-    }
-
     @Override
     public Set<String> getProjectColumns() {
         return new HashSet<>(parsedPSJ.getProjectColumns());
@@ -56,25 +39,12 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
-    public void reduceQuery(){
-        SqlSelect select = getSelectNode(parsedSql);
-        where = select.getWhere();
-        from =  select.getFrom();
-        selectAttributes = select.getSelectList();
-    }
-
-    @Override
     public Query getSolverQuery(Schema schema) {
         return parsedPSJ.getSolverQuery(schema);
     }
 
+    @Override
     public List<Boolean> getResultBitmap() {
         return parsedPSJ.getResultBitmap();
     }
-
-    public SqlNode getWhere() {return where;}
-
-    public SqlNode getFrom() {return from;}
-
-    public SqlNodeList getSelectAttributes() {return selectAttributes;}
 }

@@ -98,7 +98,7 @@ public class PrivacyConnection implements Connection {
     ParserResult parser_result = parser.parse(query);
 
     SqlKind kind = parser_result.getSqlNode().getKind();
-    if (kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY)) {
+    if (kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION)) {
       // These are the types of queries we do handle.
       return Optional.of(parser_result);
     }
@@ -427,7 +427,7 @@ public class PrivacyConnection implements Connection {
     private ParserResult parser_result;
     private List<String> param_names;
     private Object[] values;
-    private PrivacyQuerySelect privacy_query = null;
+    private PrivacyQuery privacy_query = null;
 
     PrivacyPreparedStatement(String sql, ParserResult pr, List<String> param_names) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
@@ -446,7 +446,7 @@ public class PrivacyConnection implements Connection {
 
     public boolean checkPolicy() {
       System.out.println("checkPolicy: " + parser_result.getParsedSql() + "\t" + Arrays.toString(values));
-      privacy_query = (PrivacyQuerySelect) PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
+      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
       current_sequence.addToTrace(new QueryWithResult(privacy_query));
       final long startTime = System.currentTimeMillis();
       // TODO(zhangwen): need to consult `shouldApplyPolicy` here?
@@ -468,7 +468,7 @@ public class PrivacyConnection implements Connection {
       if (current.tuples == null) {
         current.tuples = new ArrayList<>();
       }
-      List<Boolean> resultBitmap = ((PrivacyQuerySelect) current.query).getResultBitmap();
+      List<Boolean> resultBitmap = current.query.getResultBitmap();
       for (int i = row.size(); i-- > 0; ) {
         if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);
@@ -516,9 +516,10 @@ public class PrivacyConnection implements Connection {
                 row.add(resultSet.getBoolean(i));
                 break;
               case Types.DATE:
+                row.add(resultSet.getDate(i).getTime());
+                break;
               case Types.TIMESTAMP:
-                // TODO fix this
-                row.add("placeholder");
+                row.add(resultSet.getTimestamp(i).getTime());
                 break;
               default:
                 throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
