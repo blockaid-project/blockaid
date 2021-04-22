@@ -70,7 +70,7 @@ public class PrivacyConnection implements Connection {
   }
 
   private boolean shouldApplyPolicy(SqlKind kind) {
-    return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY);
+    return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION);
   }
 
   public void resetSequence() {
@@ -365,7 +365,7 @@ public class PrivacyConnection implements Connection {
     private ParserResult parser_result;
     private List<String> param_names;
     private Object[] values;
-    private PrivacyQuerySelect privacy_query = null;
+    private PrivacyQuery privacy_query = null;
 
     PrivacyPreparedStatement(String sql, List<String> param_names) throws SQLException {
       values = new Object[(sql + " ").split("\\?").length - 1];
@@ -383,7 +383,7 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() throws SQLException {
-      privacy_query = (PrivacyQuerySelect) PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
+      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
       current_sequence.add(new QueryWithResult(privacy_query));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
         if (!query_checker.checkPolicy(current_sequence)) {
@@ -398,7 +398,7 @@ public class PrivacyConnection implements Connection {
       if (current.tuples == null) {
         current.tuples = new ArrayList<>();
       }
-      List<Boolean> resultBitmap = ((PrivacyQuerySelect) current.query).getResultBitmap();
+      List<Boolean> resultBitmap = current.query.getResultBitmap();
       for (int i = row.size(); i-- > 0; ) {
         if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);

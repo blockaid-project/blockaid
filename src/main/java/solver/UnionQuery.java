@@ -4,7 +4,7 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Sort;
 
-public class UnionQuery<QT> extends Query {
+public class UnionQuery extends Query {
     public Query[] queries;
     private Sort[] headTypes;
 

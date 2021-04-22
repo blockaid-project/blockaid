@@ -21,6 +21,8 @@ public class PrivacyQueryFactory {
             case SELECT:
             case ORDER_BY:
                 return new PrivacyQuerySelect(result, schema, parameters, paramNames);
+            case UNION:
+                return new PrivacyQueryUnion(result, schema, parameters, paramNames);
             default:
                 throw new AssertionError("unexpected");
         }

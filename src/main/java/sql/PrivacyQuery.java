@@ -49,9 +49,9 @@ public abstract class PrivacyQuery {
         return result;
     }
 
-    abstract public void reduceQuery();
     abstract public Set<String> getProjectColumns();
     abstract public Set<String> getThetaColumns();
     abstract public Query getSolverQuery(Schema schema);
+    abstract public List<Boolean> getResultBitmap();
 }
 

@@ -16,9 +16,6 @@ import solver.Tuple;
 import java.util.*;
 
 public class PrivacyQuerySelect extends PrivacyQuery {
-    private SqlNode where;
-    private SqlNode from;
-    private SqlNodeList selectAttributes;
     private ParsedPSJ parsedPSJ;
 
     public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema) {
@@ -27,7 +24,6 @@ public class PrivacyQuerySelect extends PrivacyQuery {
 
     public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
-        reduceQuery();
         parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(parameters), paramNames);
     }
 
@@ -37,10 +33,6 @@ public class PrivacyQuerySelect extends PrivacyQuery {
         } else {
             return (SqlSelect) result.getSqlNode();
         }
-    }
-
-    public boolean checkPolicySchema(){
-        return true;
     }
 
     @Override
@@ -54,25 +46,12 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
-    public void reduceQuery(){
-        SqlSelect select = getSelectNode(parsedSql);
-        where = select.getWhere();
-        from =  select.getFrom();
-        selectAttributes = select.getSelectList();
-    }
-
-    @Override
     public Query getSolverQuery(Schema schema) {
         return parsedPSJ.getSolverQuery(schema);
     }
 
+    @Override
     public List<Boolean> getResultBitmap() {
         return parsedPSJ.getResultBitmap();
     }
-
-    public SqlNode getWhere() {return where;}
-
-    public SqlNode getFrom() {return from;}
-
-    public SqlNodeList getSelectAttributes() {return selectAttributes;}
 }
