@@ -45,7 +45,9 @@ public class ParsedPSJ {
             this.resultBitmap = null;
         }
         if (fromClause.getKind() != SqlKind.JOIN) {
-            assert fromClause instanceof SqlIdentifier;
+            if (!(fromClause instanceof SqlIdentifier)) {
+                throw new RuntimeException("unhandled from clause: " + fromClause);
+            }
             List<String> names = ((SqlIdentifier) fromClause).names;
             String relation = names.get(names.size() - 1);
             relations = Collections.singletonList(relation.toUpperCase());
@@ -59,11 +61,15 @@ public class ParsedPSJ {
             boolean addPrimaryKey = false;
             while (sn instanceof SqlBasicCall) {
                 if (((SqlBasicCall) sn).getOperator() instanceof SqlAsOperator) {
-                    assert ((SqlBasicCall) sn).operand(0) instanceof SqlLiteral; // only literal aliases
+                    if (!(((SqlBasicCall) sn).operand(0) instanceof SqlLiteral)) { // only literal aliases
+                        throw new RuntimeException("only literal aliases are handled");
+                    }
                     sn = ((SqlBasicCall) sn).operand(0);
                     continue;
                 }
-                assert ((SqlBasicCall) sn).operandCount() == 1; // only supporting unary functions
+                if (((SqlBasicCall) sn).operandCount() != 1) { // only supporting unary functions
+                    throw new RuntimeException("only supporting unary functions");
+                }
                 sn = ((SqlBasicCall) sn).getOperands()[0];
                 this.resultBitmap = null;
                 addPrimaryKey = true;
@@ -94,7 +100,6 @@ public class ParsedPSJ {
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
                 if (identifier.names.size() == 1) {
                     for (String relation : relations) {
-//                        System.out.println("***\t" + relation + ", " + schema.schema.getTableNames());
                         for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
                             addProjectColumn((relation + "." + column.name).toUpperCase());
                         }

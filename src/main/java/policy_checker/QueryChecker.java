@@ -30,7 +30,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 5000; // ms
+    public static long SOLVE_TIMEOUT = 15000; // ms
 
     private ArrayList<Policy> policySet;
     private List<Set<String>> preapprovedSets;
@@ -243,8 +243,8 @@ public class QueryChecker {
         // regular check
         String regularSMT = this.determinacyFormula.generateSMT(queries);
         executors.add(new Z3Executor(regularSMT, latch, true, true));
-        executors.add(new VampireCascExecutor(regularSMT, latch, true, true));
-        executors.add(new VampireFMBExecutor(regularSMT, latch, true, true));
+//        executors.add(new VampireCascExecutor(regularSMT, latch, true, true));
+//        executors.add(new VampireFMBExecutor(regularSMT, latch, true, true));
         executors.add(new CVC4Executor(regularSMT, latch, true, true));
 
         try {

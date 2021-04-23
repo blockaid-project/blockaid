@@ -1,8 +1,7 @@
 package sql;
 
-import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.*;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -18,6 +17,7 @@ public class PrivacyQueryFactory {
         if (result == null){
             return null;
         }
+        result = DesugarOuterJoin.perform(result);
         switch(result.getKind()) {
             case SELECT:
             case ORDER_BY:

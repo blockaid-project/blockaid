@@ -131,6 +131,7 @@ public class PrivacyConnection implements Connection {
     s = matcher.replaceAll("?");
     // FIXME(zhangwen): We'll get rid of any LIMIT clause, but we keep any parameters used by the LIMIT clause.  Bad?
 
+    System.out.println("prepareStatement: " + s);
     Optional<ParserResult> parser_result = shouldApplyPolicy(s);
     if (!parser_result.isPresent()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
@@ -519,7 +520,12 @@ public class PrivacyConnection implements Connection {
                 row.add(resultSet.getDate(i).getTime());
                 break;
               case Types.TIMESTAMP:
-                row.add(resultSet.getTimestamp(i).getTime());
+                Timestamp ts = resultSet.getTimestamp(i);
+                if (ts == null) {
+                  row.add(null);
+                } else {
+                  row.add(ts.getTime());
+                }
                 break;
               default:
                 throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
