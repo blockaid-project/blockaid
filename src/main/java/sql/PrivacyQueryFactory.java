@@ -1,9 +1,8 @@
 package sql;
 
-import org.apache.calcite.sql.*;
-
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 public class PrivacyQueryFactory {
 
@@ -17,7 +16,18 @@ public class PrivacyQueryFactory {
         if (result == null){
             return null;
         }
-        result = DesugarOuterJoin.perform(result);
+
+        Optional<PrivacyQuery> res;
+        if ((res = StripOrderBy.perform(result, schema, parameters, paramNames)).isPresent()) {
+            return res.get();
+        }
+        if ((res = StripUnaryOpSubquery.perform(result, schema, parameters, paramNames)).isPresent()) {
+            return res.get();
+        }
+        if ((res = DesugarOuterJoin.perform(result, schema, parameters, paramNames)).isPresent()) {
+            return res.get();
+        }
+
         switch(result.getKind()) {
             case SELECT:
             case ORDER_BY:

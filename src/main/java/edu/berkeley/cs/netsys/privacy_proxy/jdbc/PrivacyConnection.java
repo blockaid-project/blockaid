@@ -517,7 +517,12 @@ public class PrivacyConnection implements Connection {
                 row.add(resultSet.getBoolean(i));
                 break;
               case Types.DATE:
-                row.add(resultSet.getDate(i).getTime());
+                Date d = resultSet.getDate(i);
+                if (d == null) {
+                  row.add(null);
+                } else {
+                  row.add(d.getTime());
+                }
                 break;
               case Types.TIMESTAMP:
                 Timestamp ts = resultSet.getTimestamp(i);

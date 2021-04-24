@@ -10,9 +10,15 @@ public abstract class PrivacyQuery {
     public Object[] parameters;
     public List<String> paramNames;
 
-    public PrivacyQuery(ParserResult parsedSql)
+    /**
+     * For making wrapper.  Doesn't copy the privacy query.
+     * @param pq the privacy query to wrap over.
+     */
+    protected PrivacyQuery(PrivacyQuery pq)
     {
-        this(parsedSql, new Object[0], Collections.emptyList());
+        this.parsedSql = pq.parsedSql;
+        this.parameters = pq.parameters;
+        this.paramNames = pq.paramNames;
     }
 
     public PrivacyQuery(ParserResult parsedSql, Object[] parameters, List<String> paramNames)

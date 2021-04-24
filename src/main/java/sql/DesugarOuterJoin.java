@@ -9,49 +9,43 @@ import java.util.List;
 import java.util.Optional;
 
 public class DesugarOuterJoin {
-    public static ParserResult perform(ParserResult result) {
-        SqlSelect select;
-        switch (result.getKind()) {
-            case SELECT:
-                select = (SqlSelect) result.getSqlNode();
-                break;
-            case ORDER_BY:
-                select = (SqlSelect) ((SqlOrderBy) result.getSqlNode()).query;
-                break;
-            default:
-                return result;
+    public static Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+                                                 List<String> paramNames) {
+        if (result.getKind() != SqlKind.SELECT) {
+            return Optional.empty();
         }
 
+        SqlSelect select = (SqlSelect) result.getSqlNode();
         if (!select.isDistinct() || select.getGroup() != null || select.getHaving() != null
-                || !select.getWindowList().getList().isEmpty()) { return result; }
+                || !select.getWindowList().getList().isEmpty()) { return Optional.empty(); }
 
         SqlNode fromClause = select.getFrom();
-        if (fromClause.getKind() != SqlKind.JOIN) { return result; }
+        if (fromClause.getKind() != SqlKind.JOIN) { return Optional.empty(); }
         SqlJoin join = (SqlJoin) fromClause;
         if (join.isNatural() || join.getJoinType() != JoinType.LEFT || join.getLeft().getKind() != SqlKind.IDENTIFIER
                 || join.getRight().getKind() != SqlKind.IDENTIFIER
-                || join.getConditionType() != JoinConditionType.ON) { return result; }
+                || join.getConditionType() != JoinConditionType.ON) { return Optional.empty(); }
         SqlIdentifier joinLeft = (SqlIdentifier) join.getLeft();
-        if (joinLeft.names.size() != 1) { return result; }
+        if (joinLeft.names.size() != 1) { return Optional.empty(); }
         String tableName = joinLeft.names.get(0);
 
         SqlIdentifier joinRight = (SqlIdentifier) join.getRight();
-        if (joinRight.names.size() != 1) { return result; }
+        if (joinRight.names.size() != 1) { return Optional.empty(); }
         String rightTableName = joinRight.names.get(0);
 
         SqlNode joinCondition = join.getCondition();
         if (replaceFieldsWithNull(joinCondition, rightTableName).isPresent()) {
             // We expect the join condition to be NULL if there is no match in the right table.
-            return result;
+            return Optional.empty();
         }
 
         List<SqlNode> selectList = select.getSelectList().getList();
-        if (selectList.size() != 1) { return result; }
+        if (selectList.size() != 1) { return Optional.empty(); }
         SqlNode selectColumnNode = selectList.get(0);
-        if (selectColumnNode.getKind() != SqlKind.IDENTIFIER) { return result; }
+        if (selectColumnNode.getKind() != SqlKind.IDENTIFIER) { return Optional.empty(); }
         SqlIdentifier selectId = (SqlIdentifier) selectColumnNode;
         if (selectId.names.size() != 2 || !selectId.names.get(0).equals(tableName)
-                || !selectId.names.get(1).isEmpty()) { return result; }
+                || !selectId.names.get(1).isEmpty()) { return Optional.empty(); }
 
         // Turn into a union.
         // RHS: inner join.
@@ -72,7 +66,8 @@ public class DesugarOuterJoin {
 
         SqlNode union = new SqlBasicCall(SqlStdOperatorTable.UNION, new SqlNode[]{lhs, rhs},
                 select.getParserPosition());
-        return new ParserResult(union.toString(), union.getKind(), union, false, false) {};
+        ParserResult newPR = new ParserResult(union.toString(), union.getKind(), union, false, false) {};
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
     }
 
     /**
