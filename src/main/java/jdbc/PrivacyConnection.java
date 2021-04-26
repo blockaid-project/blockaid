@@ -1,5 +1,7 @@
 package jdbc;
 
+import cache.QueryTrace;
+import cache.QueryTraceEntry;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import policy_checker.Policy;
@@ -22,7 +24,7 @@ public class PrivacyConnection implements Connection {
   private PrivacyParser parser;
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
-  public QuerySequence current_sequence;
+  public QueryTrace current_trace;
   private SchemaPlusWithKey schema;
 
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
@@ -60,7 +62,7 @@ public class PrivacyConnection implements Connection {
             pks.isEmpty() ? new String[0] : pks.split("\n"),
             fks.isEmpty() ? new String[0] : fks.split("\n")
     );
-    current_sequence = new QuerySequence();
+    current_trace = new QueryTrace();
   }
 
   private void set_policy(Properties info) {
@@ -74,7 +76,7 @@ public class PrivacyConnection implements Connection {
   }
 
   public void resetSequence() {
-    current_sequence = new QuerySequence();
+    current_trace = new QueryTrace();
   }
 
   @Override
@@ -384,27 +386,30 @@ public class PrivacyConnection implements Connection {
 
     public boolean checkPolicy() throws SQLException {
       privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
-      current_sequence.add(new QueryWithResult(privacy_query));
+      Map<String, Integer> variableIndex = new HashMap<>();
+      for (int i = 0; i < param_names.size(); ++i) {
+        if (!param_names.get(i).equals("?")) {
+          variableIndex.put(param_names.get(i), i);
+        }
+      }
+      current_trace.startQuery(privacy_query, Arrays.asList(values), variableIndex);
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (!query_checker.checkPolicy(current_sequence)) {
+        if (!query_checker.checkPolicy(current_trace)) {
           return false;
         }
       }
       return true;
     }
 
-    public void addRow(List<Object> row) {
-      QueryWithResult current = current_sequence.get(current_sequence.size() - 1);
-      if (current.tuples == null) {
-        current.tuples = new ArrayList<>();
-      }
-      List<Boolean> resultBitmap = current.query.getResultBitmap();
+    private void addRow(List<List<Object>> rows, List<Object> row) {
+      QueryTraceEntry current = current_trace.getCurrentQuery();
+      List<Boolean> resultBitmap = current.getQuery().getResultBitmap();
       for (int i = row.size(); i-- > 0; ) {
         if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);
         }
       }
-      current.tuples.add(row);
+      rows.add(row);
     }
 
     private class ResultSetWrapper implements ResultSet {
@@ -421,6 +426,7 @@ public class PrivacyConnection implements Connection {
           columnTypes.add(metaData.getColumnType(i));
         }
 
+        List<List<Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
           List<Object> row = new ArrayList<>();
           for (int i = 1; i <= columnTypes.size(); ++i) {
@@ -448,8 +454,10 @@ public class PrivacyConnection implements Connection {
                 throw new UnsupportedOperationException("unsupported type");
             }
           }
-          addRow(row);
+          addRow(rows, row);
         }
+        current_trace.endQuery(rows);
+
         resultSet.beforeFirst();
       }
 

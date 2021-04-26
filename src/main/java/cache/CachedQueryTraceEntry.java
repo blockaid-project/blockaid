@@ -41,7 +41,7 @@ public class CachedQueryTraceEntry {
     private int maxEqualityNumber;
 
     public CachedQueryTraceEntry(QueryTraceEntry trace, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
-        this(trace.queryText, trace.parameters, trace.tuples, parameterEquality, tupleEquality);
+        this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, parameterEquality, tupleEquality);
     }
 
     private CachedQueryTraceEntry(String queryText, List<Object> parameters, List<List<Object>> tuples, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
@@ -75,7 +75,7 @@ public class CachedQueryTraceEntry {
     }
 
     public boolean checkQueryText(QueryTraceEntry query) {
-        return queryText.equals(query.queryText);
+        return queryText.equals(query.query.parsedSql.getParsedSql());
     }
 
     public boolean checkParameters(QueryTraceEntry query, Map<Index, Object> mappedIndices) {

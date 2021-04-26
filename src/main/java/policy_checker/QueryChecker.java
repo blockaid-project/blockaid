@@ -1,15 +1,14 @@
 package policy_checker;
 
+import cache.*;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.microsoft.z3.*;
-import org.apache.calcite.schema.SchemaPlus;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
 import solver.*;
 import sql.PrivacyQuery;
-import sql.QuerySequence;
 import sql.SchemaPlusWithKey;
 
 import java.util.*;
@@ -33,7 +32,7 @@ public class QueryChecker {
     private ArrayList<Policy> policySet;
     private List<Set<String>> preapprovedSets;
     private LoadingCache<PrivacyQueryCoarseWrapper, FastCheckDecision> policyDecisionCacheCoarse;
-    private LoadingCache<QuerySequence, Boolean> policyDecisionCacheFine;
+    private TraceCache policyDecisionCacheFine;
     private Context context;
     private Schema schema;
     private DeterminacyFormula fastCheckDeterminacyFormula;
@@ -63,14 +62,7 @@ public class QueryChecker {
                     }
                 });
 
-        this.policyDecisionCacheFine = CacheBuilder.newBuilder()
-                .maximumSize(ENABLE_CACHING ? Integer.MAX_VALUE : 0)
-                .build(new CacheLoader<QuerySequence, Boolean>() {
-                    @Override
-                    public Boolean load(final QuerySequence query) {
-                        return doCheckPolicy(query);
-                    }
-                });
+        this.policyDecisionCacheFine = new TraceCache(); // TODO ENABLE_CACHING FLAG
 
         this.context = new Context();
 
@@ -221,9 +213,8 @@ public class QueryChecker {
         return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
     }
 
-    private boolean doCheckPolicy(QuerySequence queries) {
+    private boolean doCheckPolicy(QueryTrace queries) {
         CountDownLatch latch = new CountDownLatch(1);
-        PrivacyQuery query = queries.get(queries.size() - 1).query;
 
         List<SMTExecutor> executors = new ArrayList<>();
 
@@ -284,10 +275,10 @@ public class QueryChecker {
         return FastCheckDecision.UNKNOWN;
     }
 
-    public boolean checkPolicy(QuerySequence queries) {
+    public boolean checkPolicy(QueryTrace queries) {
         try {
             if (ENABLE_PRECHECK) {
-                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.get(queries.size() - 1).query));
+                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.getCurrentQuery().getQuery()));
                 if (precheckResult == FastCheckDecision.ALLOW) {
                     return true;
                 }
@@ -296,7 +287,32 @@ public class QueryChecker {
                     return false;
                 }
             }
-            return policyDecisionCacheFine.get(queries.copy());
+            Boolean cacheResult = policyDecisionCacheFine.checkCache(queries);
+            if (cacheResult != null) {
+                return cacheResult;
+            }
+            // TODO fix, currently just all values no equality
+            CachedQueryTrace cacheTrace = new CachedQueryTrace();
+            for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
+                for (QueryTraceEntry queryEntry : queryEntries) {
+                    List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
+                    for (int i = 0; i < queryEntry.getParameters().size(); ++i) {
+                        parameterEquality.add(null);
+                    }
+                    List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
+                    for (int i = 0; i < queryEntry.getTuples().size(); ++i) {
+                        List<CachedQueryTraceEntry.Index> tuple = new ArrayList<>();
+                        for (int j = 0; j < queryEntry.getTuples().get(i).size(); ++j) {
+                            tuple.add(null);
+                        }
+                        tupleEquality.add(tuple);
+                    }
+                    cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, parameterEquality, tupleEquality));
+                }
+            }
+            boolean policyResult = doCheckPolicy(queries);
+            policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
+            return policyResult;
         } catch (ExecutionException e) {
             throw propagate(e);
         }

@@ -8,7 +8,6 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import policy_checker.QueryChecker;
 import server.EndToEndTest;
-import sql.QuerySequence;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -80,27 +79,6 @@ public class DiasporaTest {
 
         setupTables(dbUrl, generateDBSQL(h2Url));
         setupTables(h2Url, readSchemaSQL());
-    }
-
-    @Test
-    public void runSimpleTest() throws Exception {
-        Class.forName("jdbc.PrivacyDriver");
-        Class.forName("org.h2.Driver");
-
-        Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
-        conn.setAutoCommit(true);
-
-        // todo: data needs to be generated or we're querying an empty database
-
-        String query = "SELECT username FROM users WHERE id = ?_MY_UID";
-        PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-        p.setInt(1, 1);
-        assertTrue(p.checkPolicy());
-        p.addRow(Collections.singletonList("aaaa"));
-        query = "SELECT username FROM users WHERE username = ??";
-        p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-        p.setString(1, "aaaa");
-        assertTrue(p.checkPolicy());
     }
 
     @Test
@@ -323,7 +301,7 @@ public class DiasporaTest {
         for (String query : queries) {
             System.err.println(query);
             PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
-            p.checkPolicy();
+            p.execute();
         }
     }
 }

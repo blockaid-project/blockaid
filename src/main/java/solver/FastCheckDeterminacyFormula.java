@@ -1,10 +1,10 @@
 package solver;
 
+import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
-import sql.QuerySequence;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,13 +28,13 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
     }
 
     @Override
-    public Expr[] makeFormulaConstants(QuerySequence queries) {
+    public Expr[] makeFormulaConstants(QueryTrace queries) {
         /**
          *  Makes SMT formula for fast check: either "determinacy holds" or "I don't know".
          *
          *  Currently only supports PSJ / union of PSJ.
          */
-        Query query = queries.get(queries.size() - 1).query.getSolverQuery(schema);
+        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Sort[] headTypes = query.headTypes();
         Expr[] freshConsts = new Expr[headTypes.length];
         for (int i = 0; i < freshConsts.length; ++i) {
@@ -44,8 +44,8 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
     }
 
     @Override
-    public BoolExpr makeFormula(QuerySequence queries, Expr[] constants) {
-        Query query = queries.get(queries.size() - 1).query.getSolverQuery(schema);
+    public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
+        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Tuple extHeadTup = new Tuple(constants);
         return context.mkAnd(
                 query.doesContain(context, inst1, extHeadTup),

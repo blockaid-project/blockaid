@@ -1,9 +1,9 @@
 package solver;
 
+import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
-import sql.QuerySequence;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,13 +28,13 @@ public class BasicDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Expr[] makeFormulaConstants(QuerySequence queries) {
+    public Expr[] makeFormulaConstants(QueryTrace queries) {
         return new Expr[0];
     }
 
     @Override
-    public BoolExpr makeFormula(QuerySequence queries, Expr[] constants) {
-        Query query = queries.get(queries.size() - 1).query.getSolverQuery(schema);
+    public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
+        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         return context.mkAnd(
                 context.mkNot(query.apply(context, inst1).equalsExpr(context, query.apply(context, inst2))),
                 generateTupleCheck(queries)

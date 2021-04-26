@@ -1,11 +1,11 @@
 package solver;
 
+import cache.QueryTrace;
+import cache.QueryTraceEntry;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Solver;
-import sql.QuerySequence;
-import sql.QueryWithResult;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,16 +35,18 @@ public abstract class DeterminacyFormula {
         this.preparedExprSMT = solver.toString();
     }
 
-    protected BoolExpr generateTupleCheck(QuerySequence queries) {
+    protected BoolExpr generateTupleCheck(QueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
-        for (QueryWithResult queryWithResult : queries) {
-            Query query = queryWithResult.query.getSolverQuery(schema);
-            Relation r1 = query.apply(context, inst1);
-            Relation r2 = query.apply(context, inst2);
-            if (queryWithResult.tuples != null) {
-                List<Tuple> tuples = queryWithResult.tuples.stream().map(tuple -> new Tuple(tuple.stream().map(v -> Tuple.getExprFromObject(context, v)).toArray(Expr[]::new))).collect(Collectors.toList());
-                exprs.add(r1.doesContain(context, tuples));
-                exprs.add(r2.doesContain(context, tuples));
+        for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
+            for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
+                Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
+                Relation r1 = query.apply(context, inst1);
+                Relation r2 = query.apply(context, inst2);
+                if (!queryTraceEntry.getTuples().isEmpty()) {
+                    List<Tuple> tuples = queryTraceEntry.getTuples().stream().map(tuple -> new Tuple(tuple.stream().map(v -> Tuple.getExprFromObject(context, v)).toArray(Expr[]::new))).collect(Collectors.toList());
+                    exprs.add(r1.doesContain(context, tuples));
+                    exprs.add(r2.doesContain(context, tuples));
+                }
             }
         }
         if (exprs.isEmpty()) {
@@ -53,17 +55,17 @@ public abstract class DeterminacyFormula {
         return context.mkAnd(exprs.toArray(new BoolExpr[0]));
     }
 
-    protected abstract Expr[] makeFormulaConstants(QuerySequence queries);
-    protected abstract BoolExpr makeFormula(QuerySequence queries, Expr[] constants);
+    protected abstract Expr[] makeFormulaConstants(QueryTrace queries);
+    protected abstract BoolExpr makeFormula(QueryTrace queries, Expr[] constants);
 
-    public Solver makeSolver(QuerySequence queries) {
+    public Solver makeSolver(QueryTrace queries) {
         Solver solver = context.mkSolver();
         solver.add(preparedExpr);
         solver.add(makeFormula(queries, makeFormulaConstants(queries)));
         return solver;
     }
 
-    public synchronized String generateSMT(QuerySequence queries) {
+    public synchronized String generateSMT(QueryTrace queries) {
         Expr[] constants = makeFormulaConstants(queries);
         StringBuilder stringBuilder = new StringBuilder();
         for (Expr constant : constants) {
