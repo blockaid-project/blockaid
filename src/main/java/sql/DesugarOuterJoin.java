@@ -1,12 +1,12 @@
 package sql;
 
+import com.google.common.collect.ImmutableList;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.sql.util.SqlVisitor;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 public class DesugarOuterJoin {
     public static Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
@@ -47,27 +47,47 @@ public class DesugarOuterJoin {
         if (selectId.names.size() != 2 || !selectId.names.get(0).equals(tableName)
                 || !selectId.names.get(1).isEmpty()) { return Optional.empty(); }
 
+        // Only handling the case where the select list contains no parameters.
+        if (select.getSelectList().accept(DynParamCounter.INSTANCE) > 0) {
+            return Optional.empty();
+        }
+
         // Turn into a union.
-        // RHS: inner join.
-        SqlJoin rhsJoin = new SqlJoin(join.getParserPosition(), joinLeft, join.isNaturalNode(),
+        // LHS: simply change "outer join" into "inner join".
+        SqlJoin lhsJoin = new SqlJoin(join.getParserPosition(), joinLeft, join.isNaturalNode(),
                 SqlLiteral.createSymbol(JoinType.INNER, join.getJoinTypeNode().getParserPosition()),
                 joinRight, join.getConditionTypeNode(), join.getCondition());
-        SqlSelect rhs = new SqlSelect(select.getParserPosition(), SqlNodeList.EMPTY, select.getSelectList(), rhsJoin,
+        SqlSelect lhs = new SqlSelect(select.getParserPosition(), SqlNodeList.EMPTY, select.getSelectList(), lhsJoin,
                 select.getWhere(), select.getGroup(), select.getHaving(), select.getWindowList(), select.getOrderList(),
                 select.getOffset(), select.getFetch(), select.getHints());
 
-        // LHS: get rid of the join, substitute rightTable.columns with NULL in where clause.
-        SqlNode newWhere = replaceFieldsWithNull(select.getWhere(), rightTableName).orElseGet(
-                () -> SqlLiteral.createBoolean(false, select.getWhere().getParserPosition())
+        // RHS: get rid of the join, substitute rightTable.columns with NULL in where clause.
+        SqlNode newWhere = replaceFieldsWithNull(select.getWhere(), rightTableName)
+                .orElseGet(() -> SqlLiteral.createBoolean(false, select.getWhere().getParserPosition())
         );
-        SqlSelect lhs = new SqlSelect(select.getParserPosition(), SqlNodeList.EMPTY, select.getSelectList(),
-                joinRight, newWhere, select.getGroup(), select.getHaving(), select.getWindowList(),
+        SqlNode rhs = new SqlSelect(select.getParserPosition(), SqlNodeList.EMPTY, select.getSelectList(),
+                joinLeft, newWhere, select.getGroup(), select.getHaving(), select.getWindowList(),
                 select.getOrderList(), select.getOffset(), select.getFetch(), select.getHints());
+
+        RenumberDynParams r = new RenumberDynParams(parameters.length);
+        rhs = rhs.accept(r);
 
         SqlNode union = new SqlBasicCall(SqlStdOperatorTable.UNION, new SqlNode[]{lhs, rhs},
                 select.getParserPosition());
         ParserResult newPR = new ParserResult(union.toString(), union.getKind(), union, false, false) {};
-        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
+
+        List<SqlDynamicParam> renumberedParams = r.getRenumberedParams();
+        Object[] newParameters = new Object[parameters.length + renumberedParams.size()];
+        System.arraycopy(parameters, 0, newParameters, 0, parameters.length);
+        ArrayList<String> newParamNames = new ArrayList<>(paramNames);
+
+        for (int i = 0; i < renumberedParams.size(); ++i) {
+            int oldIndex = renumberedParams.get(i).getIndex();
+            newParameters[parameters.length + i] = parameters[oldIndex];
+            newParamNames.add(paramNames.get(oldIndex));
+        }
+
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, newParameters, newParamNames));
     }
 
     /**
@@ -81,6 +101,8 @@ public class DesugarOuterJoin {
                 if (lit.getTypeName() == SqlTypeName.NULL) {
                     return Optional.empty();
                 }
+                return Optional.of(node);
+            case DYNAMIC_PARAM:
                 return Optional.of(node);
             case IDENTIFIER:
                 List<String> names = ((SqlIdentifier) node).names;
@@ -138,5 +160,84 @@ public class DesugarOuterJoin {
         }
 
         return Optional.of(new SqlBasicCall(call.getOperator(), newOperands, call.getParserPosition()));
+    }
+
+    static class RenumberDynParams implements SqlVisitor<SqlNode> {
+        private final int startIndex;
+        private int numParamsSoFar = 0;
+        private final List<SqlDynamicParam> renumberedParams = new ArrayList<>();
+
+        public List<SqlDynamicParam> getRenumberedParams() {
+            return Collections.unmodifiableList(renumberedParams);
+        }
+
+        public RenumberDynParams(int startIndex) {
+            this.startIndex = startIndex;
+        }
+
+        @Override
+        public SqlNode visit(SqlLiteral sqlLiteral) {
+            return sqlLiteral;
+        }
+
+        @Override
+        public SqlNode visit(SqlCall sqlCall) {
+            SqlCall nc = (SqlCall) sqlCall.clone(sqlCall.getParserPosition());
+
+            List<SqlNode> operands = sqlCall.getOperandList();
+            int numOperands = operands.size();
+            if (sqlCall.getKind() == SqlKind.SELECT) {
+                // HACK-- a select node's `setOperand` method doesn't support setting the last operand,
+                // so we do that here.
+                SqlNodeList newHints = (SqlNodeList) (((SqlSelect) sqlCall).getHints().accept(this));
+                ((SqlSelect) nc).setHints(newHints);
+                numOperands -= 1;
+            }
+            for (int i = 0; i < numOperands; ++i) {
+                SqlNode o = operands.get(i);
+                if (o != null) {
+                    nc.setOperand(i, o.accept(this));
+                }
+            }
+
+            return nc;
+        }
+
+        @Override
+        public SqlNode visit(SqlNodeList sqlNodeList) {
+            ArrayList<SqlNode> l = new ArrayList<>();
+            for (SqlNode n : sqlNodeList) {
+                if (n == null) {
+                    l.add(null);
+                } else {
+                    l.add(n.accept(this));
+                }
+            }
+            return new SqlNodeList(l, sqlNodeList.getParserPosition());
+        }
+
+        @Override
+        public SqlNode visit(SqlIdentifier sqlIdentifier) {
+            return sqlIdentifier;
+        }
+
+        @Override
+        public SqlNode visit(SqlDataTypeSpec sqlDataTypeSpec) {
+            throw new RuntimeException("not supported: SqlDataTypeSpec");
+        }
+
+        @Override
+        public SqlNode visit(SqlDynamicParam sqlDynamicParam) {
+            renumberedParams.add(sqlDynamicParam);
+            SqlDynamicParam np = new SqlDynamicParam(startIndex + numParamsSoFar,
+                    sqlDynamicParam.getParserPosition());
+            numParamsSoFar += 1;
+            return np;
+        }
+
+        @Override
+        public SqlNode visit(SqlIntervalQualifier sqlIntervalQualifier) {
+            throw new RuntimeException("not supported: SqlIntervalQualifier");
+        }
     }
 }

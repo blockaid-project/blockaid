@@ -30,6 +30,9 @@ public class StripUnaryOpSubquery {
             return Optional.empty();
         }
 
+        // Only handling the case where this stripping doesn't remove any parameters.
+        assert sqlSelect.accept(DynParamCounter.INSTANCE) == parameters.length;
+
         ParserResult newPR = new ParserResult(sqlSelect.toString(), sqlSelect.getKind(), sqlSelect,
                 false, false) {};
         // After stripping, need to set result bitmap to empty so that the results of this query are not processed.

@@ -131,7 +131,6 @@ public class PrivacyConnection implements Connection {
     s = matcher.replaceAll("?");
     // FIXME(zhangwen): We'll get rid of any LIMIT clause, but we keep any parameters used by the LIMIT clause.  Bad?
 
-    System.out.println("prepareStatement: " + s);
     Optional<ParserResult> parser_result = shouldApplyPolicy(s);
     if (!parser_result.isPresent()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);

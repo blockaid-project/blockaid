@@ -9,6 +9,7 @@ import planner.PrivacyTable;
 import solver.*;
 import sql.PrivacyQuery;
 import sql.QuerySequence;
+import sql.QueryWithResult;
 import sql.SchemaPlusWithKey;
 
 import java.io.IOException;
@@ -302,9 +303,13 @@ public class QueryChecker {
     }
 
     public boolean checkPolicy(QuerySequence queries) {
+        PrivacyQuery currQuery = queries.lastInTrace().query;
+        System.out.println("transformed:\t"
+                + currQuery.parsedSql.getSqlNode().toString().replace("\n", "\n\t")
+                + "\n\t" + Arrays.toString(currQuery.parameters));
         try {
             if (ENABLE_PRECHECK) {
-                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(queries.lastInTrace().query));
+                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(currQuery));
                 if (precheckResult == FastCheckDecision.ALLOW) {
                     return true;
                 }

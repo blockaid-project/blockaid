@@ -1,11 +1,13 @@
 package sql;
 
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOrderBy;
-import org.apache.calcite.sql.SqlSelect;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class StripOrderBy {
     public static Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
@@ -14,8 +16,19 @@ public class StripOrderBy {
             return Optional.empty();
         }
 
-        SqlSelect select = (SqlSelect) ((SqlOrderBy) result.getSqlNode()).query;
-        ParserResult newPR = new ParserResult(select.toString(), select.getKind(), select, false, false) {};
+        SqlOrderBy ob = (SqlOrderBy) result.getSqlNode();
+        SqlNode subQuery = ob.query;
+        ParserResult newPR = new ParserResult(subQuery.toString(), subQuery.getKind(), subQuery, false, false) {};
+
+        // We might have removed some parameters in the query.  Remove them in `parameters` and `paramNames`, too.
+        int numParamsInSubQuery = subQuery.accept(DynParamCounter.INSTANCE);
+        if (numParamsInSubQuery != parameters.length) {
+            // Assuming the removed parameters are at the end of the list.  This is correct?
+            parameters = Arrays.stream(parameters).limit(numParamsInSubQuery).collect(Collectors.toList())
+                    .toArray(new Object[numParamsInSubQuery]);
+            paramNames = paramNames.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
+        }
+
         return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
     }
 }
