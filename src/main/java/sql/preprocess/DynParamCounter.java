@@ -1,4 +1,4 @@
-package sql;
+package sql.preprocess;
 
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.util.SqlVisitor;
@@ -6,8 +6,10 @@ import org.apache.calcite.sql.util.SqlVisitor;
 /**
  * Counts the number of dynamic parameters in a SQL node.
  */
-public class DynParamCounter implements SqlVisitor<Integer> {
+class DynParamCounter implements SqlVisitor<Integer> {
     public static final DynParamCounter INSTANCE = new DynParamCounter();
+
+    private DynParamCounter() {}
 
     @Override
     public Integer visit(SqlLiteral sqlLiteral) {

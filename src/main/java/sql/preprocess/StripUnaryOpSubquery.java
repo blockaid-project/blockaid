@@ -1,12 +1,21 @@
-package sql;
+package sql.preprocess;
 
 import org.apache.calcite.sql.*;
+import sql.ParserResult;
+import sql.PrivacyQuery;
+import sql.PrivacyQueryFactory;
+import sql.SchemaPlusWithKey;
 
 import java.util.List;
 import java.util.Optional;
 
-public class StripUnaryOpSubquery {
-    public static Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames) {
+public class StripUnaryOpSubquery implements Preprocessor {
+    public static final StripUnaryOpSubquery INSTANCE = new StripUnaryOpSubquery();
+
+    private StripUnaryOpSubquery() {}
+
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+                                          List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
         }

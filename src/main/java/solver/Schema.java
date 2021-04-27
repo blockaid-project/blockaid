@@ -81,7 +81,7 @@ public class Schema {
         return relations.get(relationName.toUpperCase());
     }
 
-    private Map<String, List<String>> columnNamesCache = new HashMap<>();
+    private final Map<String, List<String>> columnNamesCache = new HashMap<>();
     public List<String> getColumnNames(String relationName) {
         return columnNamesCache.computeIfAbsent(
                 relationName,

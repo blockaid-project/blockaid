@@ -1,17 +1,25 @@
-package sql;
+package sql.preprocess;
 
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOrderBy;
+import sql.ParserResult;
+import sql.PrivacyQuery;
+import sql.PrivacyQueryFactory;
+import sql.SchemaPlusWithKey;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-public class StripOrderBy {
-    public static Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                                 List<String> paramNames) {
+public class StripOrderBy implements Preprocessor {
+    public static final StripOrderBy INSTANCE = new StripOrderBy();
+
+    private StripOrderBy() {}
+
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+                                          List<String> paramNames) {
         if (result.getKind() != SqlKind.ORDER_BY) {
             return Optional.empty();
         }

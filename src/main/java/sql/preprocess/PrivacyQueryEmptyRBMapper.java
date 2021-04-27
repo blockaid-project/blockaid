@@ -1,7 +1,8 @@
-package sql;
+package sql.preprocess;
 
 import solver.Query;
 import solver.Schema;
+import sql.PrivacyQuery;
 
 import java.util.Collections;
 import java.util.List;
@@ -10,7 +11,7 @@ import java.util.Set;
 /**
  * Wrapper around a PrivacyQuery that returns empty for result bitmap.
  */
-public class PrivacyQueryEmptyRBMapper extends PrivacyQuery {
+class PrivacyQueryEmptyRBMapper extends PrivacyQuery {
     private final PrivacyQuery pq;
 
     public PrivacyQueryEmptyRBMapper(PrivacyQuery pq) {

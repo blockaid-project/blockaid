@@ -306,7 +306,7 @@ public class QueryChecker {
         PrivacyQuery currQuery = queries.lastInTrace().query;
         System.out.println("transformed:\t"
                 + currQuery.parsedSql.getSqlNode().toString().replace("\n", "\n\t")
-                + "\n\t" + Arrays.toString(currQuery.parameters));
+                + "\n\t" + currQuery.parameters);
         try {
             if (ENABLE_PRECHECK) {
                 FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(currQuery));

@@ -1,16 +1,19 @@
-package sql;
+package sql.preprocess;
 
-import com.google.common.collect.ImmutableList;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.sql.util.SqlVisitor;
+import sql.*;
 
 import java.util.*;
 
-public class DesugarOuterJoin {
-    public static Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                                 List<String> paramNames) {
+public class DesugarLeftJoinIntoUnion implements Preprocessor {
+    public static final DesugarLeftJoinIntoUnion INSTANCE = new DesugarLeftJoinIntoUnion();
+
+    private DesugarLeftJoinIntoUnion() {}
+
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+                                          List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
         }
@@ -44,8 +47,7 @@ public class DesugarOuterJoin {
         SqlNode selectColumnNode = selectList.get(0);
         if (selectColumnNode.getKind() != SqlKind.IDENTIFIER) { return Optional.empty(); }
         SqlIdentifier selectId = (SqlIdentifier) selectColumnNode;
-        if (selectId.names.size() != 2 || !selectId.names.get(0).equals(tableName)
-                || !selectId.names.get(1).isEmpty()) { return Optional.empty(); }
+        if (selectId.names.size() != 2 || !selectId.names.get(0).equals(tableName)) { return Optional.empty(); }
 
         // Only handling the case where the select list contains no parameters.
         if (select.getSelectList().accept(DynParamCounter.INSTANCE) > 0) {
@@ -162,7 +164,7 @@ public class DesugarOuterJoin {
         return Optional.of(new SqlBasicCall(call.getOperator(), newOperands, call.getParserPosition()));
     }
 
-    static class RenumberDynParams implements SqlVisitor<SqlNode> {
+    private static class RenumberDynParams extends SqlTransformer {
         private final int startIndex;
         private int numParamsSoFar = 0;
         private final List<SqlDynamicParam> renumberedParams = new ArrayList<>();
@@ -176,68 +178,12 @@ public class DesugarOuterJoin {
         }
 
         @Override
-        public SqlNode visit(SqlLiteral sqlLiteral) {
-            return sqlLiteral;
-        }
-
-        @Override
-        public SqlNode visit(SqlCall sqlCall) {
-            SqlCall nc = (SqlCall) sqlCall.clone(sqlCall.getParserPosition());
-
-            List<SqlNode> operands = sqlCall.getOperandList();
-            int numOperands = operands.size();
-            if (sqlCall.getKind() == SqlKind.SELECT) {
-                // HACK-- a select node's `setOperand` method doesn't support setting the last operand,
-                // so we do that here.
-                SqlNodeList newHints = (SqlNodeList) (((SqlSelect) sqlCall).getHints().accept(this));
-                ((SqlSelect) nc).setHints(newHints);
-                numOperands -= 1;
-            }
-            for (int i = 0; i < numOperands; ++i) {
-                SqlNode o = operands.get(i);
-                if (o != null) {
-                    nc.setOperand(i, o.accept(this));
-                }
-            }
-
-            return nc;
-        }
-
-        @Override
-        public SqlNode visit(SqlNodeList sqlNodeList) {
-            ArrayList<SqlNode> l = new ArrayList<>();
-            for (SqlNode n : sqlNodeList) {
-                if (n == null) {
-                    l.add(null);
-                } else {
-                    l.add(n.accept(this));
-                }
-            }
-            return new SqlNodeList(l, sqlNodeList.getParserPosition());
-        }
-
-        @Override
-        public SqlNode visit(SqlIdentifier sqlIdentifier) {
-            return sqlIdentifier;
-        }
-
-        @Override
-        public SqlNode visit(SqlDataTypeSpec sqlDataTypeSpec) {
-            throw new RuntimeException("not supported: SqlDataTypeSpec");
-        }
-
-        @Override
         public SqlNode visit(SqlDynamicParam sqlDynamicParam) {
             renumberedParams.add(sqlDynamicParam);
             SqlDynamicParam np = new SqlDynamicParam(startIndex + numParamsSoFar,
                     sqlDynamicParam.getParserPosition());
             numParamsSoFar += 1;
             return np;
-        }
-
-        @Override
-        public SqlNode visit(SqlIntervalQualifier sqlIntervalQualifier) {
-            throw new RuntimeException("not supported: SqlIntervalQualifier");
         }
     }
 }

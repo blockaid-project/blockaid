@@ -1,8 +1,8 @@
 package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
+import com.google.common.collect.ImmutableList;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.*;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import sql.*;
@@ -56,7 +56,18 @@ public class PrivacyConnection implements Connection {
         }
       }
     }
-    schema = new SchemaPlusWithKey(schemaPlus, primaryKeys);
+
+    // TODO(zhangwen): ideally want a tuple of four elements...
+    Set<List<String>> foreignKeys = new HashSet<>();
+    for (String fk : fks.split("\n")) {
+      fk = fk.toUpperCase();
+      String[] parts = fk.split(":", 2);
+      String[] from = parts[0].split("\\.", 2);
+      String[] to = parts[1].split("\\.", 2);
+      foreignKeys.add(ImmutableList.of(from[0], from[1], to[0], to[1]));
+    }
+
+    schema = new SchemaPlusWithKey(schemaPlus, primaryKeys, foreignKeys);
 
     this.policy_list = new ArrayList<>();
     set_policy(info, ctx);
