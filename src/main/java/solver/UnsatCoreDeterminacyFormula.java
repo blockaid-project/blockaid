@@ -25,18 +25,17 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
         setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
     }
 
-    private Map<QueryTraceEntry, String> assertionMap = null;
-
-    public Map<QueryTraceEntry, String> getAssertionMap() {
+    private Map<Object, Integer> assertionMap = null;
+    public Map<Object, Integer> getAssertionMap() {
         return assertionMap;
     }
 
     private String generateAssertions(QueryTrace queries, Expr[] constants) {
         Map<String, BoolExpr> exprs = new HashMap<>();
-        this.assertionMap = new HashMap<>();
 
         int constantsOffset = 0;
         int queryNumber = 0;
+        Map<Object, Set<Expr>> equalitySets = new HashMap<>();
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
             for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
                 String prefix = (queryTraceEntry == queries.getCurrentQuery() ? "cq_p" : ("q_p!" + queryNumber));
@@ -50,6 +49,9 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                         // these should be linked to the query assertions since that's the only place where the
                         // constants are even used, except for the current query but that's special cased elsewhere
                         exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, parameters[i])));
+
+                        equalitySets.putIfAbsent(parameters[i], new HashSet<>());
+                        equalitySets.get(parameters[i]).add(paramConstants.get(i));
                     }
                 }
 
@@ -65,6 +67,10 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                         tupleConstants.add(tupleConstant);
                         for (int i = 0; i < tuple.size(); ++i) {
                             exprs.put("a_v!" + queryNumber + "!" + attrNumber, context.mkEq(tupleConstant.get(i), Tuple.getExprFromObject(context, tuple.get(i))));
+
+                            equalitySets.putIfAbsent(tuple.get(i), new HashSet<>());
+                            equalitySets.get(tuple.get(i)).add(tupleConstant.get(i));
+
                             ++attrNumber;
                         }
                         constantsOffset += numAttrs;
@@ -76,8 +82,31 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                 ++queryNumber;
             }
         }
-        if (exprs.isEmpty()) {
-            return "";
+
+        this.assertionMap = new HashMap<>();
+        int assertionNum = 0;
+        for (Map.Entry<Object, Set<Expr>> entry : equalitySets.entrySet()) {
+            if (entry.getValue().size() < 2) {
+                continue;
+            }
+            boolean hasParameter = false;
+            for (Expr s : entry.getValue()) {
+                if (s.getSExpr().contains("p!")) {
+                    hasParameter = true;
+                    break;
+                }
+            }
+            if (hasParameter) {
+                List<BoolExpr> subexprs = new ArrayList<>();
+                Iterator<Expr> iter = entry.getValue().iterator();
+                Expr first = iter.next();
+                while (iter.hasNext()) {
+                    subexprs.add(context.mkEq(first, iter.next()));
+                }
+                exprs.put("a_e!" + assertionNum, context.mkAnd(subexprs.toArray(new BoolExpr[0])));
+                this.assertionMap.put(entry.getKey(), assertionNum);
+                ++assertionNum;
+            }
         }
 
         StringBuilder out = new StringBuilder();

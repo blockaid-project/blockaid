@@ -35,9 +35,9 @@ public class QueryChecker {
     private TraceCache policyDecisionCacheFine;
     private Context context;
     private Schema schema;
-    private DeterminacyFormula fastCheckDeterminacyFormula;
-    private DeterminacyFormula determinacyFormula;
-    private DeterminacyFormula unsatCoreDeterminacyFormula;
+    private final DeterminacyFormula fastCheckDeterminacyFormula;
+    private final DeterminacyFormula determinacyFormula;
+    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
@@ -261,11 +261,26 @@ public class QueryChecker {
         return false;
     }
 
-    private String[] tryGetUnsatCore(QueryTrace queries) {
+    private class UnsatCore {
+        private Set<String> core;
+        private Map<Object, Integer> equalityMap;
+
+        public UnsatCore(Set<String> core, Map<Object, Integer> equalityMap) {
+            this.core = core;
+            this.equalityMap = equalityMap;
+        }
+    }
+
+    private UnsatCore tryGetUnsatCore(QueryTrace queries) {
         CountDownLatch latch = new CountDownLatch(2);
         List<SMTExecutor> executors = new ArrayList<>();
 
-        String smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
+        String smt;
+        Map<Object, Integer> equalityMap;
+        synchronized (this.unsatCoreDeterminacyFormula) {
+            smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
+            equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
+        }
         executors.add(new Z3Executor(smt, latch));
         executors.add(new CVC4Executor(smt, latch));
 
@@ -279,7 +294,7 @@ public class QueryChecker {
             }
         }
 
-        return minCore;
+        return minCore == null ? null : new UnsatCore(new HashSet<>(Arrays.asList(minCore)), equalityMap);
     }
 
     private FastCheckDecision doPrecheckPolicy(PrivacyQuery query) {
@@ -324,39 +339,56 @@ public class QueryChecker {
             boolean policyResult = doCheckPolicy(queries);
             if (ENABLE_CACHING) {
                 new Thread(() -> {
-                    String[] minCore = null;
+                    UnsatCore core = null;
                     if (policyResult) {
-                        minCore = tryGetUnsatCore(queries);
+                        core = tryGetUnsatCore(queries);
                     }
-                    if (minCore != null) {
-                        // System.err.println("min core: " + Arrays.asList(minCore));
+                    if (core != null) {
+                        // System.err.println("min core: " + core.core);
                         CachedQueryTrace cacheTrace = new CachedQueryTrace();
                         int queryNumber = 0;
-                        Set<String> core = new HashSet<>(Arrays.asList(minCore));
                         for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
                             for (QueryTraceEntry queryEntry : queryEntries) {
-                                if (!core.contains("a_q!" + queryNumber) && queryEntry != queries.getCurrentQuery()) {
+                                if (!core.core.contains("a_q!" + queryNumber) && queryEntry != queries.getCurrentQuery()) {
                                     ++queryNumber;
                                     continue;
                                 }
                                 // equalities
                                 List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
-                                for (int i = 0; i < queryEntry.getParameters().size(); ++i) {
-                                    parameterEquality.add(null); // TODO
+                                for (Object parameter : queryEntry.getParameters()) {
+                                    if (!core.equalityMap.containsKey(parameter)) {
+                                        parameterEquality.add(null);
+                                        continue;
+                                    }
+                                    int assertionNum = core.equalityMap.get(parameter);
+                                    if (!core.core.contains("a_e!" + assertionNum)) {
+                                        parameterEquality.add(null);
+                                    } else {
+                                        parameterEquality.add(new CachedQueryTraceEntry.Index(assertionNum));
+                                    }
                                 }
                                 List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
-                                for (int i = 0; i < queryEntry.getTuples().size(); ++i) {
-                                    List<CachedQueryTraceEntry.Index> tuple = new ArrayList<>();
-                                    for (int j = 0; j < queryEntry.getTuples().get(i).size(); ++j) {
-                                        tuple.add(null); // TODO
+                                for (List<Object> tuple : queryEntry.getTuples()) {
+                                    List<CachedQueryTraceEntry.Index> indices = new ArrayList<>();
+                                    for (Object value : tuple) {
+                                        if (!core.equalityMap.containsKey(value)) {
+                                            indices.add(null);
+                                            continue;
+                                        }
+                                        int assertionNum = core.equalityMap.get(value);
+                                        if (!core.core.contains("a_e!" + assertionNum)) {
+                                            indices.add(null);
+                                        } else {
+                                            indices.add(new CachedQueryTraceEntry.Index(assertionNum));
+                                        }
                                     }
-                                    tupleEquality.add(tuple);
+                                    tupleEquality.add(indices);
                                 }
                                 // values
                                 QueryTraceEntry processedQuery = new QueryTraceEntry(queryEntry);
                                 List<Object> parameters = processedQuery.getParameters();
                                 for (int i = 0; i < parameters.size(); ++i) {
-                                    if (!core.contains("a_pv!" + queryNumber + "!" + i)) {
+                                    if (!core.core.contains("a_pv!" + queryNumber + "!" + i)) {
                                         parameters.set(i, null);
                                     }
                                 }
@@ -364,7 +396,7 @@ public class QueryChecker {
                                 int attrNum = 0;
                                 for (List<Object> tuple : processedQuery.getTuples()) {
                                     for (int j = 0; j < tuple.size(); ++j) {
-                                        if (!core.contains("a_v!" + queryNumber + "!" + attrNum)) {
+                                        if (!core.core.contains("a_v!" + queryNumber + "!" + attrNum)) {
                                             tuple.set(j, null);
                                         }
                                         ++attrNum;

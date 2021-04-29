@@ -87,25 +87,35 @@ public class DiasporaTest {
         Class.forName("org.h2.Driver");
 
         QueryChecker.ENABLE_PRECHECK = false;
+        QueryChecker.SOLVE_TIMEOUT = 10000;
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);
 
-        String query = "INSERT INTO users(id, username) VALUES (??, ??)";
+        String query = "INSERT INTO users(id, username, email, getting_started, disable_mail, `language`) VALUES (??, ??, ??, ??, ??, ??)";
         PreparedStatement s = conn.prepareStatement(query);
         s.setInt(1, 1);
         s.setString(2, "aaaa");
+        s.setString(3, "foo@bar.com");
+        s.setBoolean(4, false);
+        s.setBoolean(5, false);
+        s.setString(6, "en");
         s.execute();
 
-        query = "SELECT username FROM users WHERE users.id NOT IN (?_MY_UID)";
+        query = "SELECT id, username, email, getting_started, disable_mail, `language` FROM users WHERE users.id IN (?_MY_UID) AND users.id = ??";
         PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setInt(1, 1);
+        p.setInt(2, 1);
         p.executeQuery();
 
-        query = "SELECT username FROM users WHERE username = ??";
+        query = "SELECT username FROM users WHERE username = ?? AND email = ?? AND `language` = ??";
         p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setString(1, "aaaa");
+        p.setString(2, "foo@bar.com");
+        p.setString(3, "en");
         p.executeQuery();
+
+        Thread.sleep(5000);
     }
 
     @Test
