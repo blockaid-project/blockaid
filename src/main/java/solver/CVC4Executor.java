@@ -12,6 +12,11 @@ public class CVC4Executor extends SMTExecutor {
             "cvc4", "--lang", "smtlib2", "--quiet"
     };
 
+    // unsat core
+    public CVC4Executor(String solver, CountDownLatch latch) {
+        super(solver, latch, command);
+    }
+
     public CVC4Executor(String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive) {
         super(solver, latch, command, satConclusive, unsatConclusive);
     }

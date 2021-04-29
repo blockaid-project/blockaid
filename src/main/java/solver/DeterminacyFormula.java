@@ -1,12 +1,12 @@
 package solver;
 
+import cache.QueryTrace;
+import cache.QueryTraceEntry;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.StringSymbol;
 import com.microsoft.z3.Solver;
-import sql.QuerySequence;
-import sql.QueryWithResult;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -16,8 +16,8 @@ public abstract class DeterminacyFormula {
     protected Schema schema;
     protected Instance inst1;
     protected Instance inst2;
-    private BoolExpr preparedExpr;
-    private String preparedExprSMT;
+    protected BoolExpr preparedExpr;
+    protected String preparedExprSMT;
 
     protected DeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
         this.context = context;
@@ -34,6 +34,7 @@ public abstract class DeterminacyFormula {
         this.preparedExprSMT = solver.toString();
     }
 
+<<<<<<< HEAD
     protected BoolExpr generateTraceConformanceExpr(QuerySequence queries) {
         List<BoolExpr> exprs = new ArrayList<>();
 
@@ -46,6 +47,20 @@ public abstract class DeterminacyFormula {
                 List<Tuple> tuples = queryWithResult.tuples.stream().map(tuple -> new Tuple(tuple.stream().map(v -> Tuple.getExprFromObject(context, v)).toArray(Expr[]::new))).collect(Collectors.toList());
                 exprs.add(r1.doesContain(context, tuples));
                 exprs.add(r2.doesContain(context, tuples));
+=======
+    protected BoolExpr generateTupleCheck(QueryTrace queries, Expr[] constants) {
+        List<BoolExpr> exprs = new ArrayList<>();
+        for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
+            for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
+                Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
+                Relation r1 = query.apply(context, inst1);
+                Relation r2 = query.apply(context, inst2);
+                if (!queryTraceEntry.getTuples().isEmpty()) {
+                    List<Tuple> tuples = queryTraceEntry.getTuples().stream().map(tuple -> new Tuple(tuple.stream().map(v -> Tuple.getExprFromObject(context, v)).toArray(Expr[]::new))).collect(Collectors.toList());
+                    exprs.add(r1.doesContain(context, tuples));
+                    exprs.add(r2.doesContain(context, tuples));
+                }
+>>>>>>> 3fcc56d70c9285abd82711e641c08ec424e80214
             }
         }
 
@@ -64,16 +79,21 @@ public abstract class DeterminacyFormula {
         return context.mkAnd(exprs.toArray(new BoolExpr[0]));
     }
 
-    protected abstract Expr[] makeFormulaConstants(QuerySequence queries);
-    protected abstract BoolExpr makeFormula(QuerySequence queries, Expr[] constants);
+    protected abstract Expr[] makeFormulaConstants(QueryTrace queries);
+    protected abstract BoolExpr makeFormula(QueryTrace queries, Expr[] constants);
 
-    public Solver makeSolver(QuerySequence queries) {
+    protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
+        return "(assert " + makeFormula(queries, constants).toString() + ")";
+    }
+
+    public Solver makeSolver(QueryTrace queries) {
         Solver solver = context.mkSolver();
         solver.add(preparedExpr);
         solver.add(makeFormula(queries, makeFormulaConstants(queries)));
         return solver;
     }
 
+<<<<<<< HEAD
     public synchronized String generateSMT(QuerySequence queries) {
 //        System.out.println("\t| Make SMT:");
 
@@ -127,12 +147,20 @@ public abstract class DeterminacyFormula {
 //
 //        return formulaSMT;
 
+=======
+    public synchronized String generateSMT(QueryTrace queries) {
+        Expr[] constants = makeFormulaConstants(queries);
+>>>>>>> 3fcc56d70c9285abd82711e641c08ec424e80214
         StringBuilder stringBuilder = new StringBuilder();
         for (Expr constant : myContext.getConsts()) {
             stringBuilder.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
         }
         stringBuilder.append(this.preparedExprSMT);
+<<<<<<< HEAD
         stringBuilder.append("(assert ").append(bodyFormula).append(")");
+=======
+        stringBuilder.append(makeFormulaSMT(queries, constants));
+>>>>>>> 3fcc56d70c9285abd82711e641c08ec424e80214
         return stringBuilder.toString();
     }
 }

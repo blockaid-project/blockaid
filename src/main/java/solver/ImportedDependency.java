@@ -3,6 +3,8 @@ package solver;
 import com.microsoft.z3.*;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ImportedDependency implements Dependency {
     private String[] constants;

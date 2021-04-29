@@ -61,6 +61,16 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     }
 
     @Override
+    public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
+        Query[] q = new Query[queries.size()];
+        for (int i = 0; i < queries.size(); ++i) {
+            q[i] = queries.get(i).getSolverQuery(schema, paramPrefix, offset);
+            offset += queries.get(i).parameters.length;
+        }
+        return new UnionQuery(q);
+    }
+
+    @Override
     public List<Boolean> getResultBitmap() {
         if (queries.isEmpty()) {
             return Collections.emptyList();

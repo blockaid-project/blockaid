@@ -1,6 +1,8 @@
 package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
 import com.google.common.collect.ImmutableList;
+import cache.QueryTrace;
+import cache.QueryTraceEntry;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
 import policy_checker.Policy;
@@ -23,7 +25,7 @@ public class PrivacyConnection implements Connection {
   private PrivacyParser parser;
   private final QueryChecker query_checker;
   private ArrayList<Policy> policy_list;
-  public QuerySequence current_sequence;
+  public QueryTrace current_trace;
   private SchemaPlusWithKey schema;
 
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
@@ -79,7 +81,7 @@ public class PrivacyConnection implements Connection {
             pks.isEmpty() ? new String[0] : pks.split("\n"),
             fks.isEmpty() ? new String[0] : fks.split("\n")
     );
-    current_sequence = new QuerySequence();
+    current_trace = new QueryTrace();
   }
 
   private void set_policy(Properties info, QueryContext ctx) {
@@ -118,7 +120,7 @@ public class PrivacyConnection implements Connection {
   }
 
   public void resetSequence() {
-    current_sequence.clear();
+    current_trace = new QueryTrace();
   }
 
   @Override
@@ -458,13 +460,12 @@ public class PrivacyConnection implements Connection {
     public boolean checkPolicy() {
       System.out.println("checkPolicy: " + parser_result.getParsedSql() + "\t" + Arrays.toString(values));
       privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
-      current_sequence.addToTrace(new QueryWithResult(privacy_query));
+
+      current_trace.startQuery(privacy_query, Arrays.asList(values));
       final long startTime = System.currentTimeMillis();
-      // TODO(zhangwen): need to consult `shouldApplyPolicy` here?
       try {
-        return query_checker.checkPolicy(current_sequence);
-      }
-      catch (Exception e) {
+        return query_checker.checkPolicy(current_trace);
+      } catch (Exception e) {
         System.out.println("\t| EXCEPTION:\t" + e);
         throw e;
       } finally {
@@ -473,19 +474,15 @@ public class PrivacyConnection implements Connection {
       }
     }
 
-    public void addRow(List<Object> row) {
-//        System.out.println("\t| Returned row:\t" + row);
-      QueryWithResult current = current_sequence.lastInTrace();
-      if (current.tuples == null) {
-        current.tuples = new ArrayList<>();
-      }
-      List<Boolean> resultBitmap = current.query.getResultBitmap();
+    private void addRow(List<List<Object>> rows, List<Object> row) {
+      QueryTraceEntry current = current_trace.getCurrentQuery();
+      List<Boolean> resultBitmap = current.getQuery().getResultBitmap();
       for (int i = row.size(); i-- > 0; ) {
         if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);
         }
       }
-      current.tuples.add(row);
+      rows.add(row);
     }
 
     private class ResultSetWrapper implements ResultSet {
@@ -502,6 +499,7 @@ public class PrivacyConnection implements Connection {
           columnTypes.add(metaData.getColumnType(i));
         }
 
+        List<List<Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
           List<Object> row = new ArrayList<>();
           for (int i = 1; i <= columnTypes.size(); ++i) {
@@ -546,8 +544,10 @@ public class PrivacyConnection implements Connection {
                 throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
             }
           }
-          addRow(row);
+          addRow(rows, row);
         }
+        current_trace.endQuery(rows);
+
         resultSet.beforeFirst();
       }
 
@@ -2295,11 +2295,12 @@ public class PrivacyConnection implements Connection {
       String value = matcher.group(2);
       System.out.println("=== processSetConst: " + name + " = " + value);
       // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
-      resetSequence();
-      current_sequence.setConstValue(name, Integer.valueOf(value));
+        throw new RuntimeException("TODO: fix processSetConst");
+//      resetSequence();
+//      current_sequence.setConstValue(name, Integer.valueOf(value));
 
       // TODO(zhangwen): Can I get away with not actually executing this command?
-      return Optional.of(false);
+//      return Optional.of(false);
     }
 
     @Override

@@ -47,6 +47,11 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
+    public Query getSolverQuery(Schema schema, String prefix, int offset) {
+        return parsedPSJ.getSolverQuery(schema, prefix, offset);
+    }
+
+    @Override
     public List<Boolean> getResultBitmap() {
         return parsedPSJ.getResultBitmap();
     }

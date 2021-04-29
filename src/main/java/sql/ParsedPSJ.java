@@ -314,7 +314,7 @@ public class ParsedPSJ {
                 if (symbolMap.containsKey(name)) {
                     return symbolMap.get(name);
                 } else {
-                    return context.mkConst(context.mkSymbol(name), context.getIntSort());
+                    return context.mkConst(context.mkSymbol(name), Tuple.getSortFromObject(context, param));
                 }
             }
         }
@@ -348,11 +348,18 @@ public class ParsedPSJ {
         return relations;
     }
 
-    public BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap, Schema schema) {
+    private BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
         if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
             List<String> names = new ArrayList<>(paramNames);
+            if (prefix != null) {
+                for (int i = 0; i < names.size(); ++i) {
+                    if (names.get(i).equals("?")) {
+                        names.set(i, prefix + "!" + (i + parameterOffset));
+                    }
+                }
+            }
             Collections.reverse(names);
             BoolExpr[] exprs = new BoolExpr[theta.size()];
             for (int i = 0; i < theta.size(); ++i) {
@@ -365,11 +372,15 @@ public class ParsedPSJ {
     }
 
     public BoolExpr getPredicate(Context context, Schema schema) {
-        return getPredicate(context, Collections.emptyMap(), schema);
+        return getPredicate(context, Collections.emptyMap(), schema, null, 0);
     }
 
     public Query getSolverQuery(Schema schema) {
-        return new SolverQuery(schema);
+        return getSolverQuery(schema, null, 0);
+    }
+
+    public Query getSolverQuery(Schema schema, String prefix, int offset) {
+        return new SolverQuery(schema, prefix, offset);
     }
 
     public List<Boolean> getResultBitmap() {
@@ -382,8 +393,10 @@ public class ParsedPSJ {
         int[] thetaRelationIndex;
         int[] thetaColumnIndex;
         Schema schema;
+        String prefix;
+        int parameterOffset;
 
-        public SolverQuery(Schema schema) {
+        public SolverQuery(Schema schema, String prefix, int parameterOffset) {
             super(schema, relations);
 
             projectRelationIndex = new int[projectColumns.size()];
@@ -392,6 +405,8 @@ public class ParsedPSJ {
             thetaColumnIndex = new int[thetaColumns.size()];
 
             this.schema = schema;
+            this.prefix = prefix;
+            this.parameterOffset = parameterOffset;
 
             mapIndices(schema, projectColumns, projectRelationIndex, projectColumnIndex);
             mapIndices(schema, thetaColumns, thetaRelationIndex, thetaColumnIndex);
@@ -422,7 +437,7 @@ public class ParsedPSJ {
             for (int i = 0; i < thetaColumnIndex.length; ++i) {
                 map.put(thetaColumns.get(i), tuples[thetaRelationIndex[i]].get(thetaColumnIndex[i]));
             }
-            return getPredicate(context, map, schema);
+            return getPredicate(context, map, schema, prefix, parameterOffset);
         }
 
         @Override

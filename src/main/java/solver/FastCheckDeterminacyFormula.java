@@ -1,10 +1,10 @@
 package solver;
 
+import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
-import sql.QuerySequence;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,8 +34,8 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
      *  TODO(zhangwen): Contrary to what I wrote, this formula supports any query, right?
      */
     @Override
-    public Expr[] makeFormulaConstants(QuerySequence queries) {
-        Query query = queries.lastInTrace().query.getSolverQuery(schema);
+    public Expr[] makeFormulaConstants(QueryTrace queries) {
+        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Sort[] headTypes = query.headTypes();
         Expr[] freshConsts = new Expr[headTypes.length];
         for (int i = 0; i < freshConsts.length; ++i) {
@@ -45,13 +45,13 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
     }
 
     @Override
-    public BoolExpr makeFormula(QuerySequence queries, Expr[] constants) {
-        Query query = queries.lastInTrace().query.getSolverQuery(schema);
+    public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
+        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Tuple extHeadTup = new Tuple(constants);
         return context.mkAnd(
                 query.doesContain(context, inst1, extHeadTup),
                 context.mkNot(query.doesContain(context, inst2, extHeadTup)),
-                generateTraceConformanceExpr(queries)
+                generateTupleCheck(queries, constants)
         );
     }
 }
