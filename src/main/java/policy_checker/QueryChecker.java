@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 public class QueryChecker {
     public static boolean ENABLE_CACHING = true;
     public static boolean ENABLE_PRECHECK = true;
+    public static boolean UNNAMED_EQUALITY = true;
 
     private enum FastCheckDecision {
         ALLOW,
@@ -100,7 +101,7 @@ public class QueryChecker {
         List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
         this.determinacyFormula = new BasicDeterminacyFormula(context, schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(context, schema, policyQueries);
-        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(context, schema, policyQueries);
+        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(context, schema, policyQueries, UNNAMED_EQUALITY);
 
         if (ENABLE_PRECHECK) {
             this.preapprovedSets = new ArrayList<>();
@@ -361,7 +362,7 @@ public class QueryChecker {
                                         continue;
                                     }
                                     int assertionNum = core.equalityMap.get(parameter);
-                                    if (!core.core.contains("a_e!" + assertionNum)) {
+                                    if (!UNNAMED_EQUALITY && !core.core.contains("a_e!" + assertionNum)) {
                                         parameterEquality.add(null);
                                     } else {
                                         parameterEquality.add(new CachedQueryTraceEntry.Index(assertionNum));
@@ -376,7 +377,7 @@ public class QueryChecker {
                                             continue;
                                         }
                                         int assertionNum = core.equalityMap.get(value);
-                                        if (!core.core.contains("a_e!" + assertionNum)) {
+                                        if (!UNNAMED_EQUALITY && !core.core.contains("a_e!" + assertionNum)) {
                                             indices.add(null);
                                         } else {
                                             indices.add(new CachedQueryTraceEntry.Index(assertionNum));

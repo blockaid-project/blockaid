@@ -5,10 +5,11 @@ import cache.QueryTraceEntry;
 import com.microsoft.z3.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
-    public UnsatCoreDeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
+    private final boolean unnamedEquality;
+
+    public UnsatCoreDeterminacyFormula(Context context, Schema schema, Collection<Query> views, boolean unnamedEquality) {
         super(context, schema, views);
 
         List<BoolExpr> clauses = new ArrayList<>();
@@ -23,6 +24,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
             clauses.add(v.apply(context, inst1).equalsExpr(context, v.apply(context, inst2)));
         }
         setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
+        this.unnamedEquality = unnamedEquality;
     }
 
     private Map<Object, Integer> assertionMap = null;
@@ -111,7 +113,11 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
         StringBuilder out = new StringBuilder();
         for (Map.Entry<String, BoolExpr> expr : exprs.entrySet()) {
-            out.append("(assert (! ").append(expr.getValue().toString()).append(" :named ").append(expr.getKey()).append("))\n");
+            if (unnamedEquality && expr.getKey().startsWith("a_e!")) {
+                out.append("(assert ").append(expr.getValue().toString()).append(")\n");
+            } else {
+                out.append("(assert (! ").append(expr.getValue().toString()).append(" :named ").append(expr.getKey()).append("))\n");
+            }
         }
         return out.toString();
     }

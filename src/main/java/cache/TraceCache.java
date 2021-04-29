@@ -22,7 +22,10 @@ public class TraceCache {
         Lock readLock = lock.readLock();
         readLock.lock();
         try {
-            for (Entry entry : cache.getOrDefault(queryTrace.currentQuery.getQuery().parsedSql.getParsedSql(), Collections.emptyList())) {
+            List<Entry> entryList = cache.getOrDefault(queryTrace.currentQuery.getQuery().parsedSql.getParsedSql(), Collections.emptyList());
+            ListIterator<Entry> iterator = entryList.listIterator(entryList.size());
+            while (iterator.hasPrevious()) {
+                Entry entry = iterator.previous();
                 if (entry.trace.checkQueryTrace(queryTrace)) {
                     return entry.compliance;
                 }
