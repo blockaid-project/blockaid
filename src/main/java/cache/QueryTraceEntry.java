@@ -3,6 +3,7 @@ package cache;
 import sql.PrivacyQuery;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -10,21 +11,26 @@ public class QueryTraceEntry {
     PrivacyQuery query;
     List<Object> parameters;
     List<List<Object>> tuples;
-    Map<String, Object> variables;
 
-    public QueryTraceEntry(PrivacyQuery query, List<Object> parameters, Map<String, Object> variables) {
-        this(query, parameters, variables, new ArrayList<>());
+    public QueryTraceEntry(PrivacyQuery query, List<Object> parameters) {
+        this(query, parameters, new ArrayList<>());
     }
 
     public QueryTraceEntry(QueryTraceEntry entry, List<List<Object>> tuples) {
-        this(entry.query, entry.parameters, entry.variables, tuples);
+        this(entry.query, entry.parameters, tuples);
     }
 
-    private QueryTraceEntry(PrivacyQuery query, List<Object> parameters, Map<String, Object> variables, List<List<Object>> tuples) {
+    public QueryTraceEntry(QueryTraceEntry entry) {
+        this(entry.query, entry.parameters, entry.tuples);
+    }
+
+    private QueryTraceEntry(PrivacyQuery query, List<Object> parameters, List<List<Object>> tuples) {
         this.query = query;
-        this.parameters = parameters;
-        this.variables = variables;
-        this.tuples = tuples;
+        this.parameters = new ArrayList<>(parameters);
+        this.tuples = new ArrayList<>();
+        for (List<Object> tuple : tuples) {
+            this.tuples.add(new ArrayList<>(tuple));
+        }
     }
 
     public PrivacyQuery getQuery() {

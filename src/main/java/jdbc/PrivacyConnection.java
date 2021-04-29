@@ -392,7 +392,7 @@ public class PrivacyConnection implements Connection {
           variableIndex.put(param_names.get(i), i);
         }
       }
-      current_trace.startQuery(privacy_query, Arrays.asList(values), variableIndex);
+      current_trace.startQuery(privacy_query, Arrays.asList(values));
       if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
         if (!query_checker.checkPolicy(current_trace)) {
           return false;

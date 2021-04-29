@@ -37,7 +37,7 @@ public class BasicDeterminacyFormula extends DeterminacyFormula {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         return context.mkAnd(
                 context.mkNot(query.apply(context, inst1).equalsExpr(context, query.apply(context, inst2))),
-                generateTupleCheck(queries)
+                generateTupleCheck(queries, constants)
         );
     }
 }

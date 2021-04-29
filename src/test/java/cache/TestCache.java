@@ -43,6 +43,11 @@ public class TestCache {
         }
 
         @Override
+        public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
+            return null;
+        }
+
+        @Override
         public List<Boolean> getResultBitmap() {
             return null;
         }
@@ -60,8 +65,7 @@ public class TestCache {
 
         QueryTraceEntry q3 = new QueryTraceEntry(
                 Q3,
-                Collections.singletonList(null),
-                Collections.singletonMap("_MY_UID", null)
+                Collections.singletonList(null)
         );
         q3.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
@@ -72,8 +76,7 @@ public class TestCache {
 
         QueryTraceEntry q4 = new QueryTraceEntry(
                 Q4,
-                Arrays.asList(null, null),
-                Collections.emptyMap()
+                Arrays.asList(null, null)
         );
         q4.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
@@ -84,8 +87,7 @@ public class TestCache {
 
         QueryTraceEntry q5 = new QueryTraceEntry(
                 Q5,
-                Arrays.asList(null, null),
-                Collections.emptyMap()
+                Arrays.asList(null, null)
         );
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q5,
@@ -95,95 +97,76 @@ public class TestCache {
 
         QueryTrace testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
 
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(10, 3));
 
         assertTrue(cacheTrace.checkQueryTrace(testTrace));
 
         // parameter differs from row
         testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 2), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 2));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
 
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(10, 3));
 
         assertFalse(cacheTrace.checkQueryTrace(testTrace));
 
         // empty set when nonempty expected
         testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(10, 3));
 
         assertFalse(cacheTrace.checkQueryTrace(testTrace));
 
         // parameter differs only on most recent query
         testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
 
-        testTrace.startQuery(Q5, Arrays.asList(11, 3), Collections.emptyMap());
-
-        assertFalse(cacheTrace.checkQueryTrace(testTrace));
-
-        // _MY_UID set differently by unused query
-        testTrace = new QueryTrace();
-
-        testTrace.startQuery(Q1, Collections.singletonList(44), Collections.singletonMap("_MY_UID", 0));
-        testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
-
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
-        testTrace.endQuery(Collections.emptyList());
-
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
-        testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
-
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
-        testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
-
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(11, 3));
 
         assertFalse(cacheTrace.checkQueryTrace(testTrace));
     }
@@ -194,8 +177,7 @@ public class TestCache {
 
         QueryTraceEntry q3 = new QueryTraceEntry(
                 Q3,
-                Collections.singletonList(null),
-                Collections.singletonMap("_MY_UID", null)
+                Collections.singletonList(null)
         );
         q3.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
@@ -206,8 +188,7 @@ public class TestCache {
 
         QueryTraceEntry q4 = new QueryTraceEntry(
                 Q4,
-                Arrays.asList(null, null),
-                Collections.emptyMap()
+                Arrays.asList(null, null)
         );
         q4.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
@@ -218,8 +199,7 @@ public class TestCache {
 
         QueryTraceEntry q5 = new QueryTraceEntry(
                 Q5,
-                Arrays.asList(null, null),
-                Collections.emptyMap()
+                Arrays.asList(null, null)
         );
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q5,
@@ -232,95 +212,76 @@ public class TestCache {
 
         QueryTrace testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
 
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(10, 3));
 
         assertTrue(cache.checkCache(testTrace));
 
         // parameter differs from row
         testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 2), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 2));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
 
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(10, 3));
 
         assertNull(cache.checkCache(testTrace));
 
         // empty set when nonempty expected
         testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(10, 3));
 
         assertNull(cache.checkCache(testTrace));
 
         // parameter differs only on most recent query
         testTrace = new QueryTrace();
 
-        testTrace.startQuery(Q1, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q1, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
 
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
+        testTrace.startQuery(Q2, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.emptyList());
 
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
+        testTrace.startQuery(Q3, Collections.singletonList(1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
 
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
+        testTrace.startQuery(Q4, Arrays.asList(10, 1));
         testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
 
-        testTrace.startQuery(Q5, Arrays.asList(11, 3), Collections.emptyMap());
-
-        assertNull(cache.checkCache(testTrace));
-
-        // _MY_UID set differently by unused query
-        testTrace = new QueryTrace();
-
-        testTrace.startQuery(Q1, Collections.singletonList(44), Collections.singletonMap("_MY_UID", 0));
-        testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "john_doe", "john_doe@example.com")));
-
-        testTrace.startQuery(Q2, Arrays.asList(10, 1), Collections.singletonMap("_MY_UID", 1));
-        testTrace.endQuery(Collections.emptyList());
-
-        testTrace.startQuery(Q3, Collections.singletonList(1), Collections.singletonMap("_MY_UID", 0));
-        testTrace.endQuery(Collections.singletonList(Arrays.asList(1, "78ff4567-89ab-cdef-0123-456789abcdef", 1, "john_doe@example.com")));
-
-        testTrace.startQuery(Q4, Arrays.asList(10, 1), Collections.emptyMap());
-        testTrace.endQuery(Collections.singletonList(Arrays.asList(10, 1, false, "10cd4567-89ab-cdef-0123-456789abcdef")));
-
-        testTrace.startQuery(Q5, Arrays.asList(10, 3), Collections.emptyMap());
+        testTrace.startQuery(Q5, Arrays.asList(11, 3));
 
         assertNull(cache.checkCache(testTrace));
     }

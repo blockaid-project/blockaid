@@ -50,7 +50,7 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         return context.mkAnd(
                 query.doesContain(context, inst1, extHeadTup),
                 context.mkNot(query.doesContain(context, inst2, extHeadTup)),
-                generateTupleCheck(queries)
+                generateTupleCheck(queries, constants)
         );
     }
 }

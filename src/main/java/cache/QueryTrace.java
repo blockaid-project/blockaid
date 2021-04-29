@@ -2,10 +2,7 @@ package cache;
 
 import sql.PrivacyQuery;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class QueryTrace {
     // order of past queries is irrelevant, so using a map for cache lookup
@@ -13,13 +10,11 @@ public class QueryTrace {
     QueryTraceEntry currentQuery = null;
     private int sz = 0;
 
-    public void startQuery(PrivacyQuery query, List<Object> parameters, Map<String, Integer> variableIndex) {
-        assert currentQuery == null;
-        Map<String, Object> variables = new HashMap<>();
-        for (Map.Entry<String, Integer> index : variableIndex.entrySet()) {
-            variables.put(index.getKey(), parameters.get(index.getValue()));
+    public void startQuery(PrivacyQuery query, List<Object> parameters) {
+        if (currentQuery != null) {
+            endQuery(Collections.emptyList());
         }
-        currentQuery = new QueryTraceEntry(query, parameters, variables);
+        currentQuery = new QueryTraceEntry(query, parameters);
         queries.putIfAbsent(query.parsedSql.getParsedSql(), new ArrayList<>());
         queries.get(query.parsedSql.getParsedSql()).add(currentQuery);
 

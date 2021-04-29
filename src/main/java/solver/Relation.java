@@ -41,6 +41,10 @@ public class Relation {
         return other.isContainedIn(context, this);
     }
 
+    public BoolExpr doesContain(Context context, Tuple other) {
+        return this.apply(other.toArray(new Expr[0]));
+    }
+
     public BoolExpr doesContain(Context context, List<Tuple> other) {
         if (other.size() == 0) {
             return context.mkTrue();

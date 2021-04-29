@@ -30,18 +30,6 @@ public class CachedQueryTrace {
     private boolean checkQueryTrace(ListIterator<CachedQueryTraceEntry> entries, QueryTrace trace, List<QueryTraceEntry> usedEntries) {
         if (!entries.hasNext()) {
             Map<CachedQueryTraceEntry.Index, Object> mappedIndices = new HashMap<>();
-            // variables
-            for (List<QueryTraceEntry> e : trace.queries.values()) {
-                for (QueryTraceEntry entry : e) {
-                    for (Map.Entry<String, Object> variable : entry.variables.entrySet()) {
-                        CachedQueryTraceEntry.Index index = new CachedQueryTraceEntry.Index(variable.getKey());
-                        if (mappedIndices.containsKey(index) && !mappedIndices.get(index).equals(variable.getValue())) {
-                            return false;
-                        }
-                        mappedIndices.put(index, variable.getValue());
-                    }
-                }
-            }
             // mappedIndices is populated through query parameters, including those of later queries, so
             // all queries' parameters/variables must be processed before any query's values
             Iterator<CachedQueryTraceEntry> cacheEntries = this.entries.iterator();

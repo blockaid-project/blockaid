@@ -1,40 +1,58 @@
 package solver;
 
-import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class SMTExecutor extends Thread {
-//    private String smtString;
-    private String solver;
+    private String smtString;
     private CountDownLatch latch;
     private String[] command;
     private boolean satConclusive;
     private boolean unsatConclusive;
+    private boolean runCore;
 
     private Status result = null;
+    private String[] core = null;
     private Process process = null;
     private AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
-    protected SMTExecutor(String solver, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
-        this.solver = solver;
+    protected SMTExecutor(String smtString, CountDownLatch latch, String[] command) {
+        this(smtString, latch, command, false, true, true);
+    }
+    protected SMTExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
+        this(smtString, latch, command, satConclusive, unsatConclusive, false);
+    }
+    private SMTExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean runCore) {
+        this.smtString = smtString;
         this.latch = latch;
         this.command = command;
         this.satConclusive = satConclusive;
         this.unsatConclusive = unsatConclusive;
+        this.runCore = runCore;
     }
 
     public void run() {
+        if (this.runCore) {
+            this.runUnsatCore();
+        } else {
+            this.runNormal();
+        }
+    }
+
+    private void runNormal() {
+        InputStream stderr = null;
         try {
-            String smtString = solver.toString() + "(check-sat)";
+            String smtString = this.smtString + "(check-sat)";
 
             startProcess();
-            OutputStream stdin = process.getOutputStream();
             InputStream stdout = process.getInputStream();
+            OutputStream stdin = process.getOutputStream();
+            stderr = process.getErrorStream();
 
             BufferedWriter bufferedStdin = new BufferedWriter(new OutputStreamWriter(stdin));
             bufferedStdin.write(smtString);
@@ -44,7 +62,13 @@ public abstract class SMTExecutor extends Thread {
             Scanner scanner = new Scanner(stdout);
             StringBuilder output = new StringBuilder();
             while (scanner.hasNextLine()) {
-                output.append(scanner.nextLine());
+                String s = scanner.nextLine();
+                output.append(s);
+            }
+
+            scanner = new Scanner(stderr);
+            while (scanner.hasNextLine()) {
+                System.err.println(scanner.nextLine());
             }
 
             process.waitFor();
@@ -52,14 +76,81 @@ public abstract class SMTExecutor extends Thread {
         } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         } catch (Exception e) {
-            Scanner scanner = new Scanner(process.getErrorStream());
-            while (scanner.hasNextLine()) {
-                System.err.println(scanner.nextLine());
+            if (e instanceof IOException) {
+                // IO errors are expected when the process is killed before/while stdin is written because another
+                // executor finished already.
+                e.printStackTrace();
             }
-            // e.printStackTrace();
+            if (stderr != null) {
+                Scanner scanner = new Scanner(stderr);
+                while (scanner.hasNextLine()) {
+                    System.err.println(scanner.nextLine());
+                }
+            }
             result = Status.UNKNOWN;
         }
         if ((this.result == Status.UNSATISFIABLE && unsatConclusive) || (this.result == Status.SATISFIABLE && satConclusive)) {
+            this.latch.countDown();
+        } else {
+            result = Status.UNKNOWN;
+        }
+    }
+
+    private void runUnsatCore() {
+        InputStream stderr = null;
+        try {
+            String smtString = "(set-option :produce-unsat-cores true)" + this.smtString + "(check-sat)(get-unsat-core)";
+
+            startProcess();
+            InputStream stdout = process.getInputStream();
+            OutputStream stdin = process.getOutputStream();
+            stderr = process.getErrorStream();
+
+            BufferedWriter bufferedStdin = new BufferedWriter(new OutputStreamWriter(stdin));
+            bufferedStdin.write(smtString);
+            bufferedStdin.flush();
+            bufferedStdin.close();
+
+            Scanner scanner = new Scanner(stdout);
+            StringBuilder output = new StringBuilder();
+            while (scanner.hasNextLine()) {
+                String s = scanner.nextLine();
+                output.append(s).append('\n');
+            }
+
+            scanner = new Scanner(stderr);
+            while (scanner.hasNextLine()) {
+                System.err.println(scanner.nextLine());
+            }
+
+            process.waitFor();
+
+            if (output.toString().trim().isEmpty()) {
+                result = Status.UNKNOWN;
+                return;
+            }
+
+            String[] parts = output.toString().split("\n", 2);
+            result = getResult(parts[0].trim());
+            String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
+            core = Arrays.stream(coreParts).map(x -> x.trim()).toArray(String[]::new);
+        } catch (InterruptedException e) {
+            result = Status.UNKNOWN;
+        } catch (Exception e) {
+            if (!(e instanceof IOException) || !e.getMessage().equals("Broken pipe")) {
+                // Broken pipe is expected when the process is killed before stdin is written because another
+                // executor finished already.
+                e.printStackTrace();
+            }
+            if (stderr != null) {
+                Scanner scanner = new Scanner(stderr);
+                while (scanner.hasNextLine()) {
+                    System.err.println(scanner.nextLine());
+                }
+            }
+            result = Status.UNKNOWN;
+        }
+        if (this.result == Status.UNSATISFIABLE) {
             this.latch.countDown();
         } else {
             result = Status.UNKNOWN;
@@ -75,14 +166,18 @@ public abstract class SMTExecutor extends Thread {
 
     public synchronized void signalShutdown() {
         shuttingDown.set(true);
-        this.interrupt();
         if (process != null) {
-            process.destroyForcibly();
+            process.destroy();
         }
+        this.interrupt();
     }
 
     public Status getResult() {
         return result;
+    }
+
+    public String[] getUnsatCore() {
+        return core;
     }
 
     protected Status getResult(String output) {

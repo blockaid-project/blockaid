@@ -17,8 +17,8 @@ public abstract class DeterminacyFormula {
     protected Schema schema;
     protected Instance inst1;
     protected Instance inst2;
-    private BoolExpr preparedExpr;
-    private String preparedExprSMT;
+    protected BoolExpr preparedExpr;
+    protected String preparedExprSMT;
 
     protected DeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
         this.context = context;
@@ -35,7 +35,7 @@ public abstract class DeterminacyFormula {
         this.preparedExprSMT = solver.toString();
     }
 
-    protected BoolExpr generateTupleCheck(QueryTrace queries) {
+    protected BoolExpr generateTupleCheck(QueryTrace queries, Expr[] constants) {
         List<BoolExpr> exprs = new ArrayList<>();
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
             for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
@@ -58,6 +58,10 @@ public abstract class DeterminacyFormula {
     protected abstract Expr[] makeFormulaConstants(QueryTrace queries);
     protected abstract BoolExpr makeFormula(QueryTrace queries, Expr[] constants);
 
+    protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
+        return "(assert " + makeFormula(queries, constants).toString() + ")";
+    }
+
     public Solver makeSolver(QueryTrace queries) {
         Solver solver = context.mkSolver();
         solver.add(preparedExpr);
@@ -72,7 +76,7 @@ public abstract class DeterminacyFormula {
             stringBuilder.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
         }
         stringBuilder.append(this.preparedExprSMT);
-        stringBuilder.append("(assert ").append(makeFormula(queries, constants)).append(")");
+        stringBuilder.append(makeFormulaSMT(queries, constants));
         return stringBuilder.toString();
     }
 }
