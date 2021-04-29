@@ -76,7 +76,7 @@ public abstract class SMTExecutor extends Thread {
         } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         } catch (Exception e) {
-            if (e instanceof IOException) {
+            if (!(e instanceof IOException)) {
                 // IO errors are expected when the process is killed before/while stdin is written because another
                 // executor finished already.
                 e.printStackTrace();
@@ -137,8 +137,8 @@ public abstract class SMTExecutor extends Thread {
         } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         } catch (Exception e) {
-            if (!(e instanceof IOException) || !e.getMessage().equals("Broken pipe")) {
-                // Broken pipe is expected when the process is killed before stdin is written because another
+            if (!(e instanceof IOException)) {
+                // IO errors are expected when the process is killed before/while stdin is written because another
                 // executor finished already.
                 e.printStackTrace();
             }
