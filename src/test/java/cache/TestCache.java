@@ -9,7 +9,6 @@ import sql.PrivacyQuery;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -28,12 +27,12 @@ public class TestCache {
         }
 
         @Override
-        public Set<String> getProjectColumns() {
+        public List<String> getProjectColumns() {
             return null;
         }
 
         @Override
-        public Set<String> getThetaColumns() {
+        public List<String> getThetaColumns() {
             return null;
         }
 

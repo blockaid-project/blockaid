@@ -1,5 +1,4 @@
 -- policies must be one per line, comments must start at start of line
--- * policies not supported
 -- my_info
 SELECT users.* FROM users WHERE users.id = _MY_UID;
 SELECT people.* FROM people WHERE people.owner_id = _MY_UID;

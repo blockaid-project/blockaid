@@ -3,12 +3,10 @@ package solver;
 import com.microsoft.z3.*;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class ImportedDependency implements Dependency {
-    private String[] constants;
-    private String solverFormula;
+    private final String[] constants;
+    private final String solverFormula;
 
     public ImportedDependency(String dependency) {
         String[] parts = dependency.split("\\|", 2);

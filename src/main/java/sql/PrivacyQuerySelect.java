@@ -32,13 +32,13 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
-    public Set<String> getProjectColumns() {
-        return new HashSet<>(parsedPSJ.getProjectColumns());
+    public List<String> getProjectColumns() {
+        return new ArrayList<>(parsedPSJ.getProjectColumns());
     }
 
     @Override
-    public Set<String> getThetaColumns() {
-        return new HashSet<>(parsedPSJ.getThetaColumns());
+    public List<String> getThetaColumns() {
+        return new ArrayList<>(parsedPSJ.getThetaColumns());
     }
 
     @Override

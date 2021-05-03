@@ -42,6 +42,7 @@ public class QueryChecker {
     private final DeterminacyFormula fastCheckDeterminacyFormula;
     private final DeterminacyFormula determinacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
+    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormulaEliminate;
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
@@ -106,7 +107,8 @@ public class QueryChecker {
         List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
         this.determinacyFormula = new BasicDeterminacyFormula(context, schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(context, schema, policyQueries);
-        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(context, schema, policyQueries, UNNAMED_EQUALITY);
+        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(context, schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
+        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(context, schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
 
         if (ENABLE_PRECHECK) {
             this.preapprovedSets = new ArrayList<>();
@@ -205,8 +207,8 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {
-        Set<String> projectColumns = query.getProjectColumns();
-        Set<String> thetaColumns = query.getThetaColumns();
+        List<String> projectColumns = query.getProjectColumns();
+        List<String> thetaColumns = query.getThetaColumns();
         projectColumns.addAll(thetaColumns);
 
         for (Set<String> s : preapprovedSets) {
@@ -218,7 +220,7 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyDenial(PrivacyQuery query, Policy policy) {
-        return !policy.checkApplicable(query.getProjectColumns(), query.getThetaColumns());
+        return !policy.checkApplicable(new HashSet<>(query.getProjectColumns()), new HashSet<>(query.getThetaColumns()));
     }
 
     private void runExecutors(List<SMTExecutor> executors, CountDownLatch latch) {
@@ -279,6 +281,7 @@ public class QueryChecker {
             }
         }
 
+        System.err.println("timeout");
         // all timeout/inconclusive
         return false;
     }
@@ -294,7 +297,7 @@ public class QueryChecker {
     }
 
     private UnsatCore tryGetUnsatCore(QueryTrace queries) {
-        CountDownLatch latch = new CountDownLatch(2);
+        CountDownLatch latch = new CountDownLatch(4);
         List<SMTExecutor> executors = new ArrayList<>();
 
         String smt;
@@ -302,18 +305,55 @@ public class QueryChecker {
         synchronized (this.unsatCoreDeterminacyFormula) {
             smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
             equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
+            executors.add(new Z3Executor(smt, latch));
+            executors.add(new CVC4Executor(smt, latch));
+            try {
+                String query = queries.getCurrentQuery().getQuery().parsedSql.getParsedSql();
+                query = query.substring(0, Math.min(query.length(), 80));
+                PrintWriter pw = new PrintWriter(query + "-base.smt");
+                pw.println("(set-option :produce-unsat-cores true)");
+                pw.println(smt);
+                pw.println("(check-sat)(get-unsat-core)");
+                pw.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+                // do nothing
+            }
+            smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
+            equalityMap = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
+            executors.add(new Z3Executor(smt, latch));
+            executors.add(new CVC4Executor(smt, latch));
+            try {
+                String query = queries.getCurrentQuery().getQuery().parsedSql.getParsedSql();
+                query = query.substring(0, Math.min(query.length(), 80));
+                PrintWriter pw = new PrintWriter(query + "-elim.smt");
+                pw.println("(set-option :produce-unsat-cores true)");
+                pw.println(smt);
+                pw.println("(check-sat)(get-unsat-core)");
+                pw.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+                // do nothing
+            }
         }
-        executors.add(new Z3Executor(smt, latch));
-        executors.add(new CVC4Executor(smt, latch));
 
         runExecutors(executors, latch);
 
         String[] minCore = null;
         for (SMTExecutor executor : executors) {
             String[] core = executor.getUnsatCore();
-            if (core != null && (minCore == null || minCore.length > core.length)) {
+            if (core != null) {
+                System.err.println(Arrays.asList(core));
+            } else {
+                System.err.println("no result");
+            }
+            if (core != null && (minCore == null || minCore.length >= core.length)) {
                 minCore = core;
             }
+        }
+
+        if (minCore == null) {
+//            System.err.println(smt);
         }
 
         return minCore == null ? null : new UnsatCore(new HashSet<>(Arrays.asList(minCore)), equalityMap);
@@ -369,15 +409,24 @@ public class QueryChecker {
                     if (policyResult) {
                         core = tryGetUnsatCore(queries);
                     }
+                    System.err.println("policy compliance: " + policyResult);
                     if (core != null) {
-                        // System.err.println("min core: " + core.core);
+                        System.err.println("min core: " + core.core);
                         CachedQueryTrace cacheTrace = new CachedQueryTrace();
                         int queryNumber = 0;
                         for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
                             for (QueryTraceEntry queryEntry : queryEntries) {
                                 if (!core.core.contains("a_q!" + queryNumber) && queryEntry != queries.getCurrentQuery()) {
-                                    ++queryNumber;
-                                    continue;
+                                    boolean found = false;
+                                    for (String s : core.core) {
+                                        if (s.contains("!" + queryNumber + "!")) {
+                                            found = true;
+                                        }
+                                    }
+                                    if (!found) {
+                                        ++queryNumber;
+                                        continue;
+                                    }
                                 }
                                 // equalities
                                 List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
@@ -432,9 +481,10 @@ public class QueryChecker {
                                 ++queryNumber;
                             }
                         }
+                        System.err.println(cacheTrace);
                         policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
                     } else {
-                        // System.err.println("no core, using value match");
+                         System.err.println("no core, using value match");
                         // no unsat core found (or not unsat) - all queries all values no equality
                         CachedQueryTrace cacheTrace = new CachedQueryTrace();
                         for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
@@ -454,6 +504,7 @@ public class QueryChecker {
                                 cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, parameterEquality, tupleEquality));
                             }
                         }
+                        System.err.println(cacheTrace);
                         policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
                     }
                 }).run();

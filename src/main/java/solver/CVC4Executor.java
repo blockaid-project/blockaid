@@ -5,7 +5,7 @@ import com.microsoft.z3.Solver;
 import java.util.concurrent.CountDownLatch;
 
 public class CVC4Executor extends SMTExecutor {
-    private static String[] command = new String[]{
+    private static final String[] command = new String[]{
             // for some reason calling cvc4 directly results in broken pipes for stdin..
 //            "term_to_kill",
 //            "sh", "-c", "cat /dev/stdin | cvc4 --lang smtlib2 -q -",

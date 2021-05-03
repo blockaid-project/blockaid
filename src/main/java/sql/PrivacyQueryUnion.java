@@ -38,8 +38,8 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     }
 
     @Override
-    public Set<String> getProjectColumns() {
-        Set<String> result = new HashSet<>();
+    public List<String> getProjectColumns() {
+        List<String> result = new ArrayList<>();
         for (PrivacyQuery query : queries) {
             result.addAll(query.getProjectColumns());
         }
@@ -47,8 +47,8 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     }
 
     @Override
-    public Set<String> getThetaColumns() {
-        Set<String> result = new HashSet<>();
+    public List<String> getThetaColumns() {
+        List<String> result = new ArrayList<>();
         for (PrivacyQuery query : queries) {
             result.addAll(query.getThetaColumns());
         }

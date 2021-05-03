@@ -142,7 +142,6 @@ public class PrivacyConnection implements Connection {
       paramNames.add(name);
     }
     s = matcher.replaceAll("?");
-    // FIXME(zhangwen): We'll get rid of any LIMIT clause, but we keep any parameters used by the LIMIT clause.  Bad?
 
     Optional<ParserResult> parser_result = shouldApplyPolicy(s);
     if (!parser_result.isPresent()) {  // We let this query go through directly.
@@ -477,6 +476,9 @@ public class PrivacyConnection implements Connection {
     private void addRow(List<List<Object>> rows, List<Object> row) {
       QueryTraceEntry current = current_trace.getCurrentQuery();
       List<Boolean> resultBitmap = current.getQuery().getResultBitmap();
+      if (resultBitmap.isEmpty()) {
+        return;
+      }
       for (int i = row.size(); i-- > 0; ) {
         if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);

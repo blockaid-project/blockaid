@@ -58,7 +58,6 @@ public class ParsedPSJ {
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
             // ignore unary function calls and use whatever they're called with instead
-            // TODO: add id (SUM)
             boolean addPrimaryKey = false;
             while (sn instanceof SqlBasicCall) {
                 SqlBasicCall call = (SqlBasicCall) sn;

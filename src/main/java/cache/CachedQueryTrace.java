@@ -66,4 +66,14 @@ public class CachedQueryTrace {
         entries.previous();
         return false;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder s = new StringBuilder("---------------\n");
+        for (CachedQueryTraceEntry trace : entries) {
+            s.append(trace.toString()).append("\n");
+        }
+        s.append("---------------\n");
+        return s.toString();
+    }
 }
