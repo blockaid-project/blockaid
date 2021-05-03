@@ -43,17 +43,19 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                 String prefix = (queryTraceEntry == queries.getCurrentQuery() ? "cq_p" : ("q_p!" + queryNumber));
                 Query query = queryTraceEntry.getQuery().getSolverQuery(schema, prefix, 0);
                 List<String> paramNames = queryTraceEntry.getQuery().paramNames;
-                Object[] parameters = queryTraceEntry.getQuery().parameters;
-                Tuple paramConstants = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.length));
-                constantsOffset += parameters.length;
-                for (int i = 0; i < parameters.length; ++i) {
+                List<Object> parameters = queryTraceEntry.getQuery().parameters;
+                Tuple paramConstants = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.size()));
+                constantsOffset += parameters.size();
+                for (int i = 0; i < parameters.size(); ++i) {
                     if (paramNames.get(i).equals("?")) {
+                        Object currParam = parameters.get(i);
+
                         // these should be linked to the query assertions since that's the only place where the
                         // constants are even used, except for the current query but that's special cased elsewhere
-                        exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, parameters[i])));
+                        exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, currParam)));
 
-                        equalitySets.putIfAbsent(parameters[i], new HashSet<>());
-                        equalitySets.get(parameters[i]).add(paramConstants.get(i));
+                        equalitySets.putIfAbsent(currParam, new HashSet<>());
+                        equalitySets.get(currParam).add(paramConstants.get(i));
                     }
                 }
 
@@ -134,9 +136,9 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
             for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
                 String prefix = (queryTraceEntry == queries.getCurrentQuery() ? "cq_p" : ("q_p!" + queryNumber));
-                Object[] parameters = queryTraceEntry.getQuery().parameters;
-                for (int i = 0; i < parameters.length; ++i) {
-                    exprs.add(context.mkConst("!" + prefix + "!" + i, Tuple.getSortFromObject(context, parameters[i])));
+                List<Object> parameters = queryTraceEntry.getQuery().parameters;
+                for (int i = 0; i < parameters.size(); ++i) {
+                    exprs.add(context.mkConst("!" + prefix + "!" + i, Tuple.getSortFromObject(context, parameters.get(i))));
                 }
                 Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
                 if (!queryTraceEntry.getTuples().isEmpty()) {

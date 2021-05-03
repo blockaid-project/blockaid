@@ -2295,12 +2295,11 @@ public class PrivacyConnection implements Connection {
       String value = matcher.group(2);
       System.out.println("=== processSetConst: " + name + " = " + value);
       // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
-        throw new RuntimeException("TODO: fix processSetConst");
-//      resetSequence();
-//      current_sequence.setConstValue(name, Integer.valueOf(value));
+      resetSequence();
+      current_trace.setConstValue(name, Integer.valueOf(value));
 
       // TODO(zhangwen): Can I get away with not actually executing this command?
-//      return Optional.of(false);
+      return Optional.of(false);
     }
 
     @Override

@@ -21,6 +21,11 @@ public abstract class PrivacyQuery {
         this.paramNames = pq.paramNames;
     }
 
+    public PrivacyQuery(ParserResult parsedSql)
+    {
+        this(parsedSql, Collections.emptyList(), Collections.emptyList());
+    }
+
     public PrivacyQuery(ParserResult parsedSql, List<Object> parameters, List<String> paramNames)
     {
         this.parsedSql = parsedSql;

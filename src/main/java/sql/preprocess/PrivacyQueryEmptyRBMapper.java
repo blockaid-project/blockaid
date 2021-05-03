@@ -35,6 +35,11 @@ class PrivacyQueryEmptyRBMapper extends PrivacyQuery {
     }
 
     @Override
+    public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
+        return pq.getSolverQuery(schema, paramPrefix, offset);
+    }
+
+    @Override
     public List<Boolean> getResultBitmap() {
         return Collections.emptyList();
     }

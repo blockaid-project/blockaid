@@ -65,7 +65,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
         Query[] q = new Query[queries.size()];
         for (int i = 0; i < queries.size(); ++i) {
             q[i] = queries.get(i).getSolverQuery(schema, paramPrefix, offset);
-            offset += queries.get(i).parameters.length;
+            offset += queries.get(i).parameters.size();
         }
         return new UnionQuery(q);
     }

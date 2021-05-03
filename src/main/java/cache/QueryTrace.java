@@ -10,6 +10,23 @@ public class QueryTrace {
     QueryTraceEntry currentQuery = null;
     private int sz = 0;
 
+    // Maps constants to their values (e.g., _MY_UID -> 2).
+    // TODO(zhangwen): The existing code seems to assume constants are integers (in ParsedPSJ.getPredicate),
+    //  so I do the same here.
+    private final HashMap<String, Integer> constMap = new HashMap<>();
+
+    public void setConstValue(String name, Integer value) {
+        constMap.put(name, value);
+    }
+
+    /**
+     * Gets the constant map (constant name -> value).
+     * @return a read-only view into the const map.
+     */
+    public Map<String, Integer> getConstMap() {
+        return Collections.unmodifiableMap(constMap);
+    }
+
     public void startQuery(PrivacyQuery query, List<Object> parameters) {
         if (currentQuery != null) {
             endQuery(Collections.emptyList());

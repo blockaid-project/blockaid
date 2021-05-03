@@ -248,7 +248,8 @@ public class QueryChecker {
         executors.add(new Z3Executor(fastCheckSMT, latch, false, true));
 
         try {
-            Files.write(Paths.get("/tmp/fast_unsat.smt2"), fastCheckSMT.getBytes());
+            Files.write(Paths.get("/home/ubuntu/scratch/formulas/fast_unsat_" + queries.size() + ".smt2"),
+                    fastCheckSMT.getBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -261,7 +262,8 @@ public class QueryChecker {
         executors.add(new CVC4Executor(regularSMT, latch, true, true));
 
         try {
-            Files.write(Paths.get("/tmp/regular.smt2"), regularSMT.getBytes());
+            Files.write(Paths.get("/home/ubuntu/scratch/formulas/regular_" + queries.size() + ".smt2"),
+                    regularSMT.getBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

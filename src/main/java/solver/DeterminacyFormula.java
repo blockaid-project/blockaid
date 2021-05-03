@@ -34,20 +34,6 @@ public abstract class DeterminacyFormula {
         this.preparedExprSMT = solver.toString();
     }
 
-<<<<<<< HEAD
-    protected BoolExpr generateTraceConformanceExpr(QuerySequence queries) {
-        List<BoolExpr> exprs = new ArrayList<>();
-
-        // `inst1` and `inst2` must be consistent with the results of previous queries.
-        for (QueryWithResult queryWithResult : queries.getTrace()) {
-            Query query = queryWithResult.query.getSolverQuery(schema);
-            Relation r1 = query.apply(context, inst1);
-            Relation r2 = query.apply(context, inst2);
-            if (queryWithResult.tuples != null) {
-                List<Tuple> tuples = queryWithResult.tuples.stream().map(tuple -> new Tuple(tuple.stream().map(v -> Tuple.getExprFromObject(context, v)).toArray(Expr[]::new))).collect(Collectors.toList());
-                exprs.add(r1.doesContain(context, tuples));
-                exprs.add(r2.doesContain(context, tuples));
-=======
     protected BoolExpr generateTupleCheck(QueryTrace queries, Expr[] constants) {
         List<BoolExpr> exprs = new ArrayList<>();
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
@@ -60,7 +46,6 @@ public abstract class DeterminacyFormula {
                     exprs.add(r1.doesContain(context, tuples));
                     exprs.add(r2.doesContain(context, tuples));
                 }
->>>>>>> 3fcc56d70c9285abd82711e641c08ec424e80214
             }
         }
 
@@ -93,74 +78,19 @@ public abstract class DeterminacyFormula {
         return solver;
     }
 
-<<<<<<< HEAD
-    public synchronized String generateSMT(QuerySequence queries) {
+    public synchronized String generateSMT(QueryTrace queries) {
 //        System.out.println("\t| Make SMT:");
-
         MyZ3Context myContext = (MyZ3Context) context;
         myContext.startTrackingConsts();
-        BoolExpr bodyFormula = makeFormula(queries, makeFormulaConstants(queries));
+        String smt = makeFormulaSMT(queries, makeFormulaConstants(queries));
         myContext.stopTrackingConsts();
 
-//        long startTime = System.currentTimeMillis();
-//        Expr[] constants = makeFormulaConstants(queries);
-//        BoolExpr bodyFormula = makeFormula(queries, constants);
-//        long endTime = System.currentTimeMillis();
-//        System.out.println("\t\t| Make formula:\t" + (endTime - startTime));
-//
-//        startTime = System.currentTimeMillis();
-//        Solver solver = context.mkSolver();
-//        solver.add(bodyFormula);
-//        endTime = System.currentTimeMillis();
-//        System.out.println("\t\t| Add formula:\t" + (endTime - startTime));
-//
-//        startTime = System.currentTimeMillis();
-//        String bodySMT = solver.toString();
-//        endTime = System.currentTimeMillis();
-//        System.out.println("\t\t| toString:\t" + (endTime - startTime));
-//
-//        startTime = System.currentTimeMillis();
-//
-//        StringBuilder sb = new StringBuilder();
-//        sb.append(preparedExprSMT);
-//
-//        boolean shouldIncludeLine = true;
-//        // FIXME(zhangwen): Hack-- Removing duplicate `declare-fun` commands; relies on Z3's output format.
-//        for (String line : bodySMT.split("\\R")) {
-//            if (line.startsWith("(")) { // Start of a new command.
-//                shouldIncludeLine = true;
-//                if (line.startsWith("(declare-fun")) {
-//                    String name = line.split("\\s+")[1];
-//                    if (declaredFuncsInPrepared.contains(name)) {
-//                        shouldIncludeLine = false;
-//                    }
-//                }
-//            }
-//            if (shouldIncludeLine) {
-//                sb.append(line);
-//            }
-//        }
-//        String formulaSMT = sb.toString();
-//
-//        endTime = System.currentTimeMillis();
-//        System.out.println("\t\t| de-dup:\t" + (endTime - startTime));
-//
-//        return formulaSMT;
-
-=======
-    public synchronized String generateSMT(QueryTrace queries) {
-        Expr[] constants = makeFormulaConstants(queries);
->>>>>>> 3fcc56d70c9285abd82711e641c08ec424e80214
         StringBuilder stringBuilder = new StringBuilder();
         for (Expr constant : myContext.getConsts()) {
             stringBuilder.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
         }
         stringBuilder.append(this.preparedExprSMT);
-<<<<<<< HEAD
-        stringBuilder.append("(assert ").append(bodyFormula).append(")");
-=======
-        stringBuilder.append(makeFormulaSMT(queries, constants));
->>>>>>> 3fcc56d70c9285abd82711e641c08ec424e80214
+        stringBuilder.append(smt);
         return stringBuilder.toString();
     }
 }
