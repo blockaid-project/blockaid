@@ -40,7 +40,6 @@ likes:guid;
 taggings:taggable_id;
 taggings:taggable_type;
 taggings:tag_id;
-notifications:guid;
 conversations:guid;
 conversation_visibilities:conversation_id,person_id;
 roles:person_id,name;

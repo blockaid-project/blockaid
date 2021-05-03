@@ -101,12 +101,18 @@ public class Schema {
     public static Sort getSortFromSqlType(Context context, int type) {
         switch (type) {
             case Types.INTEGER:
+            case Types.BIGINT:
+            case Types.TINYINT:
                 return context.getIntSort();
+            case Types.FLOAT:
             case Types.DOUBLE:
+            case Types.DECIMAL:
                 return context.getRealSort();
             case Types.BOOLEAN:
                 return context.getBoolSort();
             case Types.CLOB:
+            case Types.VARCHAR:
+            case Types.LONGVARCHAR:
                 return context.getStringSort();
             case Types.TIMESTAMP:
             case Types.DATE:

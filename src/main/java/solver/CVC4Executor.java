@@ -9,7 +9,7 @@ public class CVC4Executor extends SMTExecutor {
             "term_to_kill",
             "cvc4",
             "--lang", "smtlib2",
-            "--finite-model-find",
+//            "--finite-model-find",
             "-q", "-"
     };
 

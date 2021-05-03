@@ -28,6 +28,15 @@ public class CachedQueryTraceEntry {
         public int hashCode() {
             return Objects.hash(index, variable);
         }
+
+        @Override
+        public String toString() {
+            if (index != null) {
+                return index.toString();
+            } else {
+                return variable;
+            }
+        }
     }
 
     private String queryText;
@@ -171,5 +180,16 @@ public class CachedQueryTraceEntry {
         assert !cacheTupleIter.hasNext() && !queryTupleIter.hasNext();
 
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return "CachedQueryTraceEntry{" +
+                "queryText='" + queryText + '\'' +
+                ", parameters=" + parameters +
+                ", tuples=" + tuples +
+                ", parameterEquality=" + parameterEquality +
+                ", tupleEquality=" + tupleEquality +
+                '}';
     }
 }

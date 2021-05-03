@@ -1,17 +1,8 @@
 package sql;
 
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
-import com.microsoft.z3.Expr;
-import org.apache.calcite.config.CalciteConnectionConfig;
-import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.parser.SqlParser;
-import solver.PSJ;
 import solver.Query;
 import solver.Schema;
-import solver.Tuple;
 
 import java.util.*;
 
@@ -36,13 +27,13 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
-    public Set<String> getProjectColumns() {
-        return new HashSet<>(parsedPSJ.getProjectColumns());
+    public List<String> getProjectColumns() {
+        return new ArrayList<>(parsedPSJ.getProjectColumns());
     }
 
     @Override
-    public Set<String> getThetaColumns() {
-        return new HashSet<>(parsedPSJ.getThetaColumns());
+    public List<String> getThetaColumns() {
+        return new ArrayList<>(parsedPSJ.getThetaColumns());
     }
 
     @Override

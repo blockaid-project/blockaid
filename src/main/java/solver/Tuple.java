@@ -60,6 +60,8 @@ public class Tuple extends ArrayList<Expr> {
     public static Expr getExprFromObject(Context context, Object value) {
         if (value instanceof Integer) {
             return context.mkInt((Integer) value);
+        } else if (value instanceof Long) {
+                return context.mkInt((Long) value);
         } else if (value instanceof Double) {
             throw new UnsupportedOperationException("float loading todo");
         } else if (value instanceof String) {

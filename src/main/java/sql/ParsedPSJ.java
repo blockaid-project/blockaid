@@ -11,8 +11,6 @@ import solver.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class ParsedPSJ {
@@ -54,7 +52,6 @@ public class ParsedPSJ {
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
             // ignore unary function calls and use whatever they're called with instead
-            // TODO: add id (SUM)
             boolean addPrimaryKey = false;
             while (sn instanceof SqlBasicCall) {
                 if (((SqlBasicCall) sn).getOperator() instanceof SqlAsOperator) {
@@ -93,12 +90,13 @@ public class ParsedPSJ {
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
                 if (identifier.names.size() == 1) {
                     for (String relation : relations) {
-                        for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
+                        for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
                             addProjectColumn((relation + "." + column.name).toUpperCase());
                         }
                     }
                 } else {
-                    String relation = identifier.names.get(identifier.names.size() - 2).toUpperCase();
+//                    String relation = identifier.names.get(identifier.names.size() - 2).toUpperCase();
+                    String relation = identifier.names.get(identifier.names.size() - 2).toLowerCase();
                     for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
                         addProjectColumn((relation + "." + column.name).toUpperCase());
                     }

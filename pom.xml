@@ -196,20 +196,27 @@
             <artifactId>stringtemplate</artifactId>
             <version>3.2</version>
         </dependency>
-        <!--
+        
+       <dependency>
+         <groupId>mysql</groupId>
+         <artifactId>mysql-connector-java</artifactId>
+         <version>8.0.22</version>
+      </dependency> 
       <dependency>
           <groupId>com.microsoft</groupId>
           <artifactId>z3</artifactId>
           <version>4.8.8</version>
+          <scope>system</scope> 
+          <systemPath>/home/eric/z3/bin/com.microsoft.z3.jar</systemPath>
       </dependency>
-       -->
+       
 
-    <dependency>
-        <groupId>com.microsoft</groupId>
-        <artifactId>z3</artifactId>
-        <scope>system</scope>
-        <systemPath>${basedir}/lib/com.microsoft.z3.jar</systemPath>
-    </dependency>
+    <!--<dependency>-->
+        <!--<groupId>com.microsoft</groupId>-->
+        <!--<artifactId>z3</artifactId>-->
+        <!--<scope>system</scope> -->
+        <!--<systemPath>/home/eric/z3/bin/com.microsoft.z3.jar</systemPath>-->
+    <!--</dependency>-->
 
 
       <!--

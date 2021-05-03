@@ -5,14 +5,14 @@
   (forall
     ((_v!id Int))
     (=>
-      (exists ((_u!username String) (_u!serialized_private_key String) (_u!getting_started Bool) (_u!disable_mail Bool) (_u!language String) (_u!email String)
+      (exists ((_u!username String) (_u!serialized_private_key String) (_u!getting_started Int) (_u!disable_mail Int) (_u!language String) (_u!email String)
                (_u!encrypted_password String) (_u!reset_password_token String) (_u!remember_created_at Int) (_u!sign_in_count Int) (_u!current_sign_in_at Int)
                (_u!last_sign_in_at Int) (_u!current_sign_in_ip String) (_u!last_sign_in_ip String) (_u!created_at Int) (_u!updated_at Int) (_u!invited_by_id Int)
-               (_u!authentication_token String) (_u!unconfirmed_email String) (_u!confirm_email_token String) (_u!locked_at Int) (_u!show_community_spotlight_in_stream Bool)
-               (_u!auto_follow_back Bool) (_u!auto_follow_back_aspect_id Int) (_u!hidden_shareables String) (_u!reset_password_sent_at Int) (_u!last_seen Int)
-               (_u!remove_after Int) (_u!export String) (_u!exported_at Int) (_u!exporting Bool) (_u!strip_exif Bool) (_u!exported_photos_file String)
-               (_u!exported_photos_at Int) (_u!exporting_photos Bool) (_u!color_theme String) (_u!post_default_public Bool) (_u!consumed_timestep Int)
-               (_u!otp_required_for_login Bool) (_u!otp_backup_codes String) (_u!plain_otp_secret String))
+               (_u!authentication_token String) (_u!unconfirmed_email String) (_u!confirm_email_token String) (_u!locked_at Int) (_u!show_community_spotlight_in_stream Int)
+               (_u!auto_follow_back Int) (_u!auto_follow_back_aspect_id Int) (_u!hidden_shareables String) (_u!reset_password_sent_at Int) (_u!last_seen Int)
+               (_u!remove_after Int) (_u!export String) (_u!exported_at Int) (_u!exporting Int) (_u!strip_exif Int) (_u!exported_photos_file String)
+               (_u!exported_photos_at Int) (_u!exporting_photos Int) (_u!color_theme String) (_u!post_default_public Int) (_u!consumed_timestep Int)
+               (_u!otp_required_for_login Int) (_u!otp_backup_codes String) (_u!plain_otp_secret String))
               (!USERS _v!id _u!username _u!serialized_private_key _u!getting_started _u!disable_mail _u!language _u!email _u!encrypted_password _u!reset_password_token
                             _u!remember_created_at _u!sign_in_count _u!current_sign_in_at _u!last_sign_in_at _u!current_sign_in_ip _u!last_sign_in_ip _u!created_at
                             _u!updated_at _u!invited_by_id _u!authentication_token _u!unconfirmed_email _u!confirm_email_token _u!locked_at _u!show_community_spotlight_in_stream
@@ -20,13 +20,13 @@
                             _u!exporting _u!strip_exif _u!exported_photos_file _u!exported_photos_at _u!exporting_photos _u!color_theme _u!post_default_public _u!consumed_timestep
                             _u!otp_required_for_login _u!otp_backup_codes _u!plain_otp_secret))
       (exists ((_p!id Int) (_p!guid String) (_p!diaspora_handle String) (_p!serialized_public_key String) (_p!created_at Int) (_p!updated_at Int)
-               (_p!closed_account Bool) (_p!fetch_status Int) (_p!pod_id Int))
+               (_p!closed_account Int) (_p!fetch_status Int) (_p!pod_id Int))
               (!PEOPLE _p!id _p!guid _p!diaspora_handle _p!serialized_public_key _v!id _p!created_at _p!updated_at _p!closed_account _p!fetch_status _p!pod_id)))));
 
--- reshare_constraints: (assert (forall (posts tuple t) (=> (and (t in posts) (= t.type C_RESHARE)) (and t.public (exists (posts tuple tr) (and (tr in posts) (= t.root_guid tr.guid) tr.public))))))
+-- reshare_constraints: (assert (forall (posts tuple t) (=> (and (t in posts) (= t.type C_RESHARE)) (and (= t.public 1) (exists (posts tuple tr) (and (tr in posts) (= t.root_guid tr.guid) (= tr.public 1)))))))
 |(assert
   (forall
-    ((_t!id Int) (_t!author_id Int) (_t!public Bool) (_t!guid String) (_t!type String) (_t!text String) (_t!created_at Int) (_t!updated_at Int) (_t!provider_display_name String)
+    ((_t!id Int) (_t!author_id Int) (_t!public Int) (_t!guid String) (_t!type String) (_t!text String) (_t!created_at Int) (_t!updated_at Int) (_t!provider_display_name String)
      (_t!root_guid String) (_t!likes_count Int) (_t!comments_count Int) (_t!o_embed_cache_id Int) (_t!reshares_count Int) (_t!interacted_at Int) (_t!tweet_id String)
      (_t!open_graph_cache_id Int) (_t!tumblr_ids String))
     (=>
@@ -35,9 +35,9 @@
                 _t!reshares_count _t!interacted_at _t!tweet_id _t!open_graph_cache_id _t!tumblr_ids)
         (= _t!type "Reshare"))
       (and
-        _t!public
+        (= _t!public 1)
         (exists
-          ((_tr!id Int) (_tr!author_id Int) (_tr!public Bool) (_tr!guid String) (_tr!type String) (_tr!text String) (_tr!created_at Int) (_tr!updated_at Int) (_tr!provider_display_name String)
+          ((_tr!id Int) (_tr!author_id Int) (_tr!public Int) (_tr!guid String) (_tr!type String) (_tr!text String) (_tr!created_at Int) (_tr!updated_at Int) (_tr!provider_display_name String)
                (_tr!root_guid String) (_tr!likes_count Int) (_tr!comments_count Int) (_tr!o_embed_cache_id Int) (_tr!reshares_count Int) (_tr!interacted_at Int) (_tr!tweet_id String)
                (_tr!open_graph_cache_id Int) (_tr!tumblr_ids String))
           (and
@@ -63,4 +63,4 @@
               (= _t!open_graph_cache_id _tr!open_graph_cache_id)
               (= _t!tumblr_ids _tr!tumblr_ids))
             (= _t!root_guid _tr!guid)
-            _tr!public))))));
+            (= _tr!public 1)))))));

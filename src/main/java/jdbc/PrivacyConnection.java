@@ -33,7 +33,8 @@ public class PrivacyConnection implements Connection {
     info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
     this.parser = new ParserFactory(info).getParser(info);
 
-    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
+//    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
+    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("diaspora_db_server");
 
     String deps = info.getProperty("deps");
     String pks = info.getProperty("pk");
@@ -93,8 +94,6 @@ public class PrivacyConnection implements Connection {
       parameters.add(matcher.group(2));
     }
     s = matcher.replaceAll("$1");
-
-
     if (shouldApplyPolicy(parser.parse(s).getSqlNode().getKind())) {
       return new PrivacyPreparedStatement(s, parameters);
     } else {
@@ -404,6 +403,9 @@ public class PrivacyConnection implements Connection {
     private void addRow(List<List<Object>> rows, List<Object> row) {
       QueryTraceEntry current = current_trace.getCurrentQuery();
       List<Boolean> resultBitmap = current.getQuery().getResultBitmap();
+      if (resultBitmap.size() == 0) {
+        return;
+      }
       for (int i = row.size(); i-- > 0; ) {
         if (i >= resultBitmap.size() || !resultBitmap.get(i)) {
           row.remove(i);
@@ -433,25 +435,43 @@ public class PrivacyConnection implements Connection {
             switch (columnTypes.get(i - 1)) {
               case Types.INTEGER:
               case Types.BIGINT:
+              case Types.TINYINT:
+              case Types.BIT:
                 row.add(resultSet.getInt(i));
                 break;
               case Types.CLOB:
-                row.add(resultSet.getString(i));
+              case Types.VARCHAR:
+              case Types.LONGVARCHAR:
+                if (resultSet.getString(i) == null) {
+                  row.add("@@@@@@@@@@@@@null string placeholder");
+                } else {
+                  row.add(resultSet.getString(i));
+                }
                 break;
+              case Types.FLOAT:
               case Types.DOUBLE:
+              case Types.DECIMAL:
                 row.add(resultSet.getDouble(i));
                 break;
               case Types.BOOLEAN:
                 row.add(resultSet.getBoolean(i));
                 break;
               case Types.DATE:
-                row.add(resultSet.getDate(i).getTime());
+                if (resultSet.getDate(i) == null) {
+                  row.add(-0xbaadf00dL);
+                } else {
+                  row.add(resultSet.getDate(i).getTime());
+                }
                 break;
               case Types.TIMESTAMP:
-                row.add(resultSet.getTimestamp(i).getTime());
+                if (resultSet.getTime(i) == null) {
+                  row.add(-0xbaadf00dL);
+                } else {
+                  row.add(resultSet.getTime(i).getTime());
+                }
                 break;
               default:
-                throw new UnsupportedOperationException("unsupported type");
+                throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
             }
           }
           addRow(rows, row);
