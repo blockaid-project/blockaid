@@ -135,11 +135,11 @@ public class CachedQueryTraceEntry {
         }
         assert !cacheTupleIter.hasNext() && !tupleEqualityIter.hasNext();
 
-        return checkTuplesContained(tupleChecks.listIterator(), query.tuples, new boolean[query.tuples.size()]);
+        return checkTuplesContained(tupleChecks.listIterator(), query.tuples);
     }
 
     // TODO: is it okay to allow multiple tuples from cache to map to the same tuple in query
-    private boolean checkTuplesContained(ListIterator<List<Object>> cacheTuples, List<List<Object>> queryTuples, boolean[] used) {
+    private boolean checkTuplesContained(ListIterator<List<Object>> cacheTuples, List<List<Object>> queryTuples) {
         if (!cacheTuples.hasNext()) {
             return true;
         }
@@ -150,12 +150,10 @@ public class CachedQueryTraceEntry {
         int i = 0;
         while (queryTupleIter.hasNext()) {
             List<Object> queryTuple = queryTupleIter.next();
-            if (!used[i] && checkTupleEquality(cacheTuple, queryTuple)) {
-                used[i] = true;
-                if (checkTuplesContained(cacheTuples, queryTuples, used)) {
+            if (checkTupleEquality(cacheTuple, queryTuple)) {
+                if (checkTuplesContained(cacheTuples, queryTuples)) {
                     return true;
                 }
-                used[i] = false;
             }
             ++i;
         }
