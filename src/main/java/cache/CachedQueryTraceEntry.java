@@ -40,6 +40,7 @@ public class CachedQueryTraceEntry {
     }
 
     private String queryText;
+    private boolean isCurrentQuery;
     // exact value comparisons, null if value is irrelevant
     private List<Object> parameters;
     private List<List<Object>> tuples;
@@ -49,12 +50,13 @@ public class CachedQueryTraceEntry {
 
     private int maxEqualityNumber;
 
-    public CachedQueryTraceEntry(QueryTraceEntry trace, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
-        this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, parameterEquality, tupleEquality);
+    public CachedQueryTraceEntry(QueryTraceEntry trace, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+        this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, isCurrentQuery, parameterEquality, tupleEquality);
     }
 
-    private CachedQueryTraceEntry(String queryText, List<Object> parameters, List<List<Object>> tuples, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+    private CachedQueryTraceEntry(String queryText, List<Object> parameters, List<List<Object>> tuples, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
         this.queryText = queryText;
+        this.isCurrentQuery = isCurrentQuery;
         this.parameters = parameters;
         this.tuples = tuples;
         this.parameterEquality = parameterEquality;
@@ -81,6 +83,10 @@ public class CachedQueryTraceEntry {
 
     public int getMaxEqualityNumber() {
         return maxEqualityNumber;
+    }
+
+    public boolean isCurrentQuery() {
+        return isCurrentQuery;
     }
 
     public boolean checkQueryText(QueryTraceEntry query) {
