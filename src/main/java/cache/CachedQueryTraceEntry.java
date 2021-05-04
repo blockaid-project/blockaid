@@ -1,6 +1,10 @@
 package cache;
 
+import solver.StringUtil;
+
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class CachedQueryTraceEntry {
     public static class Index {
@@ -223,12 +227,43 @@ public class CachedQueryTraceEntry {
 
     @Override
     public String toString() {
-        return "CachedQueryTraceEntry{" +
-                "queryText='" + queryText + '\'' +
-                ", parameters=" + parameters +
-                ", tuples=" + tuples +
-                ", parameterEquality=" + parameterEquality +
-                ", tupleEquality=" + tupleEquality +
-                '}';
+        StringBuffer out = new StringBuffer();
+        Pattern pattern = Pattern.compile("\\?");
+        Matcher matcher = pattern.matcher(queryText);
+        int i = 0;
+        while (matcher.find()) {
+            matcher.appendReplacement(out, "");
+            if (parameters.get(i) != null) {
+                out.append(parameters.get(i));
+            } else if (parameterEquality.get(i) != null) {
+                out.append("?").append(parameterEquality.get(i));
+            } else {
+                out.append("*");
+            }
+            ++i;
+        }
+        matcher.appendTail(out);
+        out.append("\n");
+
+        for (i = 0; i < tuples.size(); ++i) {
+            out.append("\t(");
+            boolean first = true;
+            for (int j = 0; j < tuples.get(i).size(); ++j) {
+                if (first) {
+                    first = false;
+                } else {
+                    out.append(", ");
+                }
+                if (tuples.get(i).get(j) != null) {
+                    out.append(tuples.get(i).get(j));
+                } else if (tupleEquality.get(i).get(j) != null) {
+                    out.append("?").append(tupleEquality.get(i).get(j));
+                } else {
+                    out.append("*");
+                }
+            }
+            out.append(")\n");
+        }
+        return out.toString();
     }
 }

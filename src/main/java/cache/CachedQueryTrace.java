@@ -83,7 +83,7 @@ public class CachedQueryTrace {
     public String toString() {
         StringBuilder s = new StringBuilder("---------------\n");
         for (CachedQueryTraceEntry trace : entries) {
-            s.append(trace.toString()).append("\n");
+            s.append(trace.toString());
         }
         s.append("---------------\n");
         return s.toString();
