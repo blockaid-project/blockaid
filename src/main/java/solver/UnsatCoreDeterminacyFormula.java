@@ -65,9 +65,6 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                     for (int i = 0; i < parameters.size(); ++i) {
                         if (paramNames.get(i).equals("?")) {
                             Object p = parameters.get(i);
-                            if (p instanceof Integer) {
-                                p = new Long((Integer) p);
-                            }
                             if (!equalitySets.containsKey(p)) {
                                 // these should be linked to the query assertions since that's the only place where the
                                 // constants are even used, except for the current query but that's special cased elsewhere
@@ -92,9 +89,6 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                             Object curr = tuple.get(i);
                             if (curr == null) {
                                 continue;
-                            }
-                            if (curr instanceof Integer) {
-                                curr = new Long((Integer) curr);
                             }
                             if (!eliminateIrrelevant || relevantAttributes.contains(attributeNames.get(i))) {
                                 if (!equalitySets.containsKey(curr)) {

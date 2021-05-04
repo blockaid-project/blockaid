@@ -1,10 +1,9 @@
 package solver;
 
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
-import com.microsoft.z3.Expr;
-import com.microsoft.z3.Sort;
+import com.microsoft.z3.*;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -45,6 +44,12 @@ public class Tuple extends ArrayList<Expr> {
         } else if (value instanceof Double) {
             return context.getRealSort();
         } else if (value instanceof String) {
+            try {
+                new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse((String) value);
+                return context.getIntSort();
+            } catch (ParseException e) {
+                // do nothing
+            }
             return context.getStringSort();
         } else if (value instanceof Expr) {
             return ((Expr) value).getSort();
@@ -66,6 +71,11 @@ public class Tuple extends ArrayList<Expr> {
         } else if (value instanceof Double) {
             throw new UnsupportedOperationException("float loading todo");
         } else if (value instanceof String) {
+            try {
+                return context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse((String) value).getTime());
+            } catch (ParseException e) {
+                // do nothing
+            }
             return context.mkString((String) value);
         } else if (value instanceof Expr) {
             return (Expr) value;

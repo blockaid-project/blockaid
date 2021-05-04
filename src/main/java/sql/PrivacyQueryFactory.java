@@ -14,7 +14,7 @@ public class PrivacyQueryFactory {
     };
 
     public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                                  List<String> paramNames, Map<Long, String> revConstMap)
+                                                  List<String> paramNames, Map<Integer, String> revConstMap)
     {
         if (result == null){
             return null;
@@ -44,10 +44,7 @@ public class PrivacyQueryFactory {
             si = nextSi;
 
             Object param = newParams.get(pi);
-            if (param instanceof Integer) {
-                param = new Long((Integer) param);
-            }
-            if (param instanceof Long && newParamNames.get(pi).equals("?")) {
+            if (param instanceof Integer && newParamNames.get(pi).equals("?")) {
                 String name = revConstMap.get(param);
                 if (name != null) {
                     newParamNames.set(pi, name);

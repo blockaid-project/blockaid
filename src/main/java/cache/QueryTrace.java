@@ -14,9 +14,9 @@ public class QueryTrace {
     // TODO(zhangwen): The existing code seems to assume constants are integers (in ParsedPSJ.getPredicate),
     //  so I do the same here.
 //    private final HashMap<String, Integer> constMap = new HashMap<>();
-    private final HashMap<Long, String> constMapReversed = new HashMap<>();
+    private final HashMap<Integer, String> constMapReversed = new HashMap<>();
 
-    public void setConstValue(String name, Long value) {
+    public void setConstValue(String name, Integer value) {
 //        constMap.put(name, value);
         if (constMapReversed.containsKey(value)) {
             throw new RuntimeException("currently not supported: multiple consts with the same value");
@@ -32,7 +32,7 @@ public class QueryTrace {
 //        return Collections.unmodifiableMap(constMap);
 //    }
 
-    public Map<Long, String> getReverseConstMap() {
+    public Map<Integer, String> getReverseConstMap() {
         return Collections.unmodifiableMap(constMapReversed);
     }
 

@@ -13,7 +13,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
     private DesugarLeftJoinIntoUnion() {}
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames, Map<Long, String> revConstMap) {
+                                          List<String> paramNames, Map<Integer, String> revConstMap) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
         }

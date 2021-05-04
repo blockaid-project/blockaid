@@ -1572,8 +1572,9 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setLong(int i, long l) throws SQLException {
-      direct_statement.setLong(i, l);
-      param_values[i - 1] = l;
+      // FIXME(zhangwen): HACK--mixing longs and ints is trouble, so we make them ints for now.
+      direct_statement.setInt(i, (int) l);
+      param_values[i - 1] = (int) l;
     }
 
     @Override
@@ -2301,7 +2302,7 @@ public class PrivacyConnection implements Connection {
       System.out.println("=== processSetConst: " + name + " = " + value);
       // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
       resetSequence();
-      current_trace.setConstValue(name, Long.valueOf(value));
+      current_trace.setConstValue(name, Integer.valueOf(value));
 
       // TODO(zhangwen): Can I get away with not actually executing this command?
       return Optional.of(false);

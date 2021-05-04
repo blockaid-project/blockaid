@@ -271,6 +271,8 @@ public class ParsedPSJ {
             Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (left instanceof ArithExpr && right instanceof SeqExpr) {
                 try {
+                    System.out.println("!!!*** " + theta);
+                    System.out.println("\t" + right);
                     right = context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime());
                 } catch (ParseException e) {
                     // do nothing

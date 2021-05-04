@@ -20,7 +20,7 @@ public class StripOrderBy implements Preprocessor {
     private StripOrderBy() {}
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames, Map<Long, String> revConstMap) {
+                                          List<String> paramNames, Map<Integer, String> revConstMap) {
         if (result.getKind() != SqlKind.ORDER_BY) {
             return Optional.empty();
         }

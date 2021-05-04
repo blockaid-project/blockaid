@@ -125,7 +125,7 @@ public abstract class DeterminacyFormula {
         }
         matcher.appendTail(body2);
 
-        StringBuilder out = new StringBuilder("(declare-sort INT 0)\n");
+        StringBuilder out = new StringBuilder("(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)");
         for (String i : ints) {
             out.append("(declare-fun int!").append(i).append(" () INT)\n");
         }
@@ -135,7 +135,8 @@ public abstract class DeterminacyFormula {
         }
         out.append("))\n").append(body2);
 
-        return out.toString().replaceAll("Int", "INT");
+        String transformed = out.toString();
+        return transformed.replaceAll("<", "lt").replaceAll("Int", "INT");
     }
 
     private static String replaceStrings(String smt) {

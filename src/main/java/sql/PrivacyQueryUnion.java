@@ -15,7 +15,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
      * Takes "ownership" of arguments.
      */
     public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema, List<Object> parameters,
-                             List<String> paramNames, Map<Long, String> reverseConstMap) {
+                             List<String> paramNames, Map<Integer, String> reverseConstMap) {
         super(parsedSql, parameters, paramNames);
         assert parsedSql.getSqlNode() instanceof SqlBasicCall;
         SqlBasicCall unionNode = (SqlBasicCall) parsedSql.getSqlNode();
