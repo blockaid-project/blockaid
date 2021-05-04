@@ -310,9 +310,10 @@ public class QueryChecker {
 
         String smt;
         Map<Object, Integer> equalityMap;
+        Map<Object, Integer> equalityMapEliminate;
         synchronized (this.unsatCoreDeterminacyFormula) {
             smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
-//            equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
+            equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
 //            executors.add(new Z3Executor(smt, latch));
             executors.add(new CVC4Executor(smt, latch));
             try {
@@ -329,7 +330,7 @@ public class QueryChecker {
             }
 
             smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
-            equalityMap = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
+            equalityMapEliminate = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
 //            executors.add(new Z3Executor(smt, latch));
             executors.add(new CVC4Executor(smt, latch));
             try {
@@ -349,7 +350,9 @@ public class QueryChecker {
         runExecutors(executors, latch);
 
         String[] minCore = null;
-        for (SMTExecutor executor : executors) {
+        Map<Object, Integer> usedEqualityMap = null;
+        for (int i = 0; i < executors.size(); ++i) {
+            SMTExecutor executor = executors.get(i);
             String[] core = executor.getUnsatCore();
             if (core != null) {
                 System.err.println(Arrays.asList(core));
@@ -358,14 +361,11 @@ public class QueryChecker {
             }
             if (core != null && (minCore == null || minCore.length >= core.length)) {
                 minCore = core;
+                usedEqualityMap = (i < 1 ? equalityMap : equalityMapEliminate);
             }
         }
 
-        if (minCore == null) {
-//            System.err.println(smt);
-        }
-
-        return minCore == null ? null : new UnsatCore(new HashSet<>(Arrays.asList(minCore)), equalityMap);
+        return minCore == null ? null : new UnsatCore(new HashSet<>(Arrays.asList(minCore)), usedEqualityMap);
     }
 
     private FastCheckDecision doPrecheckPolicy(PrivacyQuery query) {
