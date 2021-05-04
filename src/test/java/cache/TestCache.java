@@ -69,6 +69,7 @@ public class TestCache {
         q3.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q3,
+                false,
                 Collections.singletonList(null),
                 Collections.singletonList(Arrays.asList(new CachedQueryTraceEntry.Index(1), null, null, null))
         ));
@@ -80,6 +81,7 @@ public class TestCache {
         q4.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q4,
+                false,
                 Arrays.asList(new CachedQueryTraceEntry.Index(2), new CachedQueryTraceEntry.Index(1)),
                 Collections.singletonList(Arrays.asList(null, null, null, null)))
         );
@@ -90,6 +92,7 @@ public class TestCache {
         );
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q5,
+                true,
                 Arrays.asList(new CachedQueryTraceEntry.Index(2), null),
                 Collections.emptyList())
         );
@@ -181,6 +184,7 @@ public class TestCache {
         q3.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q3,
+                false,
                 Collections.singletonList(null),
                 Collections.singletonList(Arrays.asList(new CachedQueryTraceEntry.Index(1), null, null, null))
         ));
@@ -192,6 +196,7 @@ public class TestCache {
         q4.tuples.add(Arrays.asList(null, null, null, null));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q4,
+                false,
                 Arrays.asList(new CachedQueryTraceEntry.Index(2), new CachedQueryTraceEntry.Index(1)),
                 Collections.singletonList(Arrays.asList(null, null, null, null)))
         );
@@ -202,6 +207,7 @@ public class TestCache {
         );
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q5,
+                true,
                 Arrays.asList(new CachedQueryTraceEntry.Index(2), null),
                 Collections.emptyList())
         );

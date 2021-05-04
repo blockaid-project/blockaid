@@ -51,6 +51,18 @@ public class CachedQueryTrace {
 
         CachedQueryTraceEntry cacheEntry = entries.next();
 
+        if (cacheEntry.isCurrentQuery()) {
+            QueryTraceEntry traceEntry = trace.getCurrentQuery();
+            if (cacheEntry.checkQueryText(traceEntry)) {
+                usedEntries.add(traceEntry);
+                if (checkQueryTrace(entries, trace, usedEntries)) {
+                    return true;
+                }
+                usedEntries.remove(usedEntries.size() - 1);
+            }
+            return false;
+        }
+
         if (trace.queries.containsKey(cacheEntry.getQueryText())) {
             for (QueryTraceEntry traceEntry : trace.queries.get(cacheEntry.getQueryText())) {
                 if (cacheEntry.checkQueryText(traceEntry)) {

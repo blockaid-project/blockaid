@@ -40,6 +40,7 @@ public class CachedQueryTraceEntry {
     }
 
     private String queryText;
+    private boolean isCurrentQuery;
     // exact value comparisons, null if value is irrelevant
     private List<Object> parameters;
     private List<List<Object>> tuples;
@@ -48,13 +49,15 @@ public class CachedQueryTraceEntry {
     private List<List<Index>> tupleEquality;
 
     private int maxEqualityNumber;
+    private boolean isEmpty;
 
-    public CachedQueryTraceEntry(QueryTraceEntry trace, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
-        this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, parameterEquality, tupleEquality);
+    public CachedQueryTraceEntry(QueryTraceEntry trace, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+        this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, isCurrentQuery, parameterEquality, tupleEquality);
     }
 
-    private CachedQueryTraceEntry(String queryText, List<Object> parameters, List<List<Object>> tuples, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+    private CachedQueryTraceEntry(String queryText, List<Object> parameters, List<List<Object>> tuples, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
         this.queryText = queryText;
+        this.isCurrentQuery = isCurrentQuery;
         this.parameters = parameters;
         this.tuples = tuples;
         this.parameterEquality = parameterEquality;
@@ -73,6 +76,40 @@ public class CachedQueryTraceEntry {
                 }
             }
         }
+        removeDuplicateRows();
+        checkEmpty();
+    }
+
+    private void removeDuplicateRows() {
+        Set<List<Object>> seen = new HashSet<>();
+        for (int i = tuples.size(); i-- > 0; ) {
+            List<Object> key = new ArrayList<>(tuples.get(i));
+            key.addAll(tupleEquality.get(i));
+            if (seen.contains(key)) {
+                tuples.remove(i);
+                tupleEquality.remove(i);
+            }
+            seen.add(key);
+        }
+    }
+
+    private void checkEmpty() {
+        this.isEmpty = false;
+        for (Object value : parameters) {
+            if (value != null) {
+                return;
+            }
+        }
+        for (Index index : parameterEquality) {
+            if (index != null) {
+                return;
+            }
+        }
+        this.isEmpty = tuples.isEmpty();
+    }
+
+    public boolean isEmpty() {
+        return isEmpty;
     }
 
     public String getQueryText() {
@@ -81,6 +118,10 @@ public class CachedQueryTraceEntry {
 
     public int getMaxEqualityNumber() {
         return maxEqualityNumber;
+    }
+
+    public boolean isCurrentQuery() {
+        return isCurrentQuery;
     }
 
     public boolean checkQueryText(QueryTraceEntry query) {
