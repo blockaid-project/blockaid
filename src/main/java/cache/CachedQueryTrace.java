@@ -60,10 +60,7 @@ public class CachedQueryTrace {
                 }
                 usedEntries.remove(usedEntries.size() - 1);
             }
-            return false;
-        }
-
-        if (trace.queries.containsKey(cacheEntry.getQueryText())) {
+        } else if (trace.queries.containsKey(cacheEntry.getQueryText())) {
             for (QueryTraceEntry traceEntry : trace.queries.get(cacheEntry.getQueryText())) {
                 if (cacheEntry.checkQueryText(traceEntry)) {
                     usedEntries.add(traceEntry);
