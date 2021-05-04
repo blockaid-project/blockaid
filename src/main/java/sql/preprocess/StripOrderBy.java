@@ -10,6 +10,7 @@ import sql.SchemaPlusWithKey;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -19,7 +20,7 @@ public class StripOrderBy implements Preprocessor {
     private StripOrderBy() {}
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames) {
+                                          List<String> paramNames, Map<Long, String> revConstMap) {
         if (result.getKind() != SqlKind.ORDER_BY) {
             return Optional.empty();
         }
@@ -37,6 +38,6 @@ public class StripOrderBy implements Preprocessor {
             paramNames = paramNames.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
         }
 
-        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames, revConstMap));
     }
 }

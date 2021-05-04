@@ -1,4 +1,4 @@
-package solver;
+package solver.executor;
 
 import com.microsoft.z3.Status;
 
@@ -23,6 +23,10 @@ public abstract class SMTExecutor extends Thread {
 
     protected SMTExecutor(String smtString, CountDownLatch latch, String[] command) {
         this(smtString, latch, command, false, true, true);
+    }
+    protected SMTExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, String name) {
+        this(smtString, latch, command, satConclusive, unsatConclusive, false);
+        setName(name);
     }
     protected SMTExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
         this(smtString, latch, command, satConclusive, unsatConclusive, false);
@@ -133,7 +137,7 @@ public abstract class SMTExecutor extends Thread {
             String[] parts = output.toString().split("\n", 2);
             result = getResult(parts[0].trim());
             String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
-            core = Arrays.stream(coreParts).map(x -> x.trim()).toArray(String[]::new);
+            core = Arrays.stream(coreParts).map(String::trim).toArray(String[]::new);
         } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         } catch (Exception e) {

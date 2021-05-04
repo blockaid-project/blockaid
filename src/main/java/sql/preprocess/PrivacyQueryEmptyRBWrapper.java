@@ -11,21 +11,21 @@ import java.util.Set;
 /**
  * Wrapper around a PrivacyQuery that returns empty for result bitmap.
  */
-class PrivacyQueryEmptyRBMapper extends PrivacyQuery {
+class PrivacyQueryEmptyRBWrapper extends PrivacyQuery {
     private final PrivacyQuery pq;
 
-    public PrivacyQueryEmptyRBMapper(PrivacyQuery pq) {
+    public PrivacyQueryEmptyRBWrapper(PrivacyQuery pq) {
         super(pq);
         this.pq = pq;
     }
 
     @Override
-    public Set<String> getProjectColumns() {
+    public List<String> getProjectColumns() {
         return pq.getProjectColumns();
     }
 
     @Override
-    public Set<String> getThetaColumns() {
+    public List<String> getThetaColumns() {
         return pq.getThetaColumns();
     }
 

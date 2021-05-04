@@ -11,7 +11,7 @@ import java.util.Objects;
  */
 public abstract class ParserResult {
 
-    protected final String parsedSql;
+    protected String parsedSql;
     protected SqlKind kind;
     protected boolean isCheckable;
     protected final SqlNode sqlNode;
@@ -31,7 +31,12 @@ public abstract class ParserResult {
     public boolean getIsCheckable() {return isCheckable;}
 
     public String getParsedSql() {
-        return parsedSql;
+        return parsedSql.replace("\n", " ");
+    }
+
+    // FIXME(zhangwen): HACK-- for replacing unnamed parameters with named parameters in the query string.
+    public void setParsedSql(String s) {
+        parsedSql = s;
     }
 
     public SqlKind getKind() {

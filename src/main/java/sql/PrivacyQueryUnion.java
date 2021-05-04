@@ -1,5 +1,6 @@
 package sql;
 
+import cache.QueryTrace;
 import org.apache.calcite.sql.*;
 import solver.Query;
 import solver.Schema;
@@ -10,15 +11,11 @@ import java.util.*;
 public class PrivacyQueryUnion extends PrivacyQuery {
     private final List<PrivacyQuery> queries;
 
-    public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema) {
-        this(parsedSql, schema, Collections.emptyList(), Collections.emptyList());
-    }
-
     /**
      * Takes "ownership" of arguments.
      */
     public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema, List<Object> parameters,
-                             List<String> paramNames) {
+                             List<String> paramNames, Map<Long, String> reverseConstMap) {
         super(parsedSql, parameters, paramNames);
         assert parsedSql.getSqlNode() instanceof SqlBasicCall;
         SqlBasicCall unionNode = (SqlBasicCall) parsedSql.getSqlNode();
@@ -30,7 +27,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
             List<Object> partParameters = parameters.subList(paramOffset, paramOffset + paramCount);
             List<String> partParamNames = paramNames.subList(paramOffset, paramOffset + paramCount);
             PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new UnionPartParserResult(operand), schema,
-                    partParameters.toArray(new Object[0]), partParamNames);
+                    partParameters.toArray(new Object[0]), partParamNames, reverseConstMap);
             queries.add(query);
 
             paramOffset += paramCount;

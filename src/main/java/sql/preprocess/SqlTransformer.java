@@ -20,8 +20,7 @@ class SqlTransformer implements SqlVisitor<SqlNode> {
         List<SqlNode> operands = sqlCall.getOperandList();
         int numOperands = operands.size();
         if (sqlCall.getKind() == SqlKind.SELECT) {
-            // HACK-- a select node's `setOperand` method doesn't support setting the last operand,
-            // so we do that here.
+            // FIXME(zhangwen): HACK-- a select node's `setOperand` method doesn't support setting the last operand, so we do that here.
             SqlNodeList newHints = (SqlNodeList) (((SqlSelect) sqlCall).getHints().accept(this));
             ((SqlSelect) nc).setHints(newHints);
             numOperands -= 1;

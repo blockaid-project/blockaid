@@ -64,13 +64,17 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                 if (!queryTraceEntry.getTuples().isEmpty() || queryTraceEntry == queries.getCurrentQuery()) {
                     for (int i = 0; i < parameters.size(); ++i) {
                         if (paramNames.get(i).equals("?")) {
-                            if (!equalitySets.containsKey(parameters.get(i))) {
+                            Object p = parameters.get(i);
+                            if (p instanceof Integer) {
+                                p = new Long((Integer) p);
+                            }
+                            if (!equalitySets.containsKey(p)) {
                                 // these should be linked to the query assertions since that's the only place where the
                                 // constants are even used, except for the current query but that's special cased elsewhere
-                                exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, parameters.get(i))));
-                                equalitySets.put(parameters.get(i), new HashSet<>());
+                                exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, p)));
+                                equalitySets.put(p, new HashSet<>());
                             }
-                            equalitySets.get(parameters.get(i)).add(paramConstants.get(i));
+                            equalitySets.get(p).add(paramConstants.get(i));
                         }
                     }
                 }
@@ -85,12 +89,19 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                         Tuple tupleConstant = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + numAttrs));
                         tupleConstants.add(tupleConstant);
                         for (int i = 0; i < tuple.size(); ++i) {
+                            Object curr = tuple.get(i);
+                            if (curr == null) {
+                                continue;
+                            }
+                            if (curr instanceof Integer) {
+                                curr = new Long((Integer) curr);
+                            }
                             if (!eliminateIrrelevant || relevantAttributes.contains(attributeNames.get(i))) {
-                                if (!equalitySets.containsKey(tuple.get(i))) {
-                                    exprs.put("a_v!" + queryNumber + "!" + attrNumber, context.mkEq(tupleConstant.get(i), Tuple.getExprFromObject(context, tuple.get(i))));
-                                    equalitySets.put(tuple.get(i), new HashSet<>());
+                                if (!equalitySets.containsKey(curr)) {
+                                    exprs.put("a_v!" + queryNumber + "!" + attrNumber, context.mkEq(tupleConstant.get(i), Tuple.getExprFromObject(context, curr)));
+                                    equalitySets.put(curr, new HashSet<>());
                                 }
-                                equalitySets.get(tuple.get(i)).add(tupleConstant.get(i));
+                                equalitySets.get(curr).add(tupleConstant.get(i));
                             }
 
                             ++attrNumber;
@@ -183,77 +194,5 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     @Override
     protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
         return super.makeFormulaSMT(queries, new Expr[0]) + "\n" + generateAssertions(queries, constants);
-    }
-
-    @Override
-    public synchronized String generateSMT(QueryTrace queries) {
-        return replaceStrings(replaceInts(super.generateSMT(queries)));
-    }
-
-    private static String replaceInts(String smt) {
-        Set<String> ints = new HashSet<>();
-
-        java.util.regex.Pattern pattern = Pattern.compile("\\(- (\\d+)\\)");
-        Matcher matcher = pattern.matcher(smt);
-        StringBuffer body1 = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(body1, "");
-            String s = matcher.group(1);
-            ints.add("-" + s);
-            body1.append(" int!-").append(s);
-        }
-        matcher.appendTail(body1);
-
-        pattern = Pattern.compile("\\s(\\d+)");
-        matcher = pattern.matcher(body1.toString());
-        StringBuffer body2 = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(body2, "");
-            String s = matcher.group(1);
-            ints.add(s);
-            body2.append(" int!").append(s);
-        }
-        matcher.appendTail(body2);
-
-        StringBuffer out = new StringBuffer("(declare-sort INT 0)\n");
-        for (String i : ints) {
-            out.append("(declare-fun int!").append(i).append(" () INT)\n");
-        }
-        out.append("(assert (distinct");
-        for (String i : ints) {
-            out.append(" int!").append(i);
-        }
-        out.append("))\n").append(body2);
-
-        return out.toString().replaceAll("Int", "INT");
-    }
-
-    private static String replaceStrings(String smt) {
-        Map<String, Integer> replacement = new HashMap<>();
-
-        java.util.regex.Pattern pattern = Pattern.compile("\"([^\"]*)\"");
-        Matcher matcher = pattern.matcher(smt);
-        StringBuffer body = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(body, "");
-            String s = matcher.group(1);
-            if (!replacement.containsKey(s)) {
-                replacement.put(s, replacement.size());
-            }
-            body.append("string!").append(replacement.get(s));
-        }
-        matcher.appendTail(body);
-
-        StringBuffer out = new StringBuffer("(declare-sort STRING 0)\n");
-        for (int i = 0; i < replacement.size(); ++i) {
-            out.append("(declare-fun string!").append(i).append(" () STRING)\n");
-        }
-        out.append("(assert (distinct");
-        for (int i = 0; i < replacement.size(); ++i) {
-            out.append(" string!").append(i);
-        }
-        out.append("))\n").append(body);
-
-        return out.toString().replaceAll("String", "STRING");
     }
 }

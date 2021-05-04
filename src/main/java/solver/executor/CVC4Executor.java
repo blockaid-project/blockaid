@@ -1,6 +1,6 @@
-package solver;
+package solver.executor;
 
-import com.microsoft.z3.Solver;
+import solver.executor.SMTExecutor;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -9,7 +9,7 @@ public class CVC4Executor extends SMTExecutor {
             // for some reason calling cvc4 directly results in broken pipes for stdin..
 //            "term_to_kill",
 //            "sh", "-c", "cat /dev/stdin | cvc4 --lang smtlib2 -q -",
-            "cvc4", "--lang", "smtlib2", "--quiet"
+            "term_to_kill", "cvc4", "--lang", "smtlib2", "--quiet"
     };
 
     // unsat core
@@ -17,7 +17,7 @@ public class CVC4Executor extends SMTExecutor {
         super(solver, latch, command);
     }
 
-    public CVC4Executor(String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive) {
-        super(solver, latch, command, satConclusive, unsatConclusive);
+    public CVC4Executor(String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, String name) {
+        super(solver, latch, command, satConclusive, unsatConclusive, name);
     }
 }

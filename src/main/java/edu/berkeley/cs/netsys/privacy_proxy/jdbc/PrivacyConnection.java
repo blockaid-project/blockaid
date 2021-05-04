@@ -438,11 +438,11 @@ public class PrivacyConnection implements Connection {
     private PreparedStatement direct_statement;
     private ParserResult parser_result;
     private List<String> param_names;
-    private Object[] values;
+    private Object[] param_values;
     private PrivacyQuery privacy_query = null;
 
     PrivacyPreparedStatement(String sql, ParserResult pr, List<String> param_names) throws SQLException {
-      values = new Object[(sql + " ").split("\\?").length - 1];
+      param_values = new Object[(sql + " ").split("\\?").length - 1];
       this.parser_result = pr;
       direct_statement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
       this.param_names = param_names;
@@ -457,10 +457,13 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() {
-      System.out.println("checkPolicy: " + parser_result.getParsedSql() + "\t" + Arrays.toString(values));
-      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
+      System.out.println("[" + (current_trace.size() + 1) + "] checkPolicy: "
+              + parser_result.getParsedSql() + "\t" + Arrays.toString(param_values));
 
-      current_trace.startQuery(privacy_query, Arrays.asList(values));
+      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, param_values, param_names,
+              current_trace.getReverseConstMap());
+
+      current_trace.startQuery(privacy_query, privacy_query.parameters);
       final long startTime = System.currentTimeMillis();
       try {
         return query_checker.checkPolicy(current_trace);
@@ -1546,56 +1549,56 @@ public class PrivacyConnection implements Connection {
     @Override
     public void setBoolean(int i, boolean b) throws SQLException {
       direct_statement.setBoolean(i, b);
-      values[i - 1] = b;
+      param_values[i - 1] = b;
     }
 
     @Override
     public void setByte(int i, byte b) throws SQLException {
       direct_statement.setByte(i, b);
-      values[i - 1] = b;
+      param_values[i - 1] = b;
     }
 
     @Override
     public void setShort(int i, short i1) throws SQLException {
       direct_statement.setShort(i, i1);
-      values[i - 1] = i1;
+      param_values[i - 1] = i1;
     }
 
     @Override
     public void setInt(int i, int i1) throws SQLException {
       direct_statement.setInt(i, i1);
-      values[i - 1] = i1;
+      param_values[i - 1] = i1;
     }
 
     @Override
     public void setLong(int i, long l) throws SQLException {
       direct_statement.setLong(i, l);
-      values[i - 1] = l;
+      param_values[i - 1] = l;
     }
 
     @Override
     public void setFloat(int i, float v) throws SQLException {
       direct_statement.setFloat(i, v);
-      values[i - 1] = v;
+      param_values[i - 1] = v;
     }
 
     @Override
     public void setDouble(int i, double v) throws SQLException {
       direct_statement.setDouble(i, v);
-      values[i - 1] = v;
+      param_values[i - 1] = v;
     }
 
     @Override
     public void setBigDecimal(int i, BigDecimal bigDecimal) throws SQLException {
       direct_statement.setBigDecimal(i, bigDecimal);
-      values[i - 1] = bigDecimal;
+      param_values[i - 1] = bigDecimal;
     }
 
     @Override
     public void setString(int i, String s) throws SQLException {
       direct_statement.setString(i, s);
       // not really properly escaped todo fix
-      values[i - 1] = s;
+      param_values[i - 1] = s;
     }
 
     @Override
@@ -1637,7 +1640,7 @@ public class PrivacyConnection implements Connection {
     @Override
     public void clearParameters() throws SQLException {
       direct_statement.clearParameters();
-      Arrays.fill(values, null);
+      Arrays.fill(param_values, null);
     }
 
     @Override
@@ -2285,7 +2288,7 @@ public class PrivacyConnection implements Connection {
      * @param query the query to check.
      * @return empty if the query is not a set const query, otherwise, the return value of execute.
      */
-    private Optional<Boolean> processSetConst(String query) throws SQLException {
+    private Optional<Boolean> processSetConst(String query) {
       // I made up this syntax.
       Pattern pattern = Pattern.compile("^SET @(_[A-Za-z0-9_]+) = (\\d+)$");
       Matcher matcher = pattern.matcher(query);
@@ -2298,7 +2301,7 @@ public class PrivacyConnection implements Connection {
       System.out.println("=== processSetConst: " + name + " = " + value);
       // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
       resetSequence();
-      current_trace.setConstValue(name, Integer.valueOf(value));
+      current_trace.setConstValue(name, Long.valueOf(value));
 
       // TODO(zhangwen): Can I get away with not actually executing this command?
       return Optional.of(false);

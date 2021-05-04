@@ -13,7 +13,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
     private DesugarLeftJoinIntoUnion() {}
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames) {
+                                          List<String> paramNames, Map<Long, String> revConstMap) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
         }
@@ -89,7 +89,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
             newParamNames.add(paramNames.get(oldIndex));
         }
 
-        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, newParameters, newParamNames));
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, newParameters, newParamNames, revConstMap));
     }
 
     /**
