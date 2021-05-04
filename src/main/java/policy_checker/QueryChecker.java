@@ -390,19 +390,57 @@ public class QueryChecker {
                         System.err.println("min core: " + core.core);
                         CachedQueryTrace cacheTrace = new CachedQueryTrace();
                         int queryNumber = 0;
+                        Set<Object> valueConstraints = new HashSet<>();
+                        Set<Integer> paramAssertions = new HashSet<>();
+                        Map<Integer, Integer> assertionOccurrences  = new HashMap<>();
+                        // check used values, assertions
+                        for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
+                            for (QueryTraceEntry queryEntry : queryEntries) {
+                                boolean keptQuery = core.core.contains("a_q!" + queryNumber) || queryEntry == queries.getCurrentQuery();
+                                List<Object> parameters = queryEntry.getParameters();
+                                for (int i = 0; i < parameters.size(); ++i) {
+                                    Object parameter = parameters.get(i);
+                                    if (core.core.contains("a_pv!" + queryNumber + "!" + i)) {
+                                        valueConstraints.add(parameter);
+                                    }
+                                    if (!keptQuery || !core.equalityMap.containsKey(parameter)) {
+                                        continue;
+                                    }
+                                    int assertionNum = core.equalityMap.get(parameter);
+                                    if (UNNAMED_EQUALITY || core.core.contains("a_e!" + assertionNum)) {
+                                        paramAssertions.add(assertionNum);
+                                        assertionOccurrences.put(assertionNum, assertionOccurrences.getOrDefault(assertionNum, 0) + 1);
+                                    }
+                                }
+
+                                int attrNum = 0;
+                                for (List<Object> tuple : queryEntry.getTuples()) {
+                                    for (int j = 0; j < tuple.size(); ++j) {
+                                        Object value = tuple.get(j);
+                                        if (core.core.contains("a_v!" + queryNumber + "!" + attrNum)) {
+                                            valueConstraints.add(value);
+                                        }
+                                        if (!keptQuery || !core.equalityMap.containsKey(value)) {
+                                            ++attrNum;
+                                            continue;
+                                        }
+                                        int assertionNum = core.equalityMap.get(value);
+                                        if (UNNAMED_EQUALITY || core.core.contains("a_e!" + assertionNum)) {
+                                            assertionOccurrences.put(assertionNum, assertionOccurrences.getOrDefault(assertionNum, 0) + 1);
+                                        }
+                                        ++attrNum;
+                                    }
+                                }
+                                ++queryNumber;
+                            }
+                        }
+                        queryNumber = 0;
+                        // generate cache entry
                         for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
                             for (QueryTraceEntry queryEntry : queryEntries) {
                                 if (!core.core.contains("a_q!" + queryNumber) && queryEntry != queries.getCurrentQuery()) {
-                                    boolean found = false;
-                                    for (String s : core.core) {
-                                        if (s.contains("!" + queryNumber + "!")) {
-                                            found = true;
-                                        }
-                                    }
-                                    if (!found) {
-                                        ++queryNumber;
-                                        continue;
-                                    }
+                                    ++queryNumber;
+                                    continue;
                                 }
                                 // equalities
                                 List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
@@ -412,10 +450,10 @@ public class QueryChecker {
                                         continue;
                                     }
                                     int assertionNum = core.equalityMap.get(parameter);
-                                    if (!UNNAMED_EQUALITY && !core.core.contains("a_e!" + assertionNum)) {
-                                        parameterEquality.add(null);
-                                    } else {
+                                    if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
                                         parameterEquality.add(new CachedQueryTraceEntry.Index(assertionNum));
+                                    } else {
+                                        parameterEquality.add(null);
                                     }
                                 }
                                 List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
@@ -427,10 +465,10 @@ public class QueryChecker {
                                             continue;
                                         }
                                         int assertionNum = core.equalityMap.get(value);
-                                        if (!UNNAMED_EQUALITY && !core.core.contains("a_e!" + assertionNum)) {
-                                            indices.add(null);
-                                        } else {
+                                        if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
                                             indices.add(new CachedQueryTraceEntry.Index(assertionNum));
+                                        } else {
+                                            indices.add(null);
                                         }
                                     }
                                     tupleEquality.add(indices);
@@ -439,21 +477,21 @@ public class QueryChecker {
                                 QueryTraceEntry processedQuery = new QueryTraceEntry(queryEntry);
                                 List<Object> parameters = processedQuery.getParameters();
                                 for (int i = 0; i < parameters.size(); ++i) {
-                                    if (!core.core.contains("a_pv!" + queryNumber + "!" + i)) {
+                                    if (!valueConstraints.contains(parameters.get(i))) {
                                         parameters.set(i, null);
                                     }
                                 }
-
-                                int attrNum = 0;
                                 for (List<Object> tuple : processedQuery.getTuples()) {
                                     for (int j = 0; j < tuple.size(); ++j) {
-                                        if (!core.core.contains("a_v!" + queryNumber + "!" + attrNum)) {
+                                        if (!valueConstraints.contains(tuple.get(j))) {
                                             tuple.set(j, null);
                                         }
-                                        ++attrNum;
                                     }
                                 }
-                                cacheTrace.addEntry(new CachedQueryTraceEntry(processedQuery, parameterEquality, tupleEquality));
+                                CachedQueryTraceEntry entry = new CachedQueryTraceEntry(processedQuery, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality);
+                                if (!entry.isEmpty()) {
+                                    cacheTrace.addEntry(entry);
+                                }
                                 ++queryNumber;
                             }
                         }
@@ -477,7 +515,7 @@ public class QueryChecker {
                                     }
                                     tupleEquality.add(tuple);
                                 }
-                                cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, parameterEquality, tupleEquality));
+                                cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality));
                             }
                         }
                         System.err.println(cacheTrace);

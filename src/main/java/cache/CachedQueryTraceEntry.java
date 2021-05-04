@@ -49,6 +49,7 @@ public class CachedQueryTraceEntry {
     private List<List<Index>> tupleEquality;
 
     private int maxEqualityNumber;
+    private boolean isEmpty;
 
     public CachedQueryTraceEntry(QueryTraceEntry trace, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
         this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, isCurrentQuery, parameterEquality, tupleEquality);
@@ -75,6 +76,40 @@ public class CachedQueryTraceEntry {
                 }
             }
         }
+        removeDuplicateRows();
+        checkEmpty();
+    }
+
+    private void removeDuplicateRows() {
+        Set<List<Object>> seen = new HashSet<>();
+        for (int i = tuples.size(); i-- > 0; ) {
+            List<Object> key = new ArrayList<>(tuples.get(i));
+            key.addAll(tupleEquality.get(i));
+            if (seen.contains(key)) {
+                tuples.remove(i);
+                tupleEquality.remove(i);
+            }
+            seen.add(key);
+        }
+    }
+
+    private void checkEmpty() {
+        this.isEmpty = false;
+        for (Object value : parameters) {
+            if (value != null) {
+                return;
+            }
+        }
+        for (Index index : parameterEquality) {
+            if (index != null) {
+                return;
+            }
+        }
+        this.isEmpty = tuples.isEmpty();
+    }
+
+    public boolean isEmpty() {
+        return isEmpty;
     }
 
     public String getQueryText() {
