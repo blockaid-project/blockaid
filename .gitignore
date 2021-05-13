@@ -3,3 +3,4 @@ target
 .attach_pid*
 *~
 .*.s??
+.metadata

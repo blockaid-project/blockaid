@@ -10,7 +10,8 @@ public class PrivacyQueryFactory {
             StripOrderBy.INSTANCE,
             StripUnaryOpSubquery.INSTANCE,
             DesugarLeftJoinIntoInner.INSTANCE,
-            DesugarLeftJoinIntoUnion.INSTANCE
+            DesugarLeftJoinIntoUnion.INSTANCE,
+            StripSum.INSTANCE,
     };
 
     public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,

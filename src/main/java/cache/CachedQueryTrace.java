@@ -60,6 +60,8 @@ public class CachedQueryTrace {
                 }
                 usedEntries.remove(usedEntries.size() - 1);
             }
+
+            entries.previous();
             return false;
         }
 

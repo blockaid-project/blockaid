@@ -94,18 +94,18 @@ public class PrivacyDriverDiasporaMySQLTest {
 //                    }
 //                }
 
-//                {
-//                    final String query3 = "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = ? LIMIT ?";
-//                    try (PreparedStatement stmt = conn.prepareStatement(query3)) {
-//                        stmt.setInt(1, 45000001);
-//                        stmt.setInt(2, 1);
-//                        stmt.execute();
-//                        try (ResultSet rs = stmt.getResultSet()) {
-//                            while (rs.next()) {
-//                            }
-//                        }
-//                    }
-//                }
+                {
+                    final String query3 = "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = ? LIMIT ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(query3)) {
+                        stmt.setInt(1, 45000001);
+                        stmt.setInt(2, 1);
+                        stmt.execute();
+                        try (ResultSet rs = stmt.getResultSet()) {
+                            while (rs.next()) {
+                            }
+                        }
+                    }
+                }
 //                {
 //                    final String query4 = "SELECT  `roles`.* FROM `roles` WHERE `roles`.`person_id` = ? LIMIT ?";
 //                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
@@ -132,10 +132,9 @@ public class PrivacyDriverDiasporaMySQLTest {
 //                }
 
                 {
-                    final String query4 = "SELECT COUNT(*) FROM (SELECT DISTINCT photos.* FROM `photos` LEFT OUTER JOIN share_visibilities ON share_visibilities.shareable_id = photos.id AND share_visibilities.shareable_type = 'Photo' WHERE `photos`.`author_id` = ? AND (`share_visibilities`.`user_id` = 45000001 OR `photos`.`public` = 1) AND (photos.created_at < '2021-05-04 04:12:12.480692') AND `photos`.`pending` = ? ORDER BY photos.created_at DESC, created_at DESC) subquery_for_count ";
+                    final String query4 = "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = ?";
                     try (PreparedStatement stmt = conn.prepareStatement(query4)) {
-                        stmt.setInt(1, 26000034);
-                        stmt.setBoolean(2, false);
+                        stmt.setInt(1, 26000001);
                         stmt.execute();
                         try (ResultSet rs = stmt.getResultSet()) {
                             while (rs.next()) {

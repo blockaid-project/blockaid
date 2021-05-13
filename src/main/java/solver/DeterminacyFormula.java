@@ -19,7 +19,10 @@ public abstract class DeterminacyFormula {
     protected Instance inst1;
     protected Instance inst2;
     protected BoolExpr preparedExpr;
+
     protected String preparedExprSMT;
+    protected Map<String, Integer> preparedStringReplacement = new HashMap<>();
+    protected Set<String> preparedIntReplacement = new HashSet<>();
 
     protected DeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
         this.context = context;
@@ -33,7 +36,15 @@ public abstract class DeterminacyFormula {
         this.preparedExpr = expr;
         Solver solver = this.context.mkSolver();
         solver.add(this.preparedExpr);
-        this.preparedExprSMT = solver.toString();
+
+        String result = solver.toString();
+        result = replaceInts(result, new HashSet<>(), this.preparedIntReplacement, false);
+        result = replaceStrings(result, new HashMap<>(), this.preparedStringReplacement, false);
+
+        this.preparedIntReplacement = Collections.unmodifiableSet(this.preparedIntReplacement);
+        this.preparedStringReplacement = Collections.unmodifiableMap(this.preparedStringReplacement);
+
+        this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
     }
 
     protected BoolExpr generateTupleCheck(QueryTrace queries, Expr[] constants) {
@@ -83,33 +94,35 @@ public abstract class DeterminacyFormula {
     public synchronized String generateSMT(QueryTrace queries) {
 //        System.out.println("\t| Make SMT:");
         StringBuilder sb = new StringBuilder();
-        String smt;
         synchronized (context) {
             MyZ3Context myContext = (MyZ3Context) context;
             myContext.startTrackingConsts();
-            smt = makeFormulaSMT(queries, makeFormulaConstants(queries));
+            String smt = makeFormulaSMT(queries, makeFormulaConstants(queries));
             myContext.stopTrackingConsts();
 
             for (Expr constant : myContext.getConsts()) {
                 sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
             }
-        }
-        sb.append(this.preparedExprSMT);
-        sb.append(smt);
 
-        return replaceStrings(replaceInts(sb.toString()));
+            sb.append(smt);
+        }
+
+        String body = sb.toString();
+        body = replaceInts(body, this.preparedIntReplacement, new HashSet<>(), true);
+        body = replaceStrings(body, this.preparedStringReplacement, new HashMap<>(), true);
+        return this.preparedExprSMT + body;
     }
 
-    private static String replaceInts(String smt) {
-        Set<String> ints = new HashSet<>();
-
+    private static String replaceInts(String smt, Set<String> existingInts, Set<String> newInts, boolean finishUp) {
         java.util.regex.Pattern pattern = Pattern.compile("\\(- (\\d+)\\)");
         Matcher matcher = pattern.matcher(smt);
         StringBuffer body1 = new StringBuffer();
         while (matcher.find()) {
             matcher.appendReplacement(body1, "");
-            String s = matcher.group(1);
-            ints.add("-" + s);
+            String s = "-" + matcher.group(1);
+            if (!existingInts.contains(s)) {
+                newInts.add(s);
+            }
             body1.append(" int!-").append(s);
         }
         matcher.appendTail(body1);
@@ -120,54 +133,65 @@ public abstract class DeterminacyFormula {
         while (matcher.find()) {
             matcher.appendReplacement(body2, "");
             String s = matcher.group(1);
-            ints.add(s);
+            if (!existingInts.contains(s)) {
+                newInts.add(s);
+            }
             body2.append(" int!").append(s);
         }
         matcher.appendTail(body2);
 
-        StringBuilder out = new StringBuilder("(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)");
-        for (String i : ints) {
+        StringBuilder out = new StringBuilder();
+        for (String i : newInts) {
             out.append("(declare-fun int!").append(i).append(" () INT)\n");
         }
-        out.append("(assert (distinct");
-        for (String i : ints) {
-            out.append(" int!").append(i);
+        if (finishUp) {
+            out.append("(assert (distinct");
+            for (String i : existingInts) { out.append(" int!").append(i); }
+            for (String i : newInts) { out.append(" int!").append(i); }
+            out.append("))\n");
         }
-        out.append("))\n").append(body2);
+        out.append(body2);
 
         String transformed = out.toString();
-        return transformed.replaceAll("<", "lt").replaceAll("Int", "INT");
+        return transformed.replaceAll("<", "lt").replaceAll("\\(>", "(gt").replaceAll("Int", "INT");
     }
 
-    private static String replaceStrings(String smt) {
-        Map<String, Integer> replacement = new HashMap<>();
-
+    private static String replaceStrings(String smt, Map<String, Integer> existingRep, Map<String, Integer> newRep, boolean finishUp) {
         java.util.regex.Pattern pattern = Pattern.compile("\"([^\"]*)\"");
         Matcher matcher = pattern.matcher(smt);
         StringBuffer body = new StringBuffer();
+        int nextId = existingRep.size();
         while (matcher.find()) {
             matcher.appendReplacement(body, "");
             String s = matcher.group(1);
-            if (!replacement.containsKey(s)) {
-                replacement.put(s, replacement.size());
+            Integer rep = existingRep.get(s);
+            if (rep == null) { rep = newRep.get(s); }
+            if (rep == null) {
+                newRep.put(s, nextId);
+                rep = nextId;
+                nextId += 1;
             }
-            body.append("string!").append(replacement.get(s));
+            body.append("string!").append(rep);
         }
         matcher.appendTail(body);
 
-        StringBuilder out = new StringBuilder("(declare-sort STRING 0)\n");
-        for (Map.Entry<String, Integer> entry : replacement.entrySet()) {
+        StringBuilder out = new StringBuilder();
+        for (Map.Entry<String, Integer> entry : newRep.entrySet()) {
             out.append("(declare-fun string!").append(entry.getValue()).append(" () STRING)");
             if (entry.getKey().length() < 10) {
                 out.append("; ").append(entry.getKey());
             }
             out.append("\n");
         }
-        out.append("(assert (distinct");
-        for (int i = 0; i < replacement.size(); ++i) {
-            out.append(" string!").append(i);
+
+        if (finishUp) {
+            out.append("(assert (distinct");
+            for (int i = 0; i < existingRep.size() + newRep.size(); ++i) {
+                out.append(" string!").append(i);
+            }
+            out.append("))\n");
         }
-        out.append("))\n").append(body);
+        out.append(body);
 
         return out.toString().replaceAll("String", "STRING");
     }

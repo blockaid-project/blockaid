@@ -23,10 +23,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class QueryChecker {
-    public static boolean ENABLE_CACHING = true;
+    public static boolean ENABLE_CACHING = false;
     public static boolean ENABLE_PRECHECK = true;
     public static boolean UNNAMED_EQUALITY = true;
 
+    private static final boolean PRINT_FORMULAS = false;
     private static final String FORMULA_DIR = "/home/ubuntu/scratch/formulas";
 
     private enum FastCheckDecision {
@@ -35,7 +36,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 15000; // ms
+    public static long SOLVE_TIMEOUT = 20000; // ms
 
     private ArrayList<Policy> policySet;
     private List<Set<String>> preapprovedSets;
@@ -250,34 +251,42 @@ public class QueryChecker {
         List<SMTExecutor> executors = new ArrayList<>();
 
         // fast check
+        long startTime = System.currentTimeMillis();
         String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
+        System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
         executors.add(new Z3Executor(fastCheckSMT, latch, false, true, "z3_fast"));
         executors.add(new VampireLrsExecutor(fastCheckSMT, latch, false, true, "vampire_lrs_fast"));
-        executors.add(new VampireOttExecutor(fastCheckSMT, latch, false, true, "vampire_ott_fast"));
-        executors.add(new VampireDisExecutor(fastCheckSMT, latch, false, true, "vampire_dis_fast"));
+//        executors.add(new VampireOttExecutor(fastCheckSMT, latch, false, true, "vampire_ott_fast"));
+//        executors.add(new VampireDisExecutor(fastCheckSMT, latch, false, true, "vampire_dis_fast"));
 
-        try {
-            Files.write(Paths.get(FORMULA_DIR + "/fast_unsat_" + queries.size() + ".smt2"),
-                    fastCheckSMT.getBytes());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        if (PRINT_FORMULAS) {
+            try {
+                Files.write(Paths.get(FORMULA_DIR + "/fast_unsat_" + queries.size() + ".smt2"),
+                        fastCheckSMT.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
 
         // regular check
+        startTime = System.currentTimeMillis();
         String regularSMT = this.determinacyFormula.generateSMT(queries);
+        System.out.println("\t| Make regular:\t" + (System.currentTimeMillis() - startTime));
 //        executors.add(new Z3Executor(regularSMT, latch, true, true));
 //        executors.add(new VampireCascExecutor(regularSMT, latch, true, true));
 //        executors.add(new VampireFMBExecutor(regularSMT, latch, true, true));
         executors.add(new CVC4Executor(regularSMT, latch, true, true, "cvc4"));
 
-        try {
-            Files.write(Paths.get(FORMULA_DIR + "/regular_" + queries.size() + ".smt2"),
-                    regularSMT.getBytes());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        if (PRINT_FORMULAS) {
+            try {
+                Files.write(Paths.get(FORMULA_DIR + "/regular_" + queries.size() + ".smt2"),
+                        regularSMT.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
 
-        final long startTime = System.currentTimeMillis();
+        startTime = System.currentTimeMillis();
         runExecutors(executors, latch);
         final long solverDuration = System.currentTimeMillis() - startTime;
 
@@ -314,11 +323,8 @@ public class QueryChecker {
         synchronized (this.unsatCoreDeterminacyFormula) {
             smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
             equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
-//            executors.add(new Z3Executor(smt, latch));
             executors.add(new CVC4Executor(smt, latch));
             try {
-//                String query = queries.getCurrentQuery().getQuery().parsedSql.getParsedSql();
-//                query = query.substring(0, Math.min(query.length(), 80));
                 PrintWriter pw = new PrintWriter(FORMULA_DIR + "/gen_" + queries.size() + ".smt2");
                 pw.println("(set-option :produce-unsat-cores true)");
                 pw.println(smt);
@@ -331,11 +337,8 @@ public class QueryChecker {
 
             smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
             equalityMapEliminate = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
-//            executors.add(new Z3Executor(smt, latch));
             executors.add(new CVC4Executor(smt, latch));
             try {
-//                String query = queries.getCurrentQuery().getQuery().parsedSql.getParsedSql();
-//                query = query.substring(0, Math.min(query.length(), 80));
                 PrintWriter pw = new PrintWriter(FORMULA_DIR + "/gen_elim_" + queries.size() + ".smt2");
                 pw.println("(set-option :produce-unsat-cores true)");
                 pw.println(smt);
@@ -362,6 +365,7 @@ public class QueryChecker {
             if (core != null && (minCore == null || minCore.length >= core.length)) {
                 minCore = core;
                 usedEqualityMap = (i < 1 ? equalityMap : equalityMapEliminate);
+//                usedEqualityMap = equalityMapEliminate;
             }
         }
 
