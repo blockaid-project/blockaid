@@ -4,14 +4,16 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Sort;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class UnionQuery extends Query {
-    public Query[] queries;
-    private Sort[] headTypes;
+    public final Query[] queries;
+    private final Sort[] headTypes;
 
     public UnionQuery(Query... queries) {
         super();
 
-        assert queries.length > 0;
+        checkArgument(queries.length > 0);
 
         this.queries = queries;
         this.headTypes = this.queries[0].headTypes();
@@ -23,11 +25,11 @@ public class UnionQuery extends Query {
     }
 
     @Override
-    public BoolExpr doesContain(Context context, Instance instance, Tuple tuple) {
+    public BoolExpr doesContain(Instance instance, Tuple tuple) {
         BoolExpr[] exprs = new BoolExpr[queries.length];
         for (int i = 0; i < queries.length; ++i) {
-            exprs[i] = queries[i].doesContain(context, instance, tuple);
+            exprs[i] = queries[i].doesContain(instance, tuple);
         }
-        return context.mkOr(exprs);
+        return instance.getContext().mkOr(exprs);
     }
 }

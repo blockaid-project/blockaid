@@ -21,31 +21,33 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PrivacyConnection implements Connection {
-  private Connection direct_connection;
-  private PrivacyParser parser;
+  private final Connection direct_connection;
+  private final PrivacyParser parser;
   private final QueryChecker query_checker;
-  private ArrayList<Policy> policy_list;
-  public QueryTrace current_trace;
-  private SchemaPlusWithKey schema;
+  private final ArrayList<Policy> policy_list;
+  private QueryTrace current_trace;
+  private final SchemaPlusWithKey schema;
 
+  /**
+   * Takes ownership of direct_info.
+   */
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
     this.direct_connection = direct_connection;
-    Properties info = direct_info;
-    info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
+    direct_info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
     QueryContext ctx;
     try {
-      ctx = new QueryContext(info);
+      ctx = new QueryContext(direct_info);
     } catch (PrivacyException e){
       throw new SQLException(e.getMessage(), e);
     }
     this.parser = new ParserFactory(ctx).getParser();
 
-    String database_name = info.getProperty("database_name", "PUBLIC");
+    String database_name = direct_info.getProperty("database_name", "PUBLIC");
     SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema(database_name);
 
-    String deps = info.getProperty("deps");
-    String pks = info.getProperty("pk");
-    String fks = info.getProperty("fk");
+    String deps = direct_info.getProperty("deps");
+    String pks = direct_info.getProperty("pk");
+    String fks = direct_info.getProperty("fk");
 
     Map<String, List<String>> primaryKeys = new HashMap<>();
     if (!pks.isEmpty()) {
@@ -72,14 +74,15 @@ public class PrivacyConnection implements Connection {
     schema = new SchemaPlusWithKey(schemaPlus, primaryKeys, foreignKeys);
 
     this.policy_list = new ArrayList<>();
-    set_policy(info, ctx);
+    set_policy(direct_info, ctx);
 
     this.query_checker = QueryChecker.getInstance(
+            direct_info,
             this.policy_list,
             this.schema,
-            deps.isEmpty() ? new String[0] : deps.split("\n"),
-            pks.isEmpty() ? new String[0] : pks.split("\n"),
-            fks.isEmpty() ? new String[0] : fks.split("\n")
+            deps.lines().toArray(String[]::new),
+            pks.lines().toArray(String[]::new),
+            fks.lines().toArray(String[]::new)
     );
     current_trace = new QueryTrace();
   }

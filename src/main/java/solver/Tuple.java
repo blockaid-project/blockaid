@@ -6,27 +6,32 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class Tuple extends ArrayList<Expr> {
-    public Tuple(int i) {
-        super(i);
-    }
+    private final Schema schema;
 
-    public Tuple() {
+    public Tuple(Schema schema) {
         super();
+        this.schema = schema;
     }
 
-    public Tuple(Collection<? extends Expr> collection) {
-        super(collection);
-    }
-
-    public Tuple(Expr... exprs) {
+    public Tuple(Schema schema, Expr... exprs) {
         super(Arrays.asList(exprs));
+        this.schema = schema;
     }
 
-    BoolExpr tupleEqual(Context context, Tuple other) {
-        assert size() == other.size();
+    public Schema getSchema() {
+        return schema;
+    }
+
+    BoolExpr tupleEqual(Tuple other) {
+        checkArgument(getSchema() == other.getSchema(), "tuple schemas differ");
+        checkArgument(size() == other.size(),
+                "tuple sizes are different: %s vs %s", size(), other.size());
+
+        Context context = schema.getContext();
         if (isEmpty()) {
             return context.mkTrue();
         }

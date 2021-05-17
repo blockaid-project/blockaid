@@ -41,7 +41,9 @@ public class StripUnaryOpSubquery implements Preprocessor {
         }
 
         // Only handling the case where this stripping doesn't remove any parameters.
-        assert sqlSelect.accept(DynParamCounter.INSTANCE) == parameters.length;
+        if (sqlSelect.accept(DynParamCounter.INSTANCE) != parameters.length) {
+            return Optional.empty();
+        };
 
         ParserResult newPR = new ParserResult(sqlSelect.toString(), sqlSelect.getKind(), sqlSelect,
                 false, false) {};

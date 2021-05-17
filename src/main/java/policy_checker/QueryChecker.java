@@ -1,9 +1,6 @@
 package policy_checker;
 
 import cache.*;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.microsoft.z3.*;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
@@ -17,18 +14,20 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.PrintWriter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class QueryChecker {
-    public static boolean ENABLE_CACHING = false;
+    public static boolean ENABLE_CACHING = true;
     public static boolean ENABLE_PRECHECK = true;
     public static boolean UNNAMED_EQUALITY = true;
 
     private static final boolean PRINT_FORMULAS = false;
     private static final String FORMULA_DIR = "/home/ubuntu/scratch/formulas";
+
+    private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
     private enum FastCheckDecision {
         ALLOW,
@@ -38,44 +37,30 @@ public class QueryChecker {
 
     public static long SOLVE_TIMEOUT = 20000; // ms
 
-    private ArrayList<Policy> policySet;
-    private List<Set<String>> preapprovedSets;
-    private LoadingCache<PrivacyQueryCoarseWrapper, FastCheckDecision> policyDecisionCacheCoarse;
-    private TraceCache policyDecisionCacheFine;
-    private Context context;
-    private Schema schema;
+    private final Schema schema;
+    private final ArrayList<Policy> policySet;
     private final DeterminacyFormula fastCheckDeterminacyFormula;
     private final DeterminacyFormula determinacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormulaEliminate;
+    private final DecisionCache cache;
 
-    private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
+    /**
+     * For sharing decision cache among `QueryChecker` objects for the same database / policy.
+     */
+    private static final ConcurrentHashMap<Properties, DecisionCache> decisionCaches = new ConcurrentHashMap<>();
 
-    private static QueryChecker instance = null;
-
-    public static QueryChecker getInstance(ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps, String[] uks, String[] fks) {
-        if (instance == null) {
-            instance = new QueryChecker(policySet, rawSchema, deps, uks, fks);
-        }
-        return instance;
+    public static QueryChecker getInstance(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
+                                           String[] deps, String[] uks, String[] fks) {
+        return new QueryChecker(info, policySet, rawSchema, deps, uks, fks);
     }
 
     // TODO read pk/fk from schema instead
-    private QueryChecker(ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps, String[] uks, String[] fks)
+    private QueryChecker(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps,
+                         String[] uks, String[] fks)
     {
         this.policySet = policySet;
-        this.policyDecisionCacheCoarse = CacheBuilder.newBuilder()
-                .maximumSize(ENABLE_CACHING ? Integer.MAX_VALUE : 0)
-                .build(new CacheLoader<PrivacyQueryCoarseWrapper, FastCheckDecision>() {
-                    @Override
-                    public FastCheckDecision load(final PrivacyQueryCoarseWrapper query) {
-                        return doPrecheckPolicy(query.privacyQuery);
-                    }
-                });
-
-        this.policyDecisionCacheFine = new TraceCache();
-
-        this.context = new MyZ3Context();
+        MyZ3Context context = new MyZ3Context();
 
         Map<String, List<Column>> relations = new HashMap<>();
         for (String tableName : rawSchema.schema.getTableNames()) {
@@ -108,103 +93,15 @@ public class QueryChecker {
             dependencies.add(new ImportedDependency(dep));
         }
 
-        this.schema = new Schema(relations, dependencies);
+        this.schema = new Schema(context, relations, dependencies);
         List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
-        this.determinacyFormula = new BasicDeterminacyFormula(context, schema, policyQueries);
-        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(context, schema, policyQueries);
-        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(context, schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
-        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(context, schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
+        this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
+        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
+        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
+        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
 
-        if (ENABLE_PRECHECK) {
-            this.preapprovedSets = new ArrayList<>();
-            buildPreapprovedSets();
-        }
-    }
-
-    private void buildPreapprovedSets() {
-        class Entry {
-            private BoolExpr predicate;
-            private Set<String> columns;
-
-            public Entry(BoolExpr predicate, Set<String> columns) {
-                this.predicate = predicate;
-                this.columns = columns;
-            }
-        }
-
-        Map<Set<Integer>, Entry> previousPass = new HashMap<>();
-        previousPass.put(Collections.emptySet(), new Entry(context.mkBool(false), getAllColumns()));
-
-        Map<Set<Integer>, Entry> currentPass;
-
-        for (int i = 1; i <= policySet.size() && i <= PREAPPROVE_MAX_PASSES && !previousPass.isEmpty(); ++i) {
-            currentPass = new HashMap<>();
-
-            Set<Set<Integer>> remove = new HashSet<>();
-            for (Map.Entry<Set<Integer>, Entry> e : previousPass.entrySet()) {
-                Set<Integer> prevSet = e.getKey();
-                Entry entry = e.getValue();
-                BoolExpr prevPredicate = entry.predicate;
-                Set<String> prevColumns = entry.columns;
-
-                for (int j = 0; j < policySet.size(); ++j) {
-                    if (prevSet.contains(j)) {
-                        continue;
-                    }
-
-                    Set<Integer> nextSet = new HashSet<>(prevSet);
-                    nextSet.add(j);
-
-                    if (prevPredicate == null) {
-                        // previous set was added to preapprovedSet
-                        remove.add(nextSet);
-                    } else if (!currentPass.containsKey(nextSet)) {
-                        Set<String> nextColumns = setIntersection(prevColumns, policySet.get(j).getProjectColumns());
-
-                        if (!nextColumns.isEmpty()) {
-                            BoolExpr nextPredicate = context.mkOr(prevPredicate, policySet.get(j).getPredicate(context, schema));
-
-                            Solver solver = context.mkSolver();
-                            solver.add(context.mkNot(nextPredicate));
-                            Status q = solver.check();
-                            boolean predicateResult = (q == Status.UNSATISFIABLE);
-                            currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
-                        }
-                    }
-                }
-            }
-
-            for (Set<Integer> s : remove) {
-                currentPass.remove(s);
-            }
-
-            for (Map.Entry<Set<Integer>, Entry> entry : currentPass.entrySet()) {
-                if (entry.getValue().predicate == null) {
-                    preapprovedSets.add(entry.getValue().columns);
-                }
-            }
-
-            previousPass = currentPass;
-        }
-    }
-
-    private Set<String> getAllColumns() {
-        Set<String> r = new HashSet<>();
-        for (Policy policy : policySet) {
-            r.addAll(policy.getProjectColumns());
-        }
-        return r;
-    }
-
-    private <T> Set<T> setIntersection(Set<T> s1, Set<T> s2) {
-        Set<T> sr = new HashSet<>(s1);
-        for (T x : s1) {
-            if (!s2.contains(x)) {
-                sr.remove(x);
-            }
-        }
-
-        return sr;
+        // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
+        this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
     }
 
     private boolean containsAll(Collection<String> set, Collection<String> query) {
@@ -216,7 +113,7 @@ public class QueryChecker {
         List<String> thetaColumns = query.getThetaColumns();
         projectColumns.addAll(thetaColumns);
 
-        for (Set<String> s : preapprovedSets) {
+        for (Set<String> s : cache.preapprovedSets) {
             if (containsAll(s, projectColumns)) {
                 return true;
             }
@@ -397,33 +294,28 @@ public class QueryChecker {
         System.out.println("transformed: "
                 + currQuery.parsedSql.getParsedSql()
                 + "\t" + currQuery.parameters);
-        try {
-            if (ENABLE_PRECHECK) {
-                FastCheckDecision precheckResult = policyDecisionCacheCoarse.get(new PrivacyQueryCoarseWrapper(currQuery));
-                if (precheckResult == FastCheckDecision.ALLOW) {
-                    return true;
-                }
-                if (precheckResult == FastCheckDecision.DENY && queries.size() == 1) {
-                    // fast check deny will reject queries that depend on past data
-                    return false;
-                }
+        if (ENABLE_PRECHECK) {
+            FastCheckDecision precheckResult = doPrecheckPolicy(currQuery);
+            if (precheckResult == FastCheckDecision.ALLOW) {
+                return true;
             }
-            if (ENABLE_CACHING) {
-                Boolean cacheResult = policyDecisionCacheFine.checkCache(queries);
-                if (cacheResult != null) {
-                    return cacheResult;
-                }
+            if (precheckResult == FastCheckDecision.DENY && queries.size() == 1) {
+                // fast check deny will reject queries that depend on past data
+                return false;
             }
-            // todo: should we be caching timeout/unknown?
-            boolean policyResult = doCheckPolicy(queries);
-            if (ENABLE_CACHING) {
-//                new Thread(() -> cacheDecision(queries, policyResult)).run();
-                cacheDecision(queries, policyResult);
-            }
-            return policyResult;
-        } catch (ExecutionException e) {
-            throw propagate(e);
         }
+        if (ENABLE_CACHING) {
+            Boolean cacheResult = cache.policyDecisionCacheFine.checkCache(queries);
+            if (cacheResult != null) {
+                return cacheResult;
+            }
+        }
+        // todo: should we be caching timeout/unknown?
+        boolean policyResult = doCheckPolicy(queries);
+        if (ENABLE_CACHING) {
+            cacheDecision(queries, policyResult);
+        }
+        return policyResult;
     }
 
     private void cacheDecision(QueryTrace queries, boolean policyResult) {
@@ -541,7 +433,7 @@ public class QueryChecker {
                 }
             }
             System.err.println(cacheTrace);
-            policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
+            cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
         } else {
             System.err.println("no core, using value match");
             // no unsat core found (or not unsat) - all queries all values no equality
@@ -564,38 +456,109 @@ public class QueryChecker {
                 }
             }
             System.err.println(cacheTrace);
-            policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
+            cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
         }
     }
 
-    private RuntimeException propagate(Throwable e) {
-        if (e instanceof RuntimeException) {
-            throw (RuntimeException) e;
-        } else if (e instanceof Error) {
-            throw (Error) e;
-        } else {
-            throw new RuntimeException(e.getMessage());
-        }
-    }
+    // The fields of `DecisionCache` are shared between `QueryChecker` objects for the same database & policy.
+    private static class DecisionCache {
+        final List<Set<String>> preapprovedSets;
+        final TraceCache policyDecisionCacheFine;
 
-    private static class PrivacyQueryCoarseWrapper {
-        private PrivacyQuery privacyQuery;
-
-        public PrivacyQueryCoarseWrapper(PrivacyQuery privacyQuery) {
-            this.privacyQuery = privacyQuery;
+        public DecisionCache(Schema schema, ArrayList<Policy> policySet) {
+            this.preapprovedSets = ENABLE_PRECHECK ? buildPreapprovedSets(schema, policySet) : null;
+            this.policyDecisionCacheFine = new TraceCache();
         }
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            PrivacyQueryCoarseWrapper query = (PrivacyQueryCoarseWrapper) o;
-            return privacyQuery.parsedSql.equals(query.privacyQuery.parsedSql);
+        private static List<Set<String>> buildPreapprovedSets(Schema schema, ArrayList<Policy> policySet) {
+            class Entry {
+                private final BoolExpr predicate;
+                private final Set<String> columns;
+
+                public Entry(BoolExpr predicate, Set<String> columns) {
+                    this.predicate = predicate;
+                    this.columns = columns;
+                }
+            }
+
+            MyZ3Context ctx = schema.getContext();
+
+            List<Set<String>> preapprovedSets = new ArrayList<>();
+            Map<Set<Integer>, Entry> previousPass = new HashMap<>();
+            previousPass.put(Collections.emptySet(), new Entry(ctx.mkBool(false), getAllColumns(policySet)));
+
+            Map<Set<Integer>, Entry> currentPass;
+
+            for (int i = 1; i <= policySet.size() && i <= PREAPPROVE_MAX_PASSES && !previousPass.isEmpty(); ++i) {
+                currentPass = new HashMap<>();
+
+                Set<Set<Integer>> remove = new HashSet<>();
+                for (Map.Entry<Set<Integer>, Entry> e : previousPass.entrySet()) {
+                    Set<Integer> prevSet = e.getKey();
+                    Entry entry = e.getValue();
+                    BoolExpr prevPredicate = entry.predicate;
+                    Set<String> prevColumns = entry.columns;
+
+                    for (int j = 0; j < policySet.size(); ++j) {
+                        if (prevSet.contains(j)) {
+                            continue;
+                        }
+
+                        Set<Integer> nextSet = new HashSet<>(prevSet);
+                        nextSet.add(j);
+
+                        if (prevPredicate == null) {
+                            // previous set was added to preapprovedSet
+                            remove.add(nextSet);
+                        } else if (!currentPass.containsKey(nextSet)) {
+                            Set<String> nextColumns = setIntersection(prevColumns, policySet.get(j).getProjectColumns());
+
+                            if (!nextColumns.isEmpty()) {
+                                BoolExpr nextPredicate = ctx.mkOr(prevPredicate, policySet.get(j).getPredicate(schema));
+
+                                Solver solver = ctx.mkSolver();
+                                solver.add(ctx.mkNot(nextPredicate));
+                                Status q = solver.check();
+                                boolean predicateResult = (q == Status.UNSATISFIABLE);
+                                currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
+                            }
+                        }
+                    }
+                }
+
+                for (Set<Integer> s : remove) {
+                    currentPass.remove(s);
+                }
+
+                for (Map.Entry<Set<Integer>, Entry> entry : currentPass.entrySet()) {
+                    if (entry.getValue().predicate == null) {
+                        preapprovedSets.add(entry.getValue().columns);
+                    }
+                }
+
+                previousPass = currentPass;
+            }
+
+            return preapprovedSets;
         }
 
-        @Override
-        public int hashCode() {
-            return Objects.hash(privacyQuery.parsedSql);
+        private static <T> Set<T> setIntersection(Set<T> s1, Set<T> s2) {
+            Set<T> sr = new HashSet<>(s1);
+            for (T x : s1) {
+                if (!s2.contains(x)) {
+                    sr.remove(x);
+                }
+            }
+
+            return sr;
+        }
+
+        private static Set<String> getAllColumns(ArrayList<Policy> policySet) {
+            Set<String> r = new HashSet<>();
+            for (Policy policy : policySet) {
+                r.addAll(policy.getProjectColumns());
+            }
+            return r;
         }
     }
 }

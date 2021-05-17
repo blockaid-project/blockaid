@@ -1,12 +1,13 @@
 package sql;
 
-import cache.QueryTrace;
 import org.apache.calcite.sql.*;
 import solver.Query;
 import solver.Schema;
 import solver.UnionQuery;
 
 import java.util.*;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class PrivacyQueryUnion extends PrivacyQuery {
     private final List<PrivacyQuery> queries;
@@ -17,7 +18,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema, List<Object> parameters,
                              List<String> paramNames, Map<Integer, String> reverseConstMap) {
         super(parsedSql, parameters, paramNames);
-        assert parsedSql.getSqlNode() instanceof SqlBasicCall;
+        checkArgument(parsedSql.getSqlNode() instanceof SqlBasicCall);
         SqlBasicCall unionNode = (SqlBasicCall) parsedSql.getSqlNode();
         queries = new ArrayList<>();
         int paramOffset = 0;
@@ -87,7 +88,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
         return bitmap;
     }
 
-    private class UnionPartParserResult extends ParserResult {
+    private static class UnionPartParserResult extends ParserResult {
         private UnionPartParserResult(SqlNode node) {
             super(node.toString(), node.getKind(), node, false, false);
         }

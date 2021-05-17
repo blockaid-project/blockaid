@@ -17,16 +17,12 @@ import sql.SchemaPlusWithKey;
 import java.util.*;
 
 public class Policy {
-    private ParsedPSJ parsedPSJ;
-    private boolean useSuperset;
+    private final ParsedPSJ parsedPSJ;
+    private final boolean useSuperset;
 
     public Policy(QueryContext context, SchemaPlusWithKey schema, String sqlPolicy) {
         parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), schema, Collections.emptyList(), Collections.emptyList());
         useSuperset = false;
-    }
-
-    public boolean checkPolicySchema(){
-        return true;
     }
 
     private SqlNode parseSql(QueryContext context, String sql){
@@ -56,8 +52,8 @@ public class Policy {
         return new HashSet<>(parsedPSJ.getThetaColumns());
     }
 
-    public BoolExpr getPredicate(Context context, Schema schema) {
-        return parsedPSJ.getPredicate(context, schema);
+    public BoolExpr getPredicate(Schema schema) {
+        return parsedPSJ.getPredicate(schema);
     }
 
     public boolean checkApplicable(Set<String> projectColumns, Set<String> thetaColumns) {
@@ -69,11 +65,7 @@ public class Policy {
             return false;
         }
 
-        if (!useSuperset && !parsedPSJ.getThetaColumns().isEmpty() && !containsAny(thetaColumns, parsedPSJ.getThetaColumns())) {
-            return false;
-        }
-
-        return true;
+        return useSuperset || parsedPSJ.getThetaColumns().isEmpty() || containsAny(thetaColumns, parsedPSJ.getThetaColumns());
     }
 
     private boolean containsAll(Collection<String> set, Collection<String> query) {

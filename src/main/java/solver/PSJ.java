@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public abstract class PSJ extends Query {
     Schema schema;
     List<String> relations;
@@ -17,8 +19,8 @@ public abstract class PSJ extends Query {
         this.relations = relations;
     }
 
-    protected BoolExpr predicateGenerator(Context context, Tuple... tuples) {
-        return context.mkBool(true);
+    protected BoolExpr predicateGenerator(Tuple... tuples) {
+        return schema.getContext().mkBool(true);
     }
 
     protected abstract Tuple headSelector(Tuple... tuples);
@@ -34,12 +36,12 @@ public abstract class PSJ extends Query {
     }
 
     @Override
-    public BoolExpr doesContain(Context context, Instance instance, Tuple tuple) {
+    public BoolExpr doesContain(Instance instance, Tuple tuple) {
         // Returns a formula stating that tuple is in the output of this query on the instance.
-        Tuple[] symbolicTups = relations.stream().map(r -> schema.makeFreshTuple(context, r)).toArray(Tuple[]::new);
-        BoolExpr predicate = predicateGenerator(context, symbolicTups);
+        Tuple[] symbolicTups = relations.stream().map(r -> schema.makeFreshTuple(r)).toArray(Tuple[]::new);
+        BoolExpr predicate = predicateGenerator(symbolicTups);
         Tuple headSymTup = headSelector(symbolicTups);
-        assert headSymTup.size() == tuple.size();
+        checkArgument(headSymTup.size() == tuple.size());
 
         BoolExpr[] bodyExprs = new BoolExpr[relations.size()];
         for (int i = 0; i < relations.size(); ++i) {
@@ -47,6 +49,8 @@ public abstract class PSJ extends Query {
             Tuple tup = symbolicTups[i];
             bodyExprs[i] = instance.get(relationName).apply(tup.toArray(new Expr[0]));
         }
+
+        Context context = schema.getContext();
         BoolExpr bodyFormula = context.mkAnd(bodyExprs);
         Set<Expr> existentialVars = new HashSet<>();
         for (Tuple tup : symbolicTups) {

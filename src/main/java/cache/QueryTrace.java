@@ -4,6 +4,8 @@ import sql.PrivacyQuery;
 
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkState;
+
 public class QueryTrace {
     // order of past queries is irrelevant, so using a map for cache lookup
     Map<String, List<QueryTraceEntry>> queries = new HashMap<>();
@@ -48,7 +50,7 @@ public class QueryTrace {
     }
 
     public void endQuery(List<List<Object>> tuples) {
-        assert currentQuery != null;
+        checkState(currentQuery != null);
         queries.get(currentQuery.query.parsedSql.getParsedSql()).set(queries.get(currentQuery.query.parsedSql.getParsedSql()).size() - 1, new QueryTraceEntry(currentQuery, tuples));
         currentQuery = null;
     }

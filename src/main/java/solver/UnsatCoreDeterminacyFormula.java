@@ -14,21 +14,21 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     private final boolean eliminateIrrelevant;
     private final Set<String> relevantAttributes;
 
-    public UnsatCoreDeterminacyFormula(Context context, Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
-        super(context, schema, views);
+    public UnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
+        super(schema, (Instance inst1, Instance inst2) -> {
+            List<BoolExpr> clauses = new ArrayList<>();
+            if (inst1.constraint != null) {
+                clauses.add(inst1.constraint);
+            }
+            if (inst2.constraint != null) {
+                clauses.add(inst2.constraint);
+            }
+            for (Query v : views) {
+                clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
+            }
+            return schema.getContext().mkAnd(clauses.toArray(new BoolExpr[0]));
+        });
 
-        List<BoolExpr> clauses = new ArrayList<>();
-        if (inst1.constraint != null) {
-            clauses.add(inst1.constraint);
-        }
-        if (inst2.constraint != null) {
-            clauses.add(inst2.constraint);
-        }
-        assert views.size() > 0;
-        for (Query v : views) {
-            clauses.add(v.apply(context, inst1).equalsExpr(context, v.apply(context, inst2)));
-        }
-        setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
         this.unnamedEquality = unnamedEquality;
         this.eliminateIrrelevant = eliminateIrrelevant;
         this.relevantAttributes = new HashSet<>();
@@ -56,11 +56,11 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
                 List<String> paramNames = queryTraceEntry.getQuery().paramNames;
                 List<Object> parameters = queryTraceEntry.getQuery().parameters;
-                Tuple paramConstants = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.size()));
+                Tuple paramConstants = new Tuple(schema, Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.size()));
                 constantsOffset += parameters.size();
 
-                Relation r1 = query.apply(context, inst1);
-                Relation r2 = query.apply(context, inst2);
+                Relation r1 = query.apply(inst1);
+                Relation r2 = query.apply(inst2);
                 if (!queryTraceEntry.getTuples().isEmpty() || queryTraceEntry == queries.getCurrentQuery()) {
                     for (int i = 0; i < parameters.size(); ++i) {
                         if (paramNames.get(i).equals("?")) {
@@ -83,7 +83,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                     List<String> attributeNames = queryTraceEntry.getQuery().getProjectColumns();
                     int attrNumber = 0;
                     for (List<Object> tuple : queryTraceEntry.getTuples()) {
-                        Tuple tupleConstant = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + numAttrs));
+                        Tuple tupleConstant = new Tuple(schema, Arrays.copyOfRange(constants, constantsOffset, constantsOffset + numAttrs));
                         tupleConstants.add(tupleConstant);
                         for (int i = 0; i < tuple.size(); ++i) {
                             Object curr = tuple.get(i);
@@ -103,7 +103,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                         constantsOffset += numAttrs;
                     }
 
-                    exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContain(context, tupleConstants), r2.doesContain(context, tupleConstants)));
+                    exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContain(tupleConstants), r2.doesContain(tupleConstants)));
                 }
 
                 ++queryNumber;
@@ -148,11 +148,6 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Solver makeSolver(QueryTrace queries) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Expr[] makeFormulaConstants(QueryTrace queries) {
         List<Expr> exprs = new ArrayList<>();
         int queryNumber = 0;
@@ -182,7 +177,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     @Override
     public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema, "cq_p", 0);
-        return context.mkNot(query.apply(context, inst1).equalsExpr(context, query.apply(context, inst2)));
+        return context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2)));
     }
 
     @Override

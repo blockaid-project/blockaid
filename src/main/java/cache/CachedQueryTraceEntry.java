@@ -1,10 +1,10 @@
 package cache;
 
-import solver.StringUtil;
-
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static com.google.common.base.Preconditions.checkState;
 
 public class CachedQueryTraceEntry {
     public static class Index {
@@ -43,14 +43,14 @@ public class CachedQueryTraceEntry {
         }
     }
 
-    private String queryText;
-    private boolean isCurrentQuery;
+    private final String queryText;
+    private final boolean isCurrentQuery;
     // exact value comparisons, null if value is irrelevant
-    private List<Object> parameters;
-    private List<List<Object>> tuples;
+    private final List<Object> parameters;
+    private final List<List<Object>> tuples;
     // equalities - using indices shared across entire CachedQueryTrace, null if no constraint
-    private List<Index> parameterEquality;
-    private List<List<Index>> tupleEquality;
+    private final List<Index> parameterEquality;
+    private final List<List<Index>> tupleEquality;
 
     private int maxEqualityNumber;
     private boolean isEmpty;
@@ -151,7 +151,8 @@ public class CachedQueryTraceEntry {
                 mappedIndices.put(equalityIndex, queryValue);
             }
         }
-        assert !cacheParamIter.hasNext() && !queryParamIter.hasNext() && !paramEqualityIter.hasNext();
+        checkState(!cacheParamIter.hasNext() && !queryParamIter.hasNext() && !paramEqualityIter.hasNext(),
+                "cacheParam, queryParam, paramEquality should have the same size");
         return true;
     }
 
@@ -174,11 +175,12 @@ public class CachedQueryTraceEntry {
                     tupleIter.set(mappedIndices.get(index));
                 }
             }
-            assert !tupleIter.hasNext() && !equalityIter.hasNext();
+            checkState(!tupleIter.hasNext() && !equalityIter.hasNext());
 
             tupleChecks.add(completeTuple);
         }
-        assert !cacheTupleIter.hasNext() && !tupleEqualityIter.hasNext();
+        checkState(!cacheTupleIter.hasNext() && !tupleEqualityIter.hasNext(),
+                "cacheTuple, tupleEquality must have the same size");
 
         return checkTuplesContained(tupleChecks.listIterator(), query.tuples);
     }
@@ -220,14 +222,14 @@ public class CachedQueryTraceEntry {
                 return false;
             }
         }
-        assert !cacheTupleIter.hasNext() && !queryTupleIter.hasNext();
+        checkState(!cacheTupleIter.hasNext() && !queryTupleIter.hasNext());
 
         return true;
     }
 
     @Override
     public String toString() {
-        StringBuffer out = new StringBuffer();
+        StringBuilder out = new StringBuilder();
         Pattern pattern = Pattern.compile("\\?");
         Matcher matcher = pattern.matcher(queryText);
         int i = 0;

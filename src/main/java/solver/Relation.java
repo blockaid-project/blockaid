@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.List;
 
 public class Relation {
-    // TODO(zhangwen): We can now remove the "context" argument from the methods, right?
     Context context;
     Function function;
     Sort[] signature;
@@ -37,7 +36,7 @@ public class Relation {
         return (BoolExpr) expr;
     }
 
-    public BoolExpr isContainedIn(Context context, Relation other) {
+    public BoolExpr isContainedIn(Relation other) {
         Expr[] syms = new Expr[signature.length];
         for (int i = 0; i < signature.length; ++i) {
             syms[i] = context.mkFreshConst("v", signature[i]);
@@ -54,15 +53,15 @@ public class Relation {
 //
 //    }
 
-    public BoolExpr doesContain(Context context, Relation other) {
-        return other.isContainedIn(context, this);
+    public BoolExpr doesContain(Relation other) {
+        return other.isContainedIn(this);
     }
 
-    public BoolExpr doesContain(Context context, Tuple other) {
+    public BoolExpr doesContain(Tuple other) {
         return this.apply(other.toArray(new Expr[0]));
     }
 
-    public BoolExpr doesContain(Context context, List<Tuple> other) {
+    public BoolExpr doesContain(List<Tuple> other) {
         if (other.size() == 0) {
             return context.mkTrue();
         }
@@ -73,7 +72,7 @@ public class Relation {
         return context.mkAnd(syms);
     }
 
-    public BoolExpr equalsExpr(Context context, Relation other) {
+    public BoolExpr equalsExpr(Relation other) {
         Expr[] syms = new Expr[signature.length];
         for (int i = 0; i < signature.length; ++i) {
             syms[i] = context.mkFreshConst("v", signature[i]);

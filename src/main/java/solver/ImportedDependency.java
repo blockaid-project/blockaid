@@ -16,7 +16,8 @@ public class ImportedDependency implements Dependency {
     }
 
     @Override
-    public BoolExpr apply(Context context, Instance instance) {
+    public BoolExpr apply(Instance instance) {
+        Context context = instance.getContext();
         List<Symbol> funcSymbols = new ArrayList<>();
         List<FuncDecl> funcDecls = new ArrayList<>();
         for (String constant : constants) {
@@ -25,7 +26,8 @@ public class ImportedDependency implements Dependency {
         }
         for (Map.Entry<String, Relation> e : instance.entrySet()) {
             Function function = e.getValue().function;
-            assert function instanceof Z3Function;
+            checkArgument(function instanceof Z3Function);
+            assert function instanceof Z3Function; // To make Intellij happy.
             FuncDecl funcDecl = ((Z3Function) function).functionDecl;
             funcSymbols.add(context.mkSymbol("!" + e.getKey()));
             funcDecls.add(funcDecl);
@@ -37,5 +39,8 @@ public class ImportedDependency implements Dependency {
                 funcSymbols.toArray(new Symbol[0]),
                 funcDecls.toArray(new FuncDecl[0])
         ));
+    }
+
+    private void checkArgument(boolean b) {
     }
 }

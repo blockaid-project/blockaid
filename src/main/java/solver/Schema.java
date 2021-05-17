@@ -8,19 +8,21 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Schema {
-    private Map<String, List<Column>> relations;
-    private List<Dependency> dependencies;
+    private final MyZ3Context context;
+    private final Map<String, List<Column>> relations;
+    private final List<Dependency> dependencies;
 
-    public Schema(Map<String, List<Column>> relations) {
-        this(relations, Collections.emptyList());
-    }
-
-    public Schema(Map<String, List<Column>> relations, List<Dependency> dependencies) {
+    public Schema(MyZ3Context context, Map<String, List<Column>> relations, List<Dependency> dependencies) {
+        this.context = context;
         this.relations = relations;
         this.dependencies = dependencies;
     }
 
-    public Instance makeFreshInstance(Context context) {
+    public MyZ3Context getContext() {
+        return context;
+    }
+
+    public Instance makeFreshInstance() {
         Instance instance = new Instance(this);
         List<BoolExpr> constraints = new ArrayList<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
@@ -32,14 +34,14 @@ public class Schema {
             instance.put(relationName, new Relation(context, new Z3Function(func), colTypes));
 
             // Apply per-column constraints.
-            Tuple tuple = this.makeFreshTuple(context, relationName);
+            Tuple tuple = this.makeFreshTuple(relationName);
             List<BoolExpr> thisConstraints = new ArrayList<>();
             for (int i = 0; i < tuple.size(); ++i) {
                 Column column = columns.get(i);
                 if (column.constraint == null) {
                     continue;
                 }
-                thisConstraints.add(column.constraint.apply(context, tuple.get(i)));
+                thisConstraints.add(column.constraint.apply(tuple.get(i)));
             }
             if (!thisConstraints.isEmpty()) {
                 BoolExpr lhs = (BoolExpr) func.apply(tuple.toArray(new Expr[0]));
@@ -51,24 +53,24 @@ public class Schema {
 
         // Apply dependencies.
         for (Dependency d : dependencies) {
-            constraints.add(d.apply(context, instance));
+            constraints.add(d.apply(instance));
         }
 
         instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
         return instance;
     }
 
-    public Instance makeConcreteInstance(Context context, Map<String, List<Tuple>> content) {
-        Instance instance = this.makeFreshInstance(context);
+    public Instance makeConcreteInstance(Map<String, List<Tuple>> content) {
+        Instance instance = this.makeFreshInstance();
         List<BoolExpr> constraints = new ArrayList<>();
         constraints.add(instance.constraint);
         for (Map.Entry<String, List<Tuple>> c : content.entrySet()) {
             String relationName = c.getKey();
             List<Tuple> tuples = c.getValue();
 
-            Tuple tuple = this.makeFreshTuple(context, relationName);
+            Tuple tuple = this.makeFreshTuple(relationName);
             BoolExpr lhs = instance.get(relationName).apply(tuple.toArray(new Expr[0]));
-            Stream<BoolExpr> rhsExprs = tuples.stream().map((t) -> tuple.tupleEqual(context, t));
+            Stream<BoolExpr> rhsExprs = tuples.stream().map(tuple::tupleEqual);
             BoolExpr rhs = context.mkOr(rhsExprs.toArray(BoolExpr[]::new));
             BoolExpr body = context.mkEq(lhs, rhs);
             constraints.add(context.mkForall(tuple.toArray(new Expr[0]), body, 1, null, null, null, null));
@@ -89,9 +91,9 @@ public class Schema {
         );
     }
 
-    public Tuple makeFreshTuple(Context context, String relationName) {
+    public Tuple makeFreshTuple(String relationName) {
         List<Column> columns = relations.get(relationName.toUpperCase());
-        Tuple tuple = new Tuple();
+        Tuple tuple = new Tuple(this);
         for (Column column : columns) {
             tuple.add(context.mkFreshConst("v", column.type));
         }

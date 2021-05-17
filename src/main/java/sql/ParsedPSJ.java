@@ -12,6 +12,8 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class ParsedPSJ {
     private final List<String> relations;
     private boolean hasRelAlias = false;
@@ -222,14 +224,15 @@ public class ParsedPSJ {
         }
     }
 
-    private Expr getPredicate(Context context, SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
+    private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
+        Context context = schema.getContext();
         if (theta instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {
                 return symbolMap.get(name);
             } else if (!name.startsWith("!")) {
                 String[] parts = name.split("\\.", 2);
-                assert parts.length == 2;
+                checkArgument(parts.length == 2, "not a two-part name: %s", name);
                 String relationName = getRelationNameForAlias(parts[0]);
                 List<Column> columns = schema.getColumns(relationName);
                 for (Column column : columns) {
@@ -253,13 +256,13 @@ public class ParsedPSJ {
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall) {
-            Expr left = getPredicate(context, ((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
+            Expr left = getPredicate(((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
 
             if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
                 final Expr left1 = left;
                 SqlNodeList values = ((SqlBasicCall) theta).operand(1);
                 BoolExpr[] exprs = values.getList().stream()
-                        .map(n -> context.mkEq(left1, getPredicate(context, n, symbolMap, params, paramNames, schema)))
+                        .map(n -> context.mkEq(left1, getPredicate(n, symbolMap, params, paramNames, schema)))
                         .toArray(BoolExpr[]::new);
                 BoolExpr expr = context.mkOr(exprs);
                 if (theta.getKind() == SqlKind.NOT_IN) {
@@ -268,7 +271,7 @@ public class ParsedPSJ {
                 return expr;
             }
 
-            Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
+            Expr right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (left instanceof ArithExpr && right instanceof SeqExpr) {
                 try {
                     System.out.println("!!!*** " + theta);
@@ -349,7 +352,8 @@ public class ParsedPSJ {
         return relations;
     }
 
-    private BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
+    private BoolExpr getPredicate(Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
+        Context context = schema.getContext();
         if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
@@ -364,7 +368,7 @@ public class ParsedPSJ {
             Collections.reverse(names);
             BoolExpr[] exprs = new BoolExpr[theta.size()];
             for (int i = 0; i < theta.size(); ++i) {
-                exprs[i] = (BoolExpr) getPredicate(context, theta.get(i), symbolMap, params, names, schema);
+                exprs[i] = (BoolExpr) getPredicate(theta.get(i), symbolMap, params, names, schema);
             }
             return context.mkAnd(exprs);
         } else {
@@ -372,8 +376,8 @@ public class ParsedPSJ {
         }
     }
 
-    public BoolExpr getPredicate(Context context, Schema schema) {
-        return getPredicate(context, Collections.emptyMap(), schema, null, 0);
+    public BoolExpr getPredicate(Schema schema) {
+        return getPredicate(Collections.emptyMap(), schema, null, 0);
     }
 
     public Query getSolverQuery(Schema schema) {
@@ -433,12 +437,12 @@ public class ParsedPSJ {
         }
 
         @Override
-        protected BoolExpr predicateGenerator(Context context, Tuple... tuples) {
+        protected BoolExpr predicateGenerator(Tuple... tuples) {
             Map<String, Expr> map = new HashMap<>();
             for (int i = 0; i < thetaColumnIndex.length; ++i) {
                 map.put(thetaColumns.get(i), tuples[thetaRelationIndex[i]].get(thetaColumnIndex[i]));
             }
-            return getPredicate(context, map, schema, prefix, parameterOffset);
+            return getPredicate(map, schema, prefix, parameterOffset);
         }
 
         @Override
@@ -447,7 +451,7 @@ public class ParsedPSJ {
             for (int i = 0; i < parts.length; ++i) {
                 parts[i] = tuples[projectRelationIndex[i]].get(projectColumnIndex[i]);
             }
-            return new Tuple(parts);
+            return new Tuple(schema, parts);
         }
 
         @Override

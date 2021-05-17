@@ -5,45 +5,41 @@ import cache.QueryTraceEntry;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
-import com.microsoft.z3.StringSymbol;
 import com.microsoft.z3.Solver;
 
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public abstract class DeterminacyFormula {
     protected final Context context;
-    protected Schema schema;
-    protected Instance inst1;
-    protected Instance inst2;
-    protected BoolExpr preparedExpr;
+    protected final Schema schema;
+    protected final Instance inst1;
+    protected final Instance inst2;
 
-    protected String preparedExprSMT;
-    protected Map<String, Integer> preparedStringReplacement = new HashMap<>();
-    protected Set<String> preparedIntReplacement = new HashSet<>();
+    private final String preparedExprSMT;
+    private final Map<String, Integer> preparedStringReplacement;
+    private final Set<String> preparedIntReplacement;
 
-    protected DeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
-        this.context = context;
+    protected DeterminacyFormula(Schema schema, BiFunction<Instance, Instance, BoolExpr> mkPreparedExpr) {
         this.schema = schema;
-        this.inst1 = schema.makeFreshInstance(context);
-        this.inst2 = schema.makeFreshInstance(context);
-        this.preparedExpr = null;
-    }
+        this.context = schema.getContext();
+        this.inst1 = schema.makeFreshInstance();
+        this.inst2 = schema.makeFreshInstance();
 
-    protected void setPreparedExpr(BoolExpr expr) {
-        this.preparedExpr = expr;
-        Solver solver = this.context.mkSolver();
-        solver.add(this.preparedExpr);
-
+        // Set prepared expr.
+        Solver solver = schema.getContext().mkSolver();
+        solver.add(mkPreparedExpr.apply(this.inst1, this.inst2));
         String result = solver.toString();
-        result = replaceInts(result, new HashSet<>(), this.preparedIntReplacement, false);
-        result = replaceStrings(result, new HashMap<>(), this.preparedStringReplacement, false);
+        HashSet<String> preparedIntReplacement = new HashSet<>();
+        result = replaceInts(result, new HashSet<>(), preparedIntReplacement, false);
+        HashMap<String, Integer> preparedStringReplacement = new HashMap<>();
+        result = replaceStrings(result, new HashMap<>(), preparedStringReplacement, false);
 
-        this.preparedIntReplacement = Collections.unmodifiableSet(this.preparedIntReplacement);
-        this.preparedStringReplacement = Collections.unmodifiableMap(this.preparedStringReplacement);
-
+        this.preparedIntReplacement = Collections.unmodifiableSet(preparedIntReplacement);
+        this.preparedStringReplacement = Collections.unmodifiableMap(preparedStringReplacement);
         this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
     }
 
@@ -52,12 +48,15 @@ public abstract class DeterminacyFormula {
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
             for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
                 Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
-                Relation r1 = query.apply(context, inst1);
-                Relation r2 = query.apply(context, inst2);
+                Relation r1 = query.apply(inst1);
+                Relation r2 = query.apply(inst2);
                 if (!queryTraceEntry.getTuples().isEmpty()) {
-                    List<Tuple> tuples = queryTraceEntry.getTuples().stream().map(tuple -> new Tuple(tuple.stream().map(v -> Tuple.getExprFromObject(context, v)).toArray(Expr[]::new))).collect(Collectors.toList());
-                    exprs.add(r1.doesContain(context, tuples));
-                    exprs.add(r2.doesContain(context, tuples));
+                    List<Tuple> tuples = queryTraceEntry.getTuples().stream().map(
+                            tuple -> new Tuple(schema, tuple.stream().map(
+                                    v -> Tuple.getExprFromObject(context, v)
+                            ).toArray(Expr[]::new))).collect(Collectors.toList());
+                    exprs.add(r1.doesContain(tuples));
+                    exprs.add(r2.doesContain(tuples));
                 }
             }
         }
@@ -82,13 +81,6 @@ public abstract class DeterminacyFormula {
 
     protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
         return "(assert " + makeFormula(queries, constants).toString() + ")";
-    }
-
-    public Solver makeSolver(QueryTrace queries) {
-        Solver solver = context.mkSolver();
-        solver.add(preparedExpr);
-        solver.add(makeFormula(queries, makeFormulaConstants(queries)));
-        return solver;
     }
 
     public synchronized String generateSMT(QueryTrace queries) {
@@ -116,7 +108,7 @@ public abstract class DeterminacyFormula {
     private static String replaceInts(String smt, Set<String> existingInts, Set<String> newInts, boolean finishUp) {
         java.util.regex.Pattern pattern = Pattern.compile("\\(- (\\d+)\\)");
         Matcher matcher = pattern.matcher(smt);
-        StringBuffer body1 = new StringBuffer();
+        StringBuilder body1 = new StringBuilder();
         while (matcher.find()) {
             matcher.appendReplacement(body1, "");
             String s = "-" + matcher.group(1);
@@ -129,7 +121,7 @@ public abstract class DeterminacyFormula {
 
         pattern = Pattern.compile("\\s(\\d+)");
         matcher = pattern.matcher(body1.toString());
-        StringBuffer body2 = new StringBuffer();
+        StringBuilder body2 = new StringBuilder();
         while (matcher.find()) {
             matcher.appendReplacement(body2, "");
             String s = matcher.group(1);
@@ -159,7 +151,7 @@ public abstract class DeterminacyFormula {
     private static String replaceStrings(String smt, Map<String, Integer> existingRep, Map<String, Integer> newRep, boolean finishUp) {
         java.util.regex.Pattern pattern = Pattern.compile("\"([^\"]*)\"");
         Matcher matcher = pattern.matcher(smt);
-        StringBuffer body = new StringBuffer();
+        StringBuilder body = new StringBuilder();
         int nextId = existingRep.size();
         while (matcher.find()) {
             matcher.appendReplacement(body, "");

@@ -7,9 +7,10 @@ import com.microsoft.z3.Sort;
 
 public abstract class Query {
     public abstract Sort[] headTypes();
-    public abstract BoolExpr doesContain(Context context, Instance instance, Tuple tuple);
+    public abstract BoolExpr doesContain(Instance instance, Tuple tuple);
 
-    public Relation apply(Context context, Instance instance) {
-        return new Relation(context, (Expr... exprs) -> doesContain(context, instance, new Tuple(exprs)), headTypes());
+    public Relation apply(Instance instance) {
+        Context context = instance.getContext();
+        return new Relation(context, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
     }
 }
