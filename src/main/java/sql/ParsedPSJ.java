@@ -127,6 +127,7 @@ public class ParsedPSJ {
         }
 
         // not WHERE TRUE, WHERE FALSE
+        // FIXME(zhangwen): how does WHERE FALSE get handled?
         if (sqlSelect.getWhere() != null && sqlSelect.getWhere().getKind() != SqlKind.LITERAL) {
             SqlBasicCall mainTheta = (SqlBasicCall) sqlSelect.getWhere();
             if (mainTheta != null) {
@@ -390,6 +391,14 @@ public class ParsedPSJ {
 
     public List<Boolean> getResultBitmap() {
         return resultBitmap == null ? Collections.emptyList() : resultBitmap;
+    }
+
+    /**
+     * Checks if this policy has no `WHERE` clause, i.e., returns all rows.
+     * @return true if this policy has no `WHERE` clause.
+     */
+    public boolean hasNoTheta() {
+        return theta.isEmpty();
     }
 
     private class SolverQuery extends PSJ {

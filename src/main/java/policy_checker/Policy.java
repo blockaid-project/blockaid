@@ -56,20 +56,20 @@ public class Policy {
         return parsedPSJ.getPredicate(schema);
     }
 
+    public boolean hasNoTheta() {
+        return parsedPSJ.hasNoTheta();
+    }
+
     public boolean checkApplicable(Set<String> projectColumns, Set<String> thetaColumns) {
         if (!containsAny(parsedPSJ.getProjectColumns(), projectColumns)) {
             return false;
         }
 
-        if (useSuperset && !containsAll(thetaColumns, parsedPSJ.getThetaColumns())) {
+        if (useSuperset && !thetaColumns.containsAll(parsedPSJ.getThetaColumns())) {
             return false;
         }
 
         return useSuperset || parsedPSJ.getThetaColumns().isEmpty() || containsAny(thetaColumns, parsedPSJ.getThetaColumns());
-    }
-
-    private boolean containsAll(Collection<String> set, Collection<String> query) {
-        return set.containsAll(query);
     }
 
     private boolean containsAny(Collection<String> set, Collection<String> query) {

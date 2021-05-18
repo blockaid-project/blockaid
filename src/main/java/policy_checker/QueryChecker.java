@@ -1,6 +1,9 @@
 package policy_checker;
 
 import cache.*;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.microsoft.z3.*;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
@@ -21,8 +24,15 @@ import java.util.stream.Collectors;
 
 public class QueryChecker {
     public static boolean ENABLE_CACHING = true;
-    public static boolean ENABLE_PRECHECK = true;
     public static boolean UNNAMED_EQUALITY = true;
+
+    public enum PrecheckSetting {
+        DISABLED,
+        COARSE,
+        FULL
+    }
+
+    public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.FULL;
 
     private static final boolean PRINT_FORMULAS = false;
     private static final String FORMULA_DIR = "/home/ubuntu/scratch/formulas";
@@ -104,17 +114,13 @@ public class QueryChecker {
         this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
     }
 
-    private boolean containsAll(Collection<String> set, Collection<String> query) {
-        return set.containsAll(query);
-    }
-
     private boolean precheckPolicyApproval(PrivacyQuery query) {
         List<String> projectColumns = query.getProjectColumns();
         List<String> thetaColumns = query.getThetaColumns();
         projectColumns.addAll(thetaColumns);
 
         for (Set<String> s : cache.preapprovedSets) {
-            if (containsAll(s, projectColumns)) {
+            if (s.containsAll(projectColumns)) {
                 return true;
             }
         }
@@ -294,7 +300,7 @@ public class QueryChecker {
         System.out.println("transformed: "
                 + currQuery.parsedSql.getParsedSql()
                 + "\t" + currQuery.parameters);
-        if (ENABLE_PRECHECK) {
+        if (PRECHECK_SETTING != PrecheckSetting.DISABLED) {
             FastCheckDecision precheckResult = doPrecheckPolicy(currQuery);
             if (precheckResult == FastCheckDecision.ALLOW) {
                 return true;
@@ -462,20 +468,44 @@ public class QueryChecker {
 
     // The fields of `DecisionCache` are shared between `QueryChecker` objects for the same database & policy.
     private static class DecisionCache {
-        final List<Set<String>> preapprovedSets;
+        final ImmutableList<ImmutableSet<String>> preapprovedSets;
         final TraceCache policyDecisionCacheFine;
 
         public DecisionCache(Schema schema, ArrayList<Policy> policySet) {
-            this.preapprovedSets = ENABLE_PRECHECK ? buildPreapprovedSets(schema, policySet) : null;
+            switch (PRECHECK_SETTING) {
+                case DISABLED:
+                    this.preapprovedSets = null;
+                    break;
+                case COARSE:
+                    this.preapprovedSets = buildPreapprovedSetsCoarse(policySet);
+                    break;
+                case FULL:
+                    this.preapprovedSets = buildPreapprovedSetsFull(schema, policySet);
+                    break;
+                default:
+                    throw new IllegalStateException("invalid precheck setting: " + PRECHECK_SETTING);
+            }
             this.policyDecisionCacheFine = new TraceCache();
         }
 
-        private static List<Set<String>> buildPreapprovedSets(Schema schema, ArrayList<Policy> policySet) {
+        /**
+         * Returns the projected columns of each policy that has no `WHERE` clause.
+         * @param policySet the set of policies from which to build the preapproved set.
+         * @return the preapproved set.
+         */
+        private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsCoarse(ArrayList<Policy> policySet) {
+            return policySet.stream().filter(Policy::hasNoTheta)
+                    .map(policy -> ImmutableSet.copyOf(policy.getProjectColumns()))
+                    .collect(ImmutableList.toImmutableList());
+        }
+
+        private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsFull(
+                Schema schema, ArrayList<Policy> policySet) {
             class Entry {
                 private final BoolExpr predicate;
-                private final Set<String> columns;
+                private final ImmutableSet<String> columns;
 
-                public Entry(BoolExpr predicate, Set<String> columns) {
+                public Entry(BoolExpr predicate, ImmutableSet<String> columns) {
                     this.predicate = predicate;
                     this.columns = columns;
                 }
@@ -483,7 +513,8 @@ public class QueryChecker {
 
             MyZ3Context ctx = schema.getContext();
 
-            List<Set<String>> preapprovedSets = new ArrayList<>();
+            ImmutableList.Builder<ImmutableSet<String>> preapprovedSetsBuilder = ImmutableList.builder();
+
             Map<Set<Integer>, Entry> previousPass = new HashMap<>();
             previousPass.put(Collections.emptySet(), new Entry(ctx.mkBool(false), getAllColumns(policySet)));
 
@@ -511,7 +542,7 @@ public class QueryChecker {
                             // previous set was added to preapprovedSet
                             remove.add(nextSet);
                         } else if (!currentPass.containsKey(nextSet)) {
-                            Set<String> nextColumns = setIntersection(prevColumns, policySet.get(j).getProjectColumns());
+                            Sets.SetView<String> nextColumns = Sets.intersection(prevColumns, policySet.get(j).getProjectColumns());
 
                             if (!nextColumns.isEmpty()) {
                                 BoolExpr nextPredicate = ctx.mkOr(prevPredicate, policySet.get(j).getPredicate(schema));
@@ -520,7 +551,7 @@ public class QueryChecker {
                                 solver.add(ctx.mkNot(nextPredicate));
                                 Status q = solver.check();
                                 boolean predicateResult = (q == Status.UNSATISFIABLE);
-                                currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns));
+                                currentPass.put(nextSet, new Entry(predicateResult ? null : nextPredicate, nextColumns.immutableCopy()));
                             }
                         }
                     }
@@ -532,33 +563,20 @@ public class QueryChecker {
 
                 for (Map.Entry<Set<Integer>, Entry> entry : currentPass.entrySet()) {
                     if (entry.getValue().predicate == null) {
-                        preapprovedSets.add(entry.getValue().columns);
+                        preapprovedSetsBuilder.add(entry.getValue().columns);
                     }
                 }
 
                 previousPass = currentPass;
             }
 
-            return preapprovedSets;
+            return preapprovedSetsBuilder.build();
         }
 
-        private static <T> Set<T> setIntersection(Set<T> s1, Set<T> s2) {
-            Set<T> sr = new HashSet<>(s1);
-            for (T x : s1) {
-                if (!s2.contains(x)) {
-                    sr.remove(x);
-                }
-            }
-
-            return sr;
-        }
-
-        private static Set<String> getAllColumns(ArrayList<Policy> policySet) {
-            Set<String> r = new HashSet<>();
-            for (Policy policy : policySet) {
-                r.addAll(policy.getProjectColumns());
-            }
-            return r;
+        private static ImmutableSet<String> getAllColumns(ArrayList<Policy> policySet) {
+            return policySet.stream()
+                    .flatMap(policy -> policy.getProjectColumns().stream())
+                    .collect(ImmutableSet.toImmutableSet());
         }
     }
 }
