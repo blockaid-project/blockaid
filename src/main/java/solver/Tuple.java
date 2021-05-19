@@ -1,29 +1,58 @@
 package solver;
 
+import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
-public class Tuple extends ArrayList<Expr> {
+public class Tuple {
     private final Schema schema;
+    private final List<Expr> content; // Can't use `ImmutableList` because a `Tuple` can contain nulls.
 
-    public Tuple(Schema schema) {
-        super();
+    public Tuple(Schema schema, Expr... exprs) {
+        // FIXME(zhangwen): `List.of` doesn't allow nulls, but we do?
+        this.content = List.of(exprs);
         this.schema = schema;
     }
 
-    public Tuple(Schema schema, Expr... exprs) {
-        super(Arrays.asList(exprs));
-        this.schema = schema;
+    public Tuple(Schema schema, Stream<Expr> exprs) {
+        // The "fused" version doesn't allow nulls in the list.
+        //noinspection FuseStreamOperations
+        List<Expr> exprList = exprs.collect(Collectors.toList());
+        this.content = Collections.unmodifiableList(exprList);
+        this.schema = checkNotNull(schema);
     }
 
     public Schema getSchema() {
         return schema;
+    }
+
+    public int size() {
+        return content.size();
+    }
+
+    public boolean isEmpty() {
+        return content.isEmpty();
+    }
+
+    public Expr get(int i) {
+        return content.get(i);
+    }
+
+    public Stream<Expr> stream() {
+        return content.stream();
+    }
+
+    public List<Expr> content() {
+        return content;
     }
 
     BoolExpr tupleEqual(Tuple other) {
@@ -41,6 +70,10 @@ public class Tuple extends ArrayList<Expr> {
             exprs[i] = context.mkEq(get(i), other.get(i));
         }
         return context.mkAnd(exprs);
+    }
+
+    public Expr[] toExprArray() {
+        return content.toArray(new Expr[0]);
     }
 
     public static Sort getSortFromObject(Context context, Object value) {

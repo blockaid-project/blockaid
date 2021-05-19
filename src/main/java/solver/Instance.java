@@ -5,6 +5,8 @@ import com.microsoft.z3.Context;
 
 import java.util.HashMap;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 public class Instance extends HashMap<String, Relation> {
     final Schema schema;
     BoolExpr constraint;
@@ -14,7 +16,7 @@ public class Instance extends HashMap<String, Relation> {
     }
 
     Instance(Schema schema, BoolExpr constraint) {
-        this.schema = schema;
+        this.schema = checkNotNull(schema);
         this.constraint = constraint;
     }
 

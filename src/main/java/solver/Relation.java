@@ -5,14 +5,22 @@ import com.microsoft.z3.*;
 import java.util.Arrays;
 import java.util.List;
 
-public class Relation {
-    Context context;
-    Function function;
-    Sort[] signature;
+import static com.google.common.base.Preconditions.checkNotNull;
 
-    public Relation(Context context, Function function, Sort[] signature) {
-        this.context = context;
-        this.function = function;
+public class Relation {
+    private final Schema schema;
+    private final Context context;
+    private final Function function;
+    private final Sort[] signature;
+
+    public Function getFunction() {
+        return function;
+    }
+
+    public Relation(Schema schema, Function function, Sort[] signature) {
+        this.schema = checkNotNull(schema);
+        this.context = schema.getContext();
+        this.function = checkNotNull(function);
         this.signature = signature;
     }
 
@@ -31,57 +39,44 @@ public class Relation {
             }
             args = convertedArgs;
         }
-        Expr expr = this.function.apply(args);
-        assert expr instanceof BoolExpr;
-        return (BoolExpr) expr;
+        return this.function.apply(args);
+    }
+
+    public BoolExpr apply(Tuple tup) {
+        return apply(tup.toExprArray());
     }
 
     public BoolExpr isContainedIn(Relation other) {
-        Expr[] syms = new Expr[signature.length];
-        for (int i = 0; i < signature.length; ++i) {
-            syms[i] = context.mkFreshConst("v", signature[i]);
-        }
+        Tuple syms = makeFreshHead();
         BoolExpr lhs = this.apply(syms);
         BoolExpr rhs = other.apply(syms);
-        if (syms.length == 0) {
+        if (syms.isEmpty()) {
             return context.mkImplies(lhs, rhs);
         }
-        return context.mkForall(syms, context.mkImplies(lhs, rhs), 1, null, null, null, null);
+        return context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
+                null, null, null, null);
     }
 
-//    public BoolExpr isContainedIn(List<Tuple> other) {
-//
-//    }
-
-    public BoolExpr doesContain(Relation other) {
-        return other.isContainedIn(this);
-    }
-
-    public BoolExpr doesContain(Tuple other) {
-        return this.apply(other.toArray(new Expr[0]));
+    private Tuple makeFreshHead() {
+        return new Tuple(schema, Arrays.stream(signature).map(sort -> context.mkFreshConst("v", sort)));
     }
 
     public BoolExpr doesContain(List<Tuple> other) {
-        if (other.size() == 0) {
+        if (other.isEmpty()) {
             return context.mkTrue();
         }
-        BoolExpr[] syms = new BoolExpr[other.size()];
-        for (int i = 0; i < other.size(); ++i) {
-            syms[i] = this.apply(other.get(i).toArray(new Expr[0]));
-        }
+
+        BoolExpr[] syms = other.stream().map(this::apply).toArray(BoolExpr[]::new);
         return context.mkAnd(syms);
     }
 
     public BoolExpr equalsExpr(Relation other) {
-        Expr[] syms = new Expr[signature.length];
-        for (int i = 0; i < signature.length; ++i) {
-            syms[i] = context.mkFreshConst("v", signature[i]);
-        }
+        Tuple syms = makeFreshHead();
         BoolExpr lhs = this.apply(syms);
         BoolExpr rhs = other.apply(syms);
-        if (syms.length == 0) {
+        if (syms.isEmpty()) {
             return context.mkEq(lhs, rhs);
         }
-        return context.mkForall(syms, context.mkEq(lhs, rhs), 1, null, null, null, null);
+        return context.mkForall(syms.toExprArray(), context.mkEq(lhs, rhs), 1, null, null, null, null);
     }
 }

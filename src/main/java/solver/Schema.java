@@ -7,15 +7,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 public class Schema {
     private final MyZ3Context context;
     private final Map<String, List<Column>> relations;
     private final List<Dependency> dependencies;
 
     public Schema(MyZ3Context context, Map<String, List<Column>> relations, List<Dependency> dependencies) {
-        this.context = context;
-        this.relations = relations;
-        this.dependencies = dependencies;
+        this.context = checkNotNull(context);
+        this.relations = checkNotNull(relations);
+        this.dependencies = checkNotNull(dependencies);
     }
 
     public MyZ3Context getContext() {
@@ -31,7 +33,7 @@ public class Schema {
 
             Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
             FuncDecl func = context.mkFreshFuncDecl("v", colTypes, context.getBoolSort());
-            instance.put(relationName, new Relation(context, new Z3Function(func), colTypes));
+            instance.put(relationName, new Relation(this, new Z3Function(func), colTypes));
 
             // Apply per-column constraints.
             Tuple tuple = this.makeFreshTuple(relationName);
@@ -44,10 +46,10 @@ public class Schema {
                 thisConstraints.add(column.constraint.apply(tuple.get(i)));
             }
             if (!thisConstraints.isEmpty()) {
-                BoolExpr lhs = (BoolExpr) func.apply(tuple.toArray(new Expr[0]));
+                BoolExpr lhs = (BoolExpr) func.apply(tuple.toExprArray());
                 BoolExpr rhs = context.mkAnd(thisConstraints.toArray(new BoolExpr[0]));
                 BoolExpr body = context.mkImplies(lhs, rhs);
-                constraints.add(context.mkForall(tuple.toArray(new Expr[0]), body, 1, null, null, null, null));
+                constraints.add(context.mkForall(tuple.toExprArray(), body, 1, null, null, null, null));
             }
         }
 
@@ -69,11 +71,11 @@ public class Schema {
             List<Tuple> tuples = c.getValue();
 
             Tuple tuple = this.makeFreshTuple(relationName);
-            BoolExpr lhs = instance.get(relationName).apply(tuple.toArray(new Expr[0]));
+            BoolExpr lhs = instance.get(relationName).apply(tuple);
             Stream<BoolExpr> rhsExprs = tuples.stream().map(tuple::tupleEqual);
             BoolExpr rhs = context.mkOr(rhsExprs.toArray(BoolExpr[]::new));
             BoolExpr body = context.mkEq(lhs, rhs);
-            constraints.add(context.mkForall(tuple.toArray(new Expr[0]), body, 1, null, null, null, null));
+            constraints.add(context.mkForall(tuple.toExprArray(), body, 1, null, null, null, null));
         }
         instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
         return instance;
@@ -93,11 +95,7 @@ public class Schema {
 
     public Tuple makeFreshTuple(String relationName) {
         List<Column> columns = relations.get(relationName.toUpperCase());
-        Tuple tuple = new Tuple(this);
-        for (Column column : columns) {
-            tuple.add(context.mkFreshConst("v", column.type));
-        }
-        return tuple;
+        return new Tuple(this, columns.stream().map(column -> context.mkFreshConst("v", column.type)));
     }
 
     public static Sort getSortFromSqlType(Context context, int type) {

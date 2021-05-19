@@ -1,12 +1,13 @@
 package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
-import com.google.common.collect.ImmutableList;
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
+import com.google.common.collect.*;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
+import solver.ForeignKeyDependency;
 import sql.*;
 
 import java.io.InputStream;
@@ -49,29 +50,24 @@ public class PrivacyConnection implements Connection {
     String pks = direct_info.getProperty("pk");
     String fks = direct_info.getProperty("fk");
 
-    Map<String, List<String>> primaryKeys = new HashMap<>();
-    if (!pks.isEmpty()) {
-      for (String pk : pks.split("\n")) {
-        pk = pk.toUpperCase();
-        String[] parts = pk.split(":", 2);
-        String[] columns = parts[1].split(",");
-        if (!primaryKeys.containsKey(parts[0])) {
-          primaryKeys.put(parts[0], Arrays.asList(columns));
-        }
+    Map<String, ImmutableList<String>> primaryKeys = new HashMap<>();
+    pks.lines().map(String::toUpperCase).forEach(line -> {
+      String[] parts = line.split(":", 2);
+      String[] columns = parts[1].split(",");
+      if (!primaryKeys.containsKey(parts[0])) {
+        primaryKeys.put(parts[0], ImmutableList.copyOf(columns));
       }
-    }
+    });
 
-    // TODO(zhangwen): ideally want a tuple of four elements...
-    Set<List<String>> foreignKeys = new HashSet<>();
-    for (String fk : fks.split("\n")) {
-      fk = fk.toUpperCase();
-      String[] parts = fk.split(":", 2);
+    ImmutableSet<ForeignKeyDependency> foreignKeys = fks.lines().map(line -> {
+      line = line.toUpperCase();
+      String[] parts = line.split(":", 2);
       String[] from = parts[0].split("\\.", 2);
       String[] to = parts[1].split("\\.", 2);
-      foreignKeys.add(ImmutableList.of(from[0], from[1], to[0], to[1]));
-    }
+      return new ForeignKeyDependency(from[0], from[1], to[0], to[1]);
+    }).collect(ImmutableSet.toImmutableSet());
 
-    schema = new SchemaPlusWithKey(schemaPlus, primaryKeys, foreignKeys);
+    schema = new SchemaPlusWithKey(schemaPlus, ImmutableMap.copyOf(primaryKeys), foreignKeys);
 
     this.policy_list = new ArrayList<>();
     set_policy(direct_info, ctx);
@@ -147,7 +143,7 @@ public class PrivacyConnection implements Connection {
     s = matcher.replaceAll("?");
 
     Optional<ParserResult> parser_result = shouldApplyPolicy(s);
-    if (!parser_result.isPresent()) {  // We let this query go through directly.
+    if (parser_result.isEmpty()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
     }
 
@@ -472,6 +468,7 @@ public class PrivacyConnection implements Connection {
         return query_checker.checkPolicy(current_trace);
       } catch (Exception e) {
         System.out.println("\t| EXCEPTION:\t" + e);
+        e.printStackTrace();
         throw e;
       } finally {
         final long endTime = System.currentTimeMillis();

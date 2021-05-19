@@ -2,10 +2,7 @@ package solver;
 
 import com.microsoft.z3.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -47,16 +44,13 @@ public abstract class PSJ extends Query {
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
             Tuple tup = symbolicTups[i];
-            bodyExprs[i] = instance.get(relationName).apply(tup.toArray(new Expr[0]));
+            bodyExprs[i] = instance.get(relationName).apply(tup);
         }
 
         Context context = schema.getContext();
         BoolExpr bodyFormula = context.mkAnd(bodyExprs);
-        Set<Expr> existentialVars = new HashSet<>();
-        for (Tuple tup : symbolicTups) {
-            existentialVars.addAll(tup);
-        }
-        for (Expr expr : headSymTup) {
+        Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
+        for (Expr expr : headSymTup.content()) {
             existentialVars.remove(expr);
         }
 

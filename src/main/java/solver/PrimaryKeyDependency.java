@@ -5,6 +5,7 @@ import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -40,11 +41,10 @@ public class PrimaryKeyDependency implements Dependency {
 
         BoolExpr agreeFormula = context.mkAnd(agreeFormulaExprs);
 
-        List<Expr> vars = new ArrayList<>(tup1);
-        vars.addAll(tup2);
-        BoolExpr lhs = context.mkAnd(relation.apply(tup1.toArray(new Expr[0])), relation.apply(tup2.toArray(new Expr[0])), agreeFormula);
+        BoolExpr lhs = context.mkAnd(relation.apply(tup1), relation.apply(tup2), agreeFormula);
         BoolExpr rhs = tup1.tupleEqual(tup2);
 
-        return context.mkForall(vars.toArray(new Expr[0]), context.mkImplies(lhs, rhs), 1, null, null, null, null);
+        Expr[] allVars = Stream.concat(tup1.stream(), tup2.stream()).toArray(Expr[]::new);
+        return context.mkForall(allVars, context.mkImplies(lhs, rhs), 1, null, null, null, null);
     }
 }

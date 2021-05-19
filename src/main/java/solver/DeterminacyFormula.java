@@ -54,7 +54,7 @@ public abstract class DeterminacyFormula {
                     List<Tuple> tuples = queryTraceEntry.getTuples().stream().map(
                             tuple -> new Tuple(schema, tuple.stream().map(
                                     v -> Tuple.getExprFromObject(context, v)
-                            ).toArray(Expr[]::new))).collect(Collectors.toList());
+                            ))).collect(Collectors.toList());
                     exprs.add(r1.doesContain(tuples));
                     exprs.add(r2.doesContain(tuples));
                 }

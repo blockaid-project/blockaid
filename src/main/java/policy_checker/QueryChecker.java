@@ -34,7 +34,7 @@ public class QueryChecker {
 
     public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.COARSE;
 
-    private static final boolean PRINT_FORMULAS = true;
+    private static final boolean PRINT_FORMULAS = false;
     private static final String FORMULA_DIR = System.getenv("PRIVOXY_FORMULA_PATH");
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
@@ -65,7 +65,6 @@ public class QueryChecker {
         return new QueryChecker(info, policySet, rawSchema, deps, uks, fks);
     }
 
-    // TODO read pk/fk from schema instead
     private QueryChecker(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps,
                          String[] uks, String[] fks)
     {

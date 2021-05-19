@@ -10,7 +10,6 @@ public abstract class Query {
     public abstract BoolExpr doesContain(Instance instance, Tuple tuple);
 
     public Relation apply(Instance instance) {
-        Context context = instance.getContext();
-        return new Relation(context, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
+        return new Relation(instance.schema, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
     }
 }
