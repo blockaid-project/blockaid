@@ -83,21 +83,19 @@ public abstract class DeterminacyFormula {
         return "(assert " + makeFormula(queries, constants).toString() + ")";
     }
 
-    public synchronized String generateSMT(QueryTrace queries) {
+    public String generateSMT(QueryTrace queries) {
 //        System.out.println("\t| Make SMT:");
         StringBuilder sb = new StringBuilder();
-        synchronized (context) {
-            MyZ3Context myContext = (MyZ3Context) context;
-            myContext.startTrackingConsts();
-            String smt = makeFormulaSMT(queries, makeFormulaConstants(queries));
-            myContext.stopTrackingConsts();
+        MyZ3Context myContext = (MyZ3Context) context;
+        myContext.startTrackingConsts();
+        String smt = makeFormulaSMT(queries, makeFormulaConstants(queries));
+        myContext.stopTrackingConsts();
 
-            for (Expr constant : myContext.getConsts()) {
-                sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
-            }
-
-            sb.append(smt);
+        for (Expr constant : myContext.getConsts()) {
+            sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
         }
+
+        sb.append(smt);
 
         String body = sb.toString();
         body = replaceInts(body, this.preparedIntReplacement, new HashSet<>(), true);

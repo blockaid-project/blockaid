@@ -61,7 +61,7 @@ public class Policy {
     }
 
     public boolean checkApplicable(Set<String> projectColumns, Set<String> thetaColumns) {
-        if (!containsAny(parsedPSJ.getProjectColumns(), projectColumns)) {
+        if (Collections.disjoint(parsedPSJ.getProjectColumns(), projectColumns)) {
             return false;
         }
 
@@ -69,16 +69,8 @@ public class Policy {
             return false;
         }
 
-        return useSuperset || parsedPSJ.getThetaColumns().isEmpty() || containsAny(thetaColumns, parsedPSJ.getThetaColumns());
-    }
-
-    private boolean containsAny(Collection<String> set, Collection<String> query) {
-        for (String s : query) {
-            if (set.contains(s)) {
-                return true;
-            }
-        }
-        return false;
+        return useSuperset || parsedPSJ.getThetaColumns().isEmpty()
+                || !Collections.disjoint(thetaColumns, parsedPSJ.getThetaColumns());
     }
 
     public Query getSolverQuery(Schema schema) {

@@ -7,14 +7,16 @@ import java.io.File;
 import java.io.IOException;
 import java.sql.*;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 public class PrivacyDriverDiasporaMySQLTest {
     private static final String dbDatabaseName = "diaspora_production_new";
-    private static final String dbUrl = "jdbc:mysql://diaspora.internal:3306/" + dbDatabaseName +
+    private static final String dbUrl = "jdbc:mysql://" + checkNotNull(System.getenv("DIASPORA_MYSQL_HOST")) + ":3306/" + dbDatabaseName +
             "?useSSL=false&useUnicode=true&character_set_server=utf8mb4&collation_server=utf8mb4_bin";
     private static final String dbUsername = "diaspora";
     private static final String dbPassword = "12345678";
 
-    private static final String setupDbDir = "/home/ubuntu/setup_db";
+    private static final String setupDbDir = checkNotNull(System.getenv("DIASPORA_SETUP_PATH"));
     private static final String setupDbPath = setupDbDir + "/db";
     private static final String setupDbUrl = "jdbc:h2:" + setupDbPath;
     // I think the setup DB is required to have the same username / password as the actual DB.
@@ -48,51 +50,51 @@ public class PrivacyDriverDiasporaMySQLTest {
         Class.forName("org.h2.Driver");
         Class.forName("com.mysql.jdbc.Driver");
 
+        String diasporaPath = checkNotNull(System.getenv("DIASPORA_PATH"));
         String proxyUrl = String.format("jdbc:privacy:thin:%s,%s,%s,%s,%s,%s,%s",
-//                "/Users/zhangwen/code/diaspora/policy/policies.sql", // Policy file.
-                "/home/ubuntu/diaspora/policy/policies.sql", // Policy file.
-                "/home/ubuntu/diaspora/policy/deps.txt", // Misc dependencies.
+                diasporaPath + "/policy/policies.sql", // Policy file.
+                diasporaPath + "/policy/deps.txt", // Misc dependencies.
                 setupDbUrl,
                 dbUrl,
-                "/home/ubuntu/diaspora/policy/pk.txt", // Primary key dependencies.
-                "/home/ubuntu/diaspora/policy/fk.txt", // Foreign key dependencies.
+                diasporaPath + "/policy/pk.txt", // Primary key dependencies.
+                diasporaPath + "/policy/fk.txt", // Foreign key dependencies.
                 dbDatabaseName
         );
 
         System.out.println(proxyUrl);
 
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            for (int i = 0; i < 1; i++) {
+            for (int i = 0; i < 10000; i++) {
                 try (Statement stmt = conn.createStatement()) {
                     stmt.execute("SET @_MY_UID = 45000001");
                 }
 
-//                {
-//                    final String query1 = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?";
-//                    try (PreparedStatement stmt = conn.prepareStatement(query1)) {
-//                        stmt.setLong(1, 45000001);
-//                        stmt.setInt(2, 1);
-//                        stmt.execute();
-//                        try (ResultSet rs = stmt.getResultSet()) {
-//                            while (rs.next()) {
-//                            }
-//                        }
-//                    }
-//                }
+                {
+                    final String query1 = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(query1)) {
+                        stmt.setLong(1, 45000001);
+                        stmt.setInt(2, 1);
+                        stmt.execute();
+                        try (ResultSet rs = stmt.getResultSet()) {
+                            while (rs.next()) {
+                            }
+                        }
+                    }
+                }
 
-//                {
-//                    final String query2 = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ? WHERE `posts`.`id` = ? AND `share_visibilities`.`user_id` = ?";
-//                    try (PreparedStatement stmt = conn.prepareStatement(query2)) {
-//                        stmt.setString(1, "Post");
-//                        stmt.setInt(2, 4);
-//                        stmt.setInt(3, 45000001);
-//                        stmt.execute();
-//                        try (ResultSet rs = stmt.getResultSet()) {
-//                            while (rs.next()) {
-//                            }
-//                        }
-//                    }
-//                }
+                {
+                    final String query2 = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ? WHERE `posts`.`id` = ? AND `share_visibilities`.`user_id` = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(query2)) {
+                        stmt.setString(1, "Post");
+                        stmt.setInt(2, 4);
+                        stmt.setInt(3, 45000001);
+                        stmt.execute();
+                        try (ResultSet rs = stmt.getResultSet()) {
+                            while (rs.next()) {
+                            }
+                        }
+                    }
+                }
 
                 {
                     final String query3 = "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = ? LIMIT ?";
@@ -106,18 +108,20 @@ public class PrivacyDriverDiasporaMySQLTest {
                         }
                     }
                 }
-//                {
-//                    final String query4 = "SELECT  `roles`.* FROM `roles` WHERE `roles`.`person_id` = ? LIMIT ?";
-//                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
-//                        stmt.setInt(1, 26000001);
-//                        stmt.setInt(2, 1);
-//                        stmt.execute();
-//                        try (ResultSet rs = stmt.getResultSet()) {
-//                            while (rs.next()) {
-//                            }
-//                        }
-//                    }
-//                }
+
+                {
+                    final String query4 = "SELECT  `roles`.* FROM `roles` WHERE `roles`.`person_id` = ? LIMIT ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
+                        stmt.setInt(1, 26000001);
+                        stmt.setInt(2, 1);
+                        stmt.execute();
+                        try (ResultSet rs = stmt.getResultSet()) {
+                            while (rs.next()) {
+                            }
+                        }
+                    }
+                }
+
 //                {
 //                    final String query4 = "SELECT  `roles`.* FROM `roles` WHERE `roles`.`person_id` = ? LIMIT ?";
 //                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
@@ -131,17 +135,17 @@ public class PrivacyDriverDiasporaMySQLTest {
 //                    }
 //                }
 
-                {
-                    final String query4 = "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
-                        stmt.setInt(1, 26000001);
-                        stmt.execute();
-                        try (ResultSet rs = stmt.getResultSet()) {
-                            while (rs.next()) {
-                            }
-                        }
-                    }
-                }
+//                {
+//                    final String query4 = "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = ?";
+//                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
+//                        stmt.setInt(1, 26000001);
+//                        stmt.execute();
+//                        try (ResultSet rs = stmt.getResultSet()) {
+//                            while (rs.next()) {
+//                            }
+//                        }
+//                    }
+//                }
 
                 conn.resetSequence();
             }
@@ -152,13 +156,14 @@ public class PrivacyDriverDiasporaMySQLTest {
         Class.forName("org.h2.Driver");
         Class.forName("com.mysql.jdbc.Driver");
 
+        String diasporaPath = checkNotNull(System.getenv("DIASPORA_PATH"));
         String proxyUrl = String.format("jdbc:privacy:thin:%s,%s,%s,%s,%s,%s,%s",
-                "/home/ubuntu/diaspora/policy/policies.sql", // Policy file.
-                "/home/ubuntu/diaspora/policy/deps.txt", // Misc dependencies.
+                diasporaPath + "/policy/policies.sql", // Policy file.
+                diasporaPath + "/policy/deps.txt", // Misc dependencies.
                 setupDbUrl,
                 dbUrl,
-                "/home/ubuntu/diaspora/policy/pk.txt", // Primary key dependencies.
-                "/home/ubuntu/diaspora/policy/fk.txt", // Foreign key dependencies.
+                diasporaPath + "/policy/pk.txt", // Primary key dependencies.
+                diasporaPath + "/policy/fk.txt", // Foreign key dependencies.
                 dbDatabaseName
         );
 

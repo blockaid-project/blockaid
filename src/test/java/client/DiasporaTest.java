@@ -120,7 +120,7 @@ public class DiasporaTest {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
-        QueryChecker.ENABLE_PRECHECK = false;
+        QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.UNNAMED_EQUALITY = true;
         QueryChecker.SOLVE_TIMEOUT = 10000;
 
@@ -182,7 +182,7 @@ public class DiasporaTest {
         Class.forName("org.h2.Driver");
 
         QueryChecker.ENABLE_CACHING = false;
-        QueryChecker.ENABLE_PRECHECK = false;
+        QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.SOLVE_TIMEOUT = 3000;
 
         long startTime, endTime;
@@ -234,7 +234,7 @@ public class DiasporaTest {
 
     @Test
     public void runMultipleThread() throws Exception {
-        QueryChecker.ENABLE_PRECHECK = false;
+        QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.SOLVE_TIMEOUT = 30000;
 
         Thread a = new Thread(new Runnable() {
@@ -289,7 +289,7 @@ public class DiasporaTest {
         Class.forName("org.h2.Driver");
 
         QueryChecker.ENABLE_CACHING = true;
-        QueryChecker.ENABLE_PRECHECK = false;
+        QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.SOLVE_TIMEOUT = 15000;
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
@@ -397,7 +397,7 @@ public class DiasporaTest {
         Class.forName("jdbc.PrivacyDriver");
         Class.forName("com.mysql.jdbc.Driver");
 
-        QueryChecker.ENABLE_PRECHECK = true;
+        QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.UNNAMED_EQUALITY = true;
         QueryChecker.SOLVE_TIMEOUT = 10000;
 

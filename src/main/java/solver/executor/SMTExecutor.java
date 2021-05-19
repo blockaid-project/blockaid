@@ -9,17 +9,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class SMTExecutor extends Thread {
-    private String smtString;
-    private CountDownLatch latch;
-    private String[] command;
-    private boolean satConclusive;
-    private boolean unsatConclusive;
-    private boolean runCore;
+    private final String smtString;
+    private final CountDownLatch latch;
+    private final String[] command;
+    private final boolean satConclusive;
+    private final boolean unsatConclusive;
+    private final boolean runCore;
 
     private Status result = null;
     private String[] core = null;
     private Process process = null;
-    private AtomicBoolean shuttingDown = new AtomicBoolean(false);
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
     protected SMTExecutor(String smtString, CountDownLatch latch, String[] command) {
         this(smtString, latch, command, false, true, true);

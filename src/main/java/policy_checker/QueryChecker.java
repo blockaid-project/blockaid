@@ -32,10 +32,10 @@ public class QueryChecker {
         FULL
     }
 
-    public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.FULL;
+    public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.COARSE;
 
-    private static final boolean PRINT_FORMULAS = false;
-    private static final String FORMULA_DIR = "/home/ubuntu/scratch/formulas";
+    private static final boolean PRINT_FORMULAS = true;
+    private static final String FORMULA_DIR = System.getenv("PRIVOXY_FORMULA_PATH");
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
@@ -220,13 +220,10 @@ public class QueryChecker {
         CountDownLatch latch = new CountDownLatch(2);
         List<SMTExecutor> executors = new ArrayList<>();
 
-        String smt;
-        Map<Object, Integer> equalityMap;
-        Map<Object, Integer> equalityMapEliminate;
-        synchronized (this.unsatCoreDeterminacyFormula) {
-            smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
-            equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
-            executors.add(new CVC4Executor(smt, latch));
+        String smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
+        Map<Object, Integer> equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
+        executors.add(new CVC4Executor(smt, latch));
+        if (PRINT_FORMULAS) {
             try {
                 PrintWriter pw = new PrintWriter(FORMULA_DIR + "/gen_" + queries.size() + ".smt2");
                 pw.println("(set-option :produce-unsat-cores true)");
@@ -237,10 +234,12 @@ public class QueryChecker {
                 throw new RuntimeException(e);
                 // do nothing
             }
+        }
 
-            smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
-            equalityMapEliminate = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
-            executors.add(new CVC4Executor(smt, latch));
+        smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
+        Map<Object, Integer> equalityMapEliminate = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
+        executors.add(new CVC4Executor(smt, latch));
+        if (PRINT_FORMULAS) {
             try {
                 PrintWriter pw = new PrintWriter(FORMULA_DIR + "/gen_elim_" + queries.size() + ".smt2");
                 pw.println("(set-option :produce-unsat-cores true)");

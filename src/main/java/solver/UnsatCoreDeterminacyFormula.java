@@ -2,17 +2,19 @@ package solver;
 
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
 import policy_checker.Policy;
 
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     private final boolean unnamedEquality;
     private final boolean eliminateIrrelevant;
-    private final Set<String> relevantAttributes;
+    private final ImmutableSet<String> relevantAttributes;
 
     public UnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
         super(schema, (Instance inst1, Instance inst2) -> {
@@ -31,11 +33,9 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
         this.unnamedEquality = unnamedEquality;
         this.eliminateIrrelevant = eliminateIrrelevant;
-        this.relevantAttributes = new HashSet<>();
-
-        for (Policy policy : policies) {
-            this.relevantAttributes.addAll(policy.getThetaColumns());
-        }
+        this.relevantAttributes = policies.stream()
+                .flatMap(policy -> policy.getThetaColumns().stream())
+                .collect(ImmutableSet.toImmutableSet());
     }
 
     private Map<Object, Integer> assertionMap = null;

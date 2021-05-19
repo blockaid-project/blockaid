@@ -1,7 +1,5 @@
 package solver.executor;
 
-import solver.executor.SMTExecutor;
-
 import java.util.concurrent.CountDownLatch;
 
 public class CVC4Executor extends SMTExecutor {
