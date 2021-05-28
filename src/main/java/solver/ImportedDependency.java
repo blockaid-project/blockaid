@@ -4,9 +4,11 @@ import com.microsoft.z3.*;
 
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class ImportedDependency implements Dependency {
-    private String[] constants;
-    private String solverFormula;
+    private final String[] constants;
+    private final String solverFormula;
 
     public ImportedDependency(String dependency) {
         String[] parts = dependency.split("\\|", 2);
@@ -16,7 +18,8 @@ public class ImportedDependency implements Dependency {
     }
 
     @Override
-    public BoolExpr apply(Context context, Instance instance) {
+    public BoolExpr apply(Instance instance) {
+        Context context = instance.getContext();
         List<Symbol> funcSymbols = new ArrayList<>();
         List<FuncDecl> funcDecls = new ArrayList<>();
         for (String constant : constants) {
@@ -24,9 +27,9 @@ public class ImportedDependency implements Dependency {
             funcDecls.add(context.mkFuncDecl("!" + constant, new Sort[0], context.getIntSort()));
         }
         for (Map.Entry<String, Relation> e : instance.entrySet()) {
-            Function function = e.getValue().function;
-            assert function instanceof Z3Function;
-            FuncDecl funcDecl = ((Z3Function) function).functionDecl;
+            Function function = e.getValue().getFunction();
+            checkArgument(function instanceof Z3Function);
+            FuncDecl funcDecl = ((Z3Function) function).getFunctionDecl();
             funcSymbols.add(context.mkSymbol("!" + e.getKey()));
             funcDecls.add(funcDecl);
         }

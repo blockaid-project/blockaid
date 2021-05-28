@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package jdbc;
+package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
 /**
  * Utility for Quark thin clients.

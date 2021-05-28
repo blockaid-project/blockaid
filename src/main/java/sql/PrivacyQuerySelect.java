@@ -7,15 +7,20 @@ import solver.Schema;
 import java.util.*;
 
 public class PrivacyQuerySelect extends PrivacyQuery {
-    private ParsedPSJ parsedPSJ;
+    private final ParsedPSJ parsedPSJ;
 
     public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema) {
-        this(parsedSql, schema, new Object[0], Collections.emptyList());
+        this(parsedSql, schema, Collections.emptyList(), Collections.emptyList());
     }
 
-    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames) {
+    /**
+     * Takes "ownership" of arguments.
+     */
+    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema, List<Object> parameters,
+                              List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
-        parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, Arrays.asList(parameters), paramNames);
+        parsedPSJ = new ParsedPSJ(getSelectNode(parsedSql), schema, parameters, paramNames);
+//        System.out.println("PrivacyQuerySelect: " + parsedSql.parsedSql + ", " + parsedPSJ);
     }
 
     private SqlSelect getSelectNode(ParserResult result) {

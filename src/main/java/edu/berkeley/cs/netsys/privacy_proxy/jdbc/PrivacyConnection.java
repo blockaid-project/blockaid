@@ -1,11 +1,13 @@
-package jdbc;
+package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
+import com.google.common.collect.*;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.SqlKind;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
+import solver.ForeignKeyDependency;
 import sql.*;
 
 import java.io.InputStream;
@@ -20,60 +22,100 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PrivacyConnection implements Connection {
-  private Connection direct_connection;
-  private PrivacyParser parser;
+  private final Connection direct_connection;
+  private final PrivacyParser parser;
   private final QueryChecker query_checker;
-  private ArrayList<Policy> policy_list;
-  public QueryTrace current_trace;
-  private SchemaPlusWithKey schema;
+  private final ArrayList<Policy> policy_list;
+  private QueryTrace current_trace;
+  private final SchemaPlusWithKey schema;
 
+  /**
+   * Takes ownership of direct_info.
+   */
   PrivacyConnection(Connection direct_connection, Properties direct_info) throws SQLException {
     this.direct_connection = direct_connection;
-    Properties info = direct_info;
-    info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
-    this.parser = new ParserFactory(info).getParser(info);
-
-//    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("PUBLIC");
-    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema("diaspora_db_server");
-
-    String deps = info.getProperty("deps");
-    String pks = info.getProperty("pk");
-    String fks = info.getProperty("fk");
-
-    Map<String, List<String>> primaryKeys = new HashMap<>();
-    if (!pks.isEmpty()) {
-      for (String pk : pks.split("\n")) {
-        pk = pk.toUpperCase();
-        String[] parts = pk.split(":", 2);
-        String[] columns = parts[1].split(",");
-        if (!primaryKeys.containsKey(parts[0])) {
-          primaryKeys.put(parts[0], Arrays.asList(columns));
-        }
-      }
+    direct_info.setProperty("schemaFactory", "catalog.db.SchemaFactory");
+    QueryContext ctx;
+    try {
+      ctx = new QueryContext(direct_info);
+    } catch (PrivacyException e){
+      throw new SQLException(e.getMessage(), e);
     }
-    schema = new SchemaPlusWithKey(schemaPlus, primaryKeys);
+    this.parser = new ParserFactory(ctx).getParser();
+
+    String database_name = direct_info.getProperty("database_name", "PUBLIC");
+    SchemaPlus schemaPlus = this.parser.getRootSchma().getSubSchema("CANONICAL").getSubSchema(database_name);
+
+    String deps = direct_info.getProperty("deps");
+    String pks = direct_info.getProperty("pk");
+    String fks = direct_info.getProperty("fk");
+
+    Map<String, ImmutableList<String>> primaryKeys = new HashMap<>();
+    pks.lines().map(String::toUpperCase).forEach(line -> {
+      String[] parts = line.split(":", 2);
+      String[] columns = parts[1].split(",");
+      if (!primaryKeys.containsKey(parts[0])) {
+        primaryKeys.put(parts[0], ImmutableList.copyOf(columns));
+      }
+    });
+
+    ImmutableSet<ForeignKeyDependency> foreignKeys = fks.lines().map(line -> {
+      line = line.toUpperCase();
+      String[] parts = line.split(":", 2);
+      String[] from = parts[0].split("\\.", 2);
+      String[] to = parts[1].split("\\.", 2);
+      return new ForeignKeyDependency(from[0], from[1], to[0], to[1]);
+    }).collect(ImmutableSet.toImmutableSet());
+
+    schema = new SchemaPlusWithKey(schemaPlus, ImmutableMap.copyOf(primaryKeys), foreignKeys);
 
     this.policy_list = new ArrayList<>();
-    set_policy(info);
+    set_policy(direct_info, ctx);
 
     this.query_checker = QueryChecker.getInstance(
+            direct_info,
             this.policy_list,
             this.schema,
-            deps.isEmpty() ? new String[0] : deps.split("\n"),
-            pks.isEmpty() ? new String[0] : pks.split("\n"),
-            fks.isEmpty() ? new String[0] : fks.split("\n")
+            deps.lines().toArray(String[]::new),
+            pks.lines().toArray(String[]::new),
+            fks.lines().toArray(String[]::new)
     );
     current_trace = new QueryTrace();
   }
 
-  private void set_policy(Properties info) {
+  private void set_policy(Properties info, QueryContext ctx) {
     for (String sql : info.getProperty("policy").split("\n")) {
-      this.policy_list.add(new Policy(info, this.schema, sql));
+      this.policy_list.add(new Policy(ctx, this.schema, sql));
     }
   }
 
-  private boolean shouldApplyPolicy(SqlKind kind) {
-    return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION);
+  /**
+   * Parses SQL query and determines whether to apply policies to it.
+   * @param query the query to parse.
+   * @return parsed query if policies are applicable, empty otherwise.
+   * @throws SQLException if parsing fails.
+   */
+  private Optional<ParserResult> shouldApplyPolicy(String query) throws SQLException {
+    if (query.toUpperCase().startsWith("UPDATE")) {
+      // The Calcite parser doesn't like our updates--
+      // org.apache.calcite.sql.parser.impl.ParseException: Encountered "." at line 1, column 43.
+      // Was expecting: "=" ... : UPDATE `notifications` SET `notifications`.`unread` = 0 WHERE
+      // `notifications`.`recipient_id` = ? AND `notifications`.`target_type` = ?
+      // AND `notifications`.`target_id` = ? AND `notifications`.`unread` = ?
+      return Optional.empty();
+    }
+
+    // FIXME(zhangwen): HACK-- As Eric reported, Calcite doesn't like "one", and so we append an underscore to it.
+    query = query.replace("1 AS one", "1 AS one_");
+    ParserResult parser_result = parser.parse(query);
+
+    SqlKind kind = parser_result.getSqlNode().getKind();
+    if (kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION)) {
+      // These are the types of queries we do handle.
+      return Optional.of(parser_result);
+    }
+
+    return Optional.empty();
   }
 
   public void resetSequence() {
@@ -82,92 +124,113 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public Statement createStatement() throws SQLException {
+//    System.out.println("=== createStatement ===");
     return new PrivacyStatement();
   }
 
   @Override
   public PreparedStatement prepareStatement(String s) throws SQLException {
-    Pattern pattern = Pattern.compile("(.*?\\?)(\\?|[A-Za-z0-9_]+)");
+    Pattern pattern = Pattern.compile("\\?([A-Za-z0-9_]*)");
     Matcher matcher = pattern.matcher(s);
-    List<String> parameters = new ArrayList<>();
+    List<String> paramNames = new ArrayList<>();
     while (matcher.find()) {
-      parameters.add(matcher.group(2));
+      String name = matcher.group(1);
+      if (name.isEmpty()) {
+        name = "?";
+      }
+      paramNames.add(name);
     }
-    s = matcher.replaceAll("$1");
-    if (shouldApplyPolicy(parser.parse(s).getSqlNode().getKind())) {
-      return new PrivacyPreparedStatement(s, parameters);
-    } else {
+    s = matcher.replaceAll("?");
+
+    Optional<ParserResult> parser_result = shouldApplyPolicy(s);
+    if (parser_result.isEmpty()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
     }
+
+    return new PrivacyPreparedStatement(s, parser_result.get(), paramNames);
   }
 
   @Override
   public CallableStatement prepareCall(String s) throws SQLException {
+//      System.out.println("=== prepareCall ===");
     return direct_connection.prepareCall(s);
   }
 
   @Override
   public String nativeSQL(String s) throws SQLException {
+//    System.out.println("=== nativeSQL ===");
     return direct_connection.nativeSQL(s);
   }
 
   @Override
   public void setAutoCommit(boolean b) throws SQLException {
+//    System.out.println("=== setAutoCommit ===");
     direct_connection.setAutoCommit(b);
   }
 
   @Override
   public boolean getAutoCommit() throws SQLException {
+//    System.out.println("=== getAutoCommit ===");
     return direct_connection.getAutoCommit();
   }
 
   @Override
   public void commit() throws SQLException {
+//    System.out.println("=== commit ===");
     direct_connection.commit();
   }
 
   @Override
   public void rollback() throws SQLException {
+//    System.out.println("=== rollback ===");
     direct_connection.rollback();
   }
 
   @Override
   public void close() throws SQLException {
+//    System.out.println("=== close ===");
     direct_connection.close();
   }
 
   @Override
   public boolean isClosed() throws SQLException {
+//    System.out.println("=== isClosed ===");
     return direct_connection.isClosed();
   }
 
   @Override
   public DatabaseMetaData getMetaData() throws SQLException {
+//    System.out.println("=== getMetaData ===");
     return direct_connection.getMetaData();
   }
 
   @Override
   public void setReadOnly(boolean b) throws SQLException {
+//    System.out.println("=== setReadOnly ===");
     direct_connection.setReadOnly(b);
   }
 
   @Override
   public boolean isReadOnly() throws SQLException {
+//    System.out.println("=== isReadOnly ===");
     return direct_connection.isReadOnly();
   }
 
   @Override
   public void setCatalog(String s) throws SQLException {
+//    System.out.println("=== setCatalog ===");
     direct_connection.setCatalog(s);
   }
 
   @Override
   public String getCatalog() throws SQLException {
+//    System.out.println("=== getCatalog ===");
     return direct_connection.getCatalog();
   }
 
   @Override
   public void setTransactionIsolation(int i) throws SQLException {
+//    System.out.println("=== setTransactionIsolation ===");
     direct_connection.setTransactionIsolation(i);
   }
 
@@ -193,11 +256,13 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s, int i, int i1) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, i, i1);
   }
 
   @Override
   public CallableStatement prepareCall(String s, int i, int i1) throws SQLException {
+//    System.out.println("=== prepareCall ===");
     return direct_connection.prepareCall(s, i, i1);
   }
 
@@ -233,6 +298,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public void rollback(Savepoint savepoint) throws SQLException {
+//    System.out.println("=== rollback ===");
     direct_connection.rollback(savepoint);
   }
 
@@ -248,26 +314,31 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public PreparedStatement prepareStatement(String s, int i, int i1, int i2) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, i, i1, i2);
   }
 
   @Override
   public CallableStatement prepareCall(String s, int i, int i1, int i2) throws SQLException {
+//    System.out.println("=== prepareCall ===");
     return direct_connection.prepareCall(s, i, i1, i2);
   }
 
   @Override
   public PreparedStatement prepareStatement(String s, int i) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, i);
   }
 
   @Override
   public PreparedStatement prepareStatement(String s, int[] ints) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, ints);
   }
 
   @Override
   public PreparedStatement prepareStatement(String s, String[] strings) throws SQLException {
+//    System.out.println("=== prepareStatement ===");
     return direct_connection.prepareStatement(s, strings);
   }
 
@@ -328,6 +399,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public void setSchema(String s) throws SQLException {
+//    System.out.println("=== setSchema ===");
     direct_connection.setSchema(s);
   }
 
@@ -365,12 +437,12 @@ public class PrivacyConnection implements Connection {
     private PreparedStatement direct_statement;
     private ParserResult parser_result;
     private List<String> param_names;
-    private Object[] values;
+    private Object[] param_values;
     private PrivacyQuery privacy_query = null;
 
-    PrivacyPreparedStatement(String sql, List<String> param_names) throws SQLException {
-      values = new Object[(sql + " ").split("\\?").length - 1];
-      parser_result = parser.parse(sql);
+    PrivacyPreparedStatement(String sql, ParserResult pr, List<String> param_names) throws SQLException {
+      param_values = new Object[(sql + " ").split("\\?").length - 1];
+      this.parser_result = pr;
       direct_statement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
       this.param_names = param_names;
     }
@@ -383,27 +455,31 @@ public class PrivacyConnection implements Connection {
       return new ResultSetWrapper(direct_statement.executeQuery());
     }
 
-    public boolean checkPolicy() throws SQLException {
-      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, values, param_names);
-      Map<String, Integer> variableIndex = new HashMap<>();
-      for (int i = 0; i < param_names.size(); ++i) {
-        if (!param_names.get(i).equals("?")) {
-          variableIndex.put(param_names.get(i), i);
-        }
+    public boolean checkPolicy() {
+      System.out.println("[" + (current_trace.size() + 1) + "] checkPolicy: "
+              + parser_result.getParsedSql() + "\t" + Arrays.toString(param_values));
+
+      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, param_values, param_names,
+              current_trace.getReverseConstMap());
+
+      current_trace.startQuery(privacy_query, privacy_query.parameters);
+      final long startTime = System.currentTimeMillis();
+      try {
+        return query_checker.checkPolicy(current_trace);
+      } catch (Exception e) {
+        System.out.println("\t| EXCEPTION:\t" + e);
+        e.printStackTrace();
+        throw e;
+      } finally {
+        final long endTime = System.currentTimeMillis();
+        System.out.println("\t+ Policy checking:\t" + (endTime - startTime));
       }
-      current_trace.startQuery(privacy_query, Arrays.asList(values));
-      if (shouldApplyPolicy(parser_result.getSqlNode().getKind())) {
-        if (!query_checker.checkPolicy(current_trace)) {
-          return false;
-        }
-      }
-      return true;
     }
 
     private void addRow(List<List<Object>> rows, List<Object> row) {
       QueryTraceEntry current = current_trace.getCurrentQuery();
       List<Boolean> resultBitmap = current.getQuery().getResultBitmap();
-      if (resultBitmap.size() == 0) {
+      if (resultBitmap.isEmpty()) {
         return;
       }
       for (int i = row.size(); i-- > 0; ) {
@@ -432,42 +508,41 @@ public class PrivacyConnection implements Connection {
         while (resultSet.next()) {
           List<Object> row = new ArrayList<>();
           for (int i = 1; i <= columnTypes.size(); ++i) {
+            // TODO(zhangwen): NULLs fetched from the DB are currently represented by the default value for the underlying
+            //  type (e.g., 0 for int).  We can probably get away with this?
             switch (columnTypes.get(i - 1)) {
               case Types.INTEGER:
               case Types.BIGINT:
               case Types.TINYINT:
-              case Types.BIT:
+              case Types.BIT: // TODO(zhangwen): turn into a Boolean?
                 row.add(resultSet.getInt(i));
                 break;
-              case Types.CLOB:
               case Types.VARCHAR:
               case Types.LONGVARCHAR:
-                if (resultSet.getString(i) == null) {
-                  row.add("@@@@@@@@@@@@@null string placeholder");
-                } else {
-                  row.add(resultSet.getString(i));
-                }
+              case Types.CLOB:
+                row.add(resultSet.getString(i));
                 break;
-              case Types.FLOAT:
-              case Types.DOUBLE:
               case Types.DECIMAL:
+              case Types.DOUBLE:
                 row.add(resultSet.getDouble(i));
                 break;
               case Types.BOOLEAN:
                 row.add(resultSet.getBoolean(i));
                 break;
               case Types.DATE:
-                if (resultSet.getDate(i) == null) {
-                  row.add(-0xbaadf00dL);
+                Date d = resultSet.getDate(i);
+                if (d == null) {
+                  row.add(null);
                 } else {
-                  row.add(resultSet.getDate(i).getTime());
+                  row.add(d.getTime());
                 }
                 break;
               case Types.TIMESTAMP:
-                if (resultSet.getTime(i) == null) {
-                  row.add(-0xbaadf00dL);
+                Timestamp ts = resultSet.getTimestamp(i);
+                if (ts == null) {
+                  row.add(null);
                 } else {
-                  row.add(resultSet.getTime(i).getTime());
+                  row.add(ts.getTime());
                 }
                 break;
               default:
@@ -1474,56 +1549,57 @@ public class PrivacyConnection implements Connection {
     @Override
     public void setBoolean(int i, boolean b) throws SQLException {
       direct_statement.setBoolean(i, b);
-      values[i - 1] = b;
+      param_values[i - 1] = b;
     }
 
     @Override
     public void setByte(int i, byte b) throws SQLException {
       direct_statement.setByte(i, b);
-      values[i - 1] = b;
+      param_values[i - 1] = b;
     }
 
     @Override
     public void setShort(int i, short i1) throws SQLException {
       direct_statement.setShort(i, i1);
-      values[i - 1] = i1;
+      param_values[i - 1] = i1;
     }
 
     @Override
     public void setInt(int i, int i1) throws SQLException {
       direct_statement.setInt(i, i1);
-      values[i - 1] = i1;
+      param_values[i - 1] = i1;
     }
 
     @Override
     public void setLong(int i, long l) throws SQLException {
-      direct_statement.setLong(i, l);
-      values[i - 1] = l;
+      // FIXME(zhangwen): HACK--mixing longs and ints is trouble, so we make them ints for now.
+      direct_statement.setInt(i, (int) l);
+      param_values[i - 1] = (int) l;
     }
 
     @Override
     public void setFloat(int i, float v) throws SQLException {
       direct_statement.setFloat(i, v);
-      values[i - 1] = v;
+      param_values[i - 1] = v;
     }
 
     @Override
     public void setDouble(int i, double v) throws SQLException {
       direct_statement.setDouble(i, v);
-      values[i - 1] = v;
+      param_values[i - 1] = v;
     }
 
     @Override
     public void setBigDecimal(int i, BigDecimal bigDecimal) throws SQLException {
       direct_statement.setBigDecimal(i, bigDecimal);
-      values[i - 1] = bigDecimal;
+      param_values[i - 1] = bigDecimal;
     }
 
     @Override
     public void setString(int i, String s) throws SQLException {
       direct_statement.setString(i, s);
       // not really properly escaped todo fix
-      values[i - 1] = s;
+      param_values[i - 1] = s;
     }
 
     @Override
@@ -1565,9 +1641,7 @@ public class PrivacyConnection implements Connection {
     @Override
     public void clearParameters() throws SQLException {
       direct_statement.clearParameters();
-      for (int i = 0; i < values.length; ++i) {
-          values[i] = null;
-      }
+      Arrays.fill(param_values, null);
     }
 
     @Override
@@ -1582,6 +1656,10 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public boolean execute() throws SQLException {
+//      System.out.println("PrivacyPreparedStatement.execute");
+      if (!checkPolicy()) {
+        throw new SQLException("Privacy compliance was not met");
+      }
       return direct_statement.execute();
     }
 
@@ -1837,7 +1915,13 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ResultSet getResultSet() throws SQLException {
-      throw new UnsupportedOperationException();
+//      System.out.println("PrivacyPreparedStatement.getResultSet");
+      // TODO(zhangwen): Is this right?
+      ResultSet rs = direct_statement.getResultSet();
+      if (rs == null) {
+        return null;
+      }
+      return new ResultSetWrapper(rs);
     }
 
     @Override
@@ -2100,6 +2184,10 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public boolean execute(String s) throws SQLException {
+      Optional<Boolean> r = processSetConst(s);
+      if (r.isPresent()) {
+        return r.get();
+      }
       return active_statment.execute(s);
     }
 
@@ -2193,8 +2281,40 @@ public class PrivacyConnection implements Connection {
       return active_statment.executeUpdate(s, strings);
     }
 
+    /**
+     * Detects whether the query is a special query that sets the value of a constant, and if so, executes the request
+     * by adding the (constant name, value) pair to the current sequence.
+     * The syntax for such special queries is like: SET @_MY_UID = 2.
+     * Currently only supports integer values.
+     * @param query the query to check.
+     * @return empty if the query is not a set const query, otherwise, the return value of execute.
+     */
+    private Optional<Boolean> processSetConst(String query) {
+      // I made up this syntax.
+      Pattern pattern = Pattern.compile("^SET @(_[A-Za-z0-9_]+) = (\\d+)$");
+      Matcher matcher = pattern.matcher(query);
+      if (!matcher.find()) {
+        return Optional.empty();
+      }
+
+      String name = matcher.group(1);
+      String value = matcher.group(2);
+      System.out.println("=== processSetConst: " + name + " = " + value);
+      // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
+      resetSequence();
+      current_trace.setConstValue(name, Integer.valueOf(value));
+
+      // TODO(zhangwen): Can I get away with not actually executing this command?
+      return Optional.of(false);
+    }
+
     @Override
     public boolean execute(String s, int i) throws SQLException {
+//      System.out.println("=== PrivacyStatement.execute: " + s);
+      Optional<Boolean> r = processSetConst(s);
+      if (r.isPresent()) {
+        return r.get();
+      }
       return active_statment.execute(s, i);
     }
 

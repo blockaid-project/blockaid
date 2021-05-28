@@ -7,25 +7,28 @@ import solver.UnionQuery;
 
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 public class PrivacyQueryUnion extends PrivacyQuery {
-    private List<PrivacyQuery> queries;
+    private final List<PrivacyQuery> queries;
 
-    public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema) {
-        this(parsedSql, schema, new Object[0], Collections.emptyList());
-    }
-
-    public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema, Object[] parameters, List<String> paramNames) {
+    /**
+     * Takes "ownership" of arguments.
+     */
+    public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema, List<Object> parameters,
+                             List<String> paramNames, Map<Integer, String> reverseConstMap) {
         super(parsedSql, parameters, paramNames);
-        assert parsedSql.getSqlNode() instanceof SqlBasicCall;
+        checkArgument(parsedSql.getSqlNode() instanceof SqlBasicCall);
         SqlBasicCall unionNode = (SqlBasicCall) parsedSql.getSqlNode();
         queries = new ArrayList<>();
         int paramOffset = 0;
         for (int i = 0; i < unionNode.operandCount(); ++i) {
             SqlNode operand = unionNode.operand(i);
             int paramCount = (" " + operand.toString() + " ").split("\\?").length - 1;
-            Object[] partParameters = Arrays.copyOfRange(parameters, paramOffset, paramOffset + paramCount);
+            List<Object> partParameters = parameters.subList(paramOffset, paramOffset + paramCount);
             List<String> partParamNames = paramNames.subList(paramOffset, paramOffset + paramCount);
-            PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new UnionPartParserResult(operand), schema, partParameters, partParamNames);
+            PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new UnionPartParserResult(operand), schema,
+                    partParameters.toArray(new Object[0]), partParamNames, reverseConstMap);
             queries.add(query);
 
             paramOffset += paramCount;
@@ -60,7 +63,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
         Query[] q = new Query[queries.size()];
         for (int i = 0; i < queries.size(); ++i) {
             q[i] = queries.get(i).getSolverQuery(schema, paramPrefix, offset);
-            offset += queries.get(i).parameters.length;
+            offset += queries.get(i).parameters.size();
         }
         return new UnionQuery(q);
     }
@@ -85,7 +88,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
         return bitmap;
     }
 
-    private class UnionPartParserResult extends ParserResult {
+    private static class UnionPartParserResult extends ParserResult {
         private UnionPartParserResult(SqlNode node) {
             super(node.toString(), node.getKind(), node, false, false);
         }

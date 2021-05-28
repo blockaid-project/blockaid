@@ -1,7 +1,7 @@
 package sql;
 
+import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
-import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
 import planner.PrivacyColumn;
@@ -11,20 +11,24 @@ import solver.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class ParsedPSJ {
-    private List<String> relations;
-    private List<String> projectColumns;
-    private List<String> thetaColumns;
-    private List<Object> parameters;
-    private List<String> paramNames;
-    private List<SqlBasicCall> theta;
+    private final List<String> relations;
+    private boolean hasRelAlias = false;
+    private final HashMap<String, Integer> relAliasToIdx;
+    private final List<String> projectColumns;
+    private final List<String> thetaColumns;
+    private final List<Object> parameters;
+    private final List<String> paramNames;
+    private final List<SqlBasicCall> theta;
     private List<Boolean> resultBitmap;
 
     public ParsedPSJ(SqlNode parsedSql, SchemaPlusWithKey schema, List<Object> parameters, List<String> paramNames) {
         projectColumns = new ArrayList<>();
         thetaColumns = new ArrayList<>();
+        this.relAliasToIdx = new HashMap<>(); // Maps relation aliases (and alias-less relation names) to index.
         this.parameters = parameters;
         this.paramNames = paramNames;
         this.theta = new ArrayList<>();
@@ -43,24 +47,34 @@ public class ParsedPSJ {
             this.resultBitmap = null;
         }
         if (fromClause.getKind() != SqlKind.JOIN) {
-            assert fromClause instanceof SqlIdentifier;
+            if (!(fromClause instanceof SqlIdentifier)) {
+                throw new RuntimeException("unhandled from clause: " + fromClause);
+            }
             List<String> names = ((SqlIdentifier) fromClause).names;
-            String relation = names.get(names.size() - 1);
-            relations = Collections.singletonList(relation.toUpperCase());
+            String relation = names.get(names.size() - 1).toUpperCase();
+            relations = Collections.singletonList(relation);
+            relAliasToIdx.put(relation, 0);
         } else {
-            relations = extractRelationNames((SqlJoin) fromClause);
+            relations = new ArrayList<>();
+            extractRelationNames((SqlJoin) fromClause);
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
             // ignore unary function calls and use whatever they're called with instead
             boolean addPrimaryKey = false;
             while (sn instanceof SqlBasicCall) {
-                if (((SqlBasicCall) sn).getOperator() instanceof SqlAsOperator) {
-                    assert ((SqlBasicCall) sn).operand(0) instanceof SqlLiteral; // only literal aliases
-                    sn = ((SqlBasicCall) sn).operand(0);
+                SqlBasicCall call = (SqlBasicCall) sn;
+                if (call.getOperator() instanceof SqlAsOperator) {
+                    SqlNode op0 = call.operand(0);
+                    if (!(op0.getKind() == SqlKind.LITERAL || op0.getKind() == SqlKind.IDENTIFIER)) {
+                        throw new RuntimeException("only literal & identifier aliases are handled");
+                    }
+                    sn = op0;
                     continue;
                 }
-                assert ((SqlBasicCall) sn).operandCount() == 1; // only supporting unary functions
-                sn = ((SqlBasicCall) sn).getOperands()[0];
+                if (call.operandCount() != 1) { // only supporting unary functions
+                    throw new RuntimeException("only supporting unary functions");
+                }
+                sn = call.getOperands()[0];
                 this.resultBitmap = null;
                 addPrimaryKey = true;
             }
@@ -73,6 +87,9 @@ public class ParsedPSJ {
             SqlIdentifier identifier = (SqlIdentifier) sn;
 
             if (addPrimaryKey) {
+                if (hasRelAlias) {
+                    throw new RuntimeException("not supported: relation alias");
+                }
                 if (identifier.names.size() == 1) {
                     for (String relation : relations) {
                         for (String column : schema.primaryKeys.get(relation)) {
@@ -88,17 +105,20 @@ public class ParsedPSJ {
             }
 
             if (identifier.names.get(identifier.names.size() - 1).equals("")) {
-                if (identifier.names.size() == 1) {
+                if (identifier.names.size() == 1) { // SELECT * FROM ...
+                    if (hasRelAlias) {
+                        throw new RuntimeException("not supported: relation alias");
+                    }
                     for (String relation : relations) {
                         for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
                             addProjectColumn((relation + "." + column.name).toUpperCase());
                         }
                     }
-                } else {
-//                    String relation = identifier.names.get(identifier.names.size() - 2).toUpperCase();
-                    String relation = identifier.names.get(identifier.names.size() - 2).toLowerCase();
-                    for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation)).getColumns()) {
-                        addProjectColumn((relation + "." + column.name).toUpperCase());
+                } else { // SELECT table.* FROM ...
+                    String quantifier = identifier.names.get(identifier.names.size() - 2).toUpperCase();
+                    String relation = relations.get(relAliasToIdx.get(quantifier));
+                    for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
+                        addProjectColumn((quantifier + "." + column.name).toUpperCase());
                     }
                 }
             } else {
@@ -107,12 +127,17 @@ public class ParsedPSJ {
         }
 
         // not WHERE TRUE, WHERE FALSE
+        // FIXME(zhangwen): how does WHERE FALSE get handled?
         if (sqlSelect.getWhere() != null && sqlSelect.getWhere().getKind() != SqlKind.LITERAL) {
             SqlBasicCall mainTheta = (SqlBasicCall) sqlSelect.getWhere();
             if (mainTheta != null) {
                 addTheta(mainTheta);
             }
         }
+    }
+
+    private String getRelationNameForAlias(String alias) {
+        return relations.get(relAliasToIdx.get(alias));
     }
 
     private void addProjectColumn(String column) {
@@ -122,30 +147,53 @@ public class ParsedPSJ {
         }
     }
 
-    private List<String> extractRelationNames(SqlJoin join) {
+    private void extractRelationNames(SqlJoin join) {
         if (join.getJoinType() != JoinType.COMMA && join.getJoinType() != JoinType.INNER) {
-            throw new RuntimeException("unhandled join type");
+            throw new RuntimeException("unhandled join type: " + join.getJoinType() + ", " + join.getCondition());
         }
         SqlNode left = join.getLeft();
         SqlNode right = join.getRight();
-        List<String> relations = new ArrayList<>();
         if (left.getKind() == SqlKind.JOIN) {
-            relations.addAll(extractRelationNames((SqlJoin) left));
+            extractRelationNames((SqlJoin) left);
         } else {
-            SqlIdentifier identifier = (SqlIdentifier) left;
-            relations.add(identifier.names.get(identifier.names.size() - 1).toUpperCase());
+            addRelationName(left);
         }
         if (right.getKind() == SqlKind.JOIN) {
-            relations.addAll(extractRelationNames((SqlJoin) right));
+            extractRelationNames((SqlJoin) right);
         } else {
-            SqlIdentifier identifier = (SqlIdentifier) right;
-            relations.add(identifier.names.get(identifier.names.size() - 1).toUpperCase());
+            addRelationName(right);
         }
 
         if (join.getCondition() != null && join.getCondition().getKind() != SqlKind.LITERAL) {
             addTheta((SqlBasicCall) join.getCondition());
         }
-        return relations;
+    }
+
+    private void addRelationName(SqlNode node) {
+        String alias = null;
+        if (node.getKind() == SqlKind.AS) {
+            SqlBasicCall call = (SqlBasicCall) node;
+            SqlNode rhs = call.operand(1);
+            ImmutableList<String> names = ((SqlIdentifier) rhs).names;
+            if (names.size() > 1) {
+                throw new RuntimeException("not supported: multipart table alias: " + rhs);
+            }
+            alias = names.get(0);
+            node = call.operand(0);
+            hasRelAlias = true;
+        }
+
+        SqlIdentifier identifier = (SqlIdentifier) node;
+        String relationName = identifier.names.get(identifier.names.size() - 1).toUpperCase();
+        relations.add(relationName);
+        if (alias != null) {
+            relAliasToIdx.put(alias.toUpperCase(), relations.size() - 1);
+        } else {
+            if (relAliasToIdx.containsKey(relationName)) {
+                throw new RuntimeException("duplicate relation name: " + relationName);
+            }
+            relAliasToIdx.put(relationName.toUpperCase(), relations.size() - 1);
+        }
     }
 
     private void addTheta(SqlBasicCall predicate) {
@@ -177,15 +225,17 @@ public class ParsedPSJ {
         }
     }
 
-    private Expr getPredicate(Context context, SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
+    private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
+        Context context = schema.getContext();
         if (theta instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {
                 return symbolMap.get(name);
             } else if (!name.startsWith("!")) {
                 String[] parts = name.split("\\.", 2);
-                assert parts.length == 2;
-                List<Column> columns = schema.getColumns(parts[0]);
+                checkArgument(parts.length == 2, "not a two-part name: %s", name);
+                String relationName = getRelationNameForAlias(parts[0]);
+                List<Column> columns = schema.getColumns(relationName);
                 for (Column column : columns) {
                     if (column.name.toUpperCase().equals(parts[1])) {
                         return context.mkConst(context.mkSymbol(name), column.type);
@@ -207,13 +257,13 @@ public class ParsedPSJ {
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall) {
-            Expr left = getPredicate(context, ((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
+            Expr left = getPredicate(((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
 
             if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
                 final Expr left1 = left;
                 SqlNodeList values = ((SqlBasicCall) theta).operand(1);
                 BoolExpr[] exprs = values.getList().stream()
-                        .map(n -> context.mkEq(left1, getPredicate(context, n, symbolMap, params, paramNames, schema)))
+                        .map(n -> context.mkEq(left1, getPredicate(n, symbolMap, params, paramNames, schema)))
                         .toArray(BoolExpr[]::new);
                 BoolExpr expr = context.mkOr(exprs);
                 if (theta.getKind() == SqlKind.NOT_IN) {
@@ -222,9 +272,11 @@ public class ParsedPSJ {
                 return expr;
             }
 
-            Expr right = getPredicate(context, ((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
+            Expr right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (left instanceof ArithExpr && right instanceof SeqExpr) {
                 try {
+                    System.out.println("!!!*** " + theta);
+                    System.out.println("\t" + right);
                     right = context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime());
                 } catch (ParseException e) {
                     // do nothing
@@ -259,6 +311,9 @@ public class ParsedPSJ {
             String name = "!" + paramNames.get(paramNames.size() - 1);
             paramNames.remove(paramNames.size() - 1);
             if (name.equals("!?")) {
+                if (param == null) {
+                    throw new UnsupportedOperationException("null parameter is not supported (yet)");
+                }
                 return Tuple.getExprFromObject(context, param);
             } else {
                 if (symbolMap.containsKey(name)) {
@@ -298,7 +353,8 @@ public class ParsedPSJ {
         return relations;
     }
 
-    private BoolExpr getPredicate(Context context, Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
+    private BoolExpr getPredicate(Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
+        Context context = schema.getContext();
         if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
@@ -313,7 +369,7 @@ public class ParsedPSJ {
             Collections.reverse(names);
             BoolExpr[] exprs = new BoolExpr[theta.size()];
             for (int i = 0; i < theta.size(); ++i) {
-                exprs[i] = (BoolExpr) getPredicate(context, theta.get(i), symbolMap, params, names, schema);
+                exprs[i] = (BoolExpr) getPredicate(theta.get(i), symbolMap, params, names, schema);
             }
             return context.mkAnd(exprs);
         } else {
@@ -321,8 +377,8 @@ public class ParsedPSJ {
         }
     }
 
-    public BoolExpr getPredicate(Context context, Schema schema) {
-        return getPredicate(context, Collections.emptyMap(), schema, null, 0);
+    public BoolExpr getPredicate(Schema schema) {
+        return getPredicate(Collections.emptyMap(), schema, null, 0);
     }
 
     public Query getSolverQuery(Schema schema) {
@@ -335,6 +391,14 @@ public class ParsedPSJ {
 
     public List<Boolean> getResultBitmap() {
         return resultBitmap == null ? Collections.emptyList() : resultBitmap;
+    }
+
+    /**
+     * Checks if this policy has no `WHERE` clause, i.e., returns all rows.
+     * @return true if this policy has no `WHERE` clause.
+     */
+    public boolean hasNoTheta() {
+        return theta.isEmpty();
     }
 
     private class SolverQuery extends PSJ {
@@ -366,18 +430,28 @@ public class ParsedPSJ {
             Iterator<String> iter = columns.iterator();
             for (int i = 0; i < columns.size(); ++i) {
                 String[] parts = iter.next().split("\\.");
-                relationIndex[i] = relations.indexOf(parts[0]);
-                columnIndex[i] = schema.getColumnNames(parts[0]).indexOf(parts[1]);
+                String quantifier = parts[0]; // A quantifier can either be a relation name or an alias.
+
+                int currIdx = relAliasToIdx.get(quantifier);
+                relationIndex[i] = currIdx;
+
+                String relationName = relations.get(currIdx);
+                List<String> columnNames = schema.getColumnNames(relationName);
+                columnIndex[i] = columnNames.indexOf(parts[1]);
+                if (relationIndex[i] == -1 || columnIndex[i] == -1) {
+                    throw new RuntimeException("column not found: " + relationName + "." + parts[1]
+                            + " in columns: " + columnNames);
+                }
             }
         }
 
         @Override
-        protected BoolExpr predicateGenerator(Context context, Tuple... tuples) {
+        protected BoolExpr predicateGenerator(Tuple... tuples) {
             Map<String, Expr> map = new HashMap<>();
             for (int i = 0; i < thetaColumnIndex.length; ++i) {
                 map.put(thetaColumns.get(i), tuples[thetaRelationIndex[i]].get(thetaColumnIndex[i]));
             }
-            return getPredicate(context, map, schema, prefix, parameterOffset);
+            return getPredicate(map, schema, prefix, parameterOffset);
         }
 
         @Override
@@ -386,7 +460,7 @@ public class ParsedPSJ {
             for (int i = 0; i < parts.length; ++i) {
                 parts[i] = tuples[projectRelationIndex[i]].get(projectColumnIndex[i]);
             }
-            return new Tuple(parts);
+            return new Tuple(schema, parts);
         }
 
         @Override

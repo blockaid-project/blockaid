@@ -1,33 +1,35 @@
 package solver;
 
 import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
 import com.microsoft.z3.Sort;
 
 import java.util.Collections;
+import java.util.Objects;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ForeignKeyDependency implements Dependency {
-    private String fromRelation;
-    private String fromColumn;
-    private String toRelation;
-    private String toColumn;
+    private final String fromRelation;
+    private final String fromColumn;
+    private final String toRelation;
+    private final String toColumn;
 
     public ForeignKeyDependency(String fromRelation, String fromColumn, String toRelation, String toColumn) {
-        this.fromRelation = fromRelation;
-        this.fromColumn = fromColumn;
-        this.toRelation = toRelation;
-        this.toColumn = toColumn;
+        this.fromRelation = checkNotNull(fromRelation);
+        this.fromColumn = checkNotNull(fromColumn);
+        this.toRelation = checkNotNull(toRelation);
+        this.toColumn = checkNotNull(toColumn);
     }
 
     @Override
-    public BoolExpr apply(Context context, Instance instance) {
+    public BoolExpr apply(Instance instance) {
         Schema schema = instance.schema;
         int fromIndex = schema.getColumnNames(fromRelation).indexOf(fromColumn);
         int toIndex = schema.getColumnNames(toRelation).indexOf(toColumn);
         PSJ selectFromRelation = new PSJ(schema, Collections.singletonList(fromRelation)) {
             @Override
             protected Tuple headSelector(Tuple... tuples) {
-                return new Tuple(tuples[0].get(fromIndex));
+                return new Tuple(schema, tuples[0].get(fromIndex));
             }
             @Override
             protected Sort[] headTypeSelector(Sort[]... types) {
@@ -37,13 +39,36 @@ public class ForeignKeyDependency implements Dependency {
         PSJ selectToRelation = new PSJ(schema, Collections.singletonList(toRelation)) {
             @Override
             protected Tuple headSelector(Tuple... tuples) {
-                return new Tuple(tuples[0].get(toIndex));
+                return new Tuple(schema, tuples[0].get(toIndex));
             }
             @Override
             protected Sort[] headTypeSelector(Sort[]... types) {
                 return new Sort[] { types[0][toIndex] };
             }
         };
-        return selectFromRelation.apply(context, instance).isContainedIn(context, selectToRelation.apply(context, instance));
+        return selectFromRelation.apply(instance).isContainedIn(selectToRelation.apply(instance));
+    }
+
+    @Override
+    public String toString() {
+        return "ForeignKeyDependency{" +
+                "fromRelation='" + fromRelation + '\'' +
+                ", fromColumn='" + fromColumn + '\'' +
+                ", toRelation='" + toRelation + '\'' +
+                ", toColumn='" + toColumn + '\'' +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ForeignKeyDependency that = (ForeignKeyDependency) o;
+        return fromRelation.equals(that.fromRelation) && fromColumn.equals(that.fromColumn) && toRelation.equals(that.toRelation) && toColumn.equals(that.toColumn);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(fromRelation, fromColumn, toRelation, toColumn);
     }
 }

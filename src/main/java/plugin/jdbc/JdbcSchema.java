@@ -33,42 +33,37 @@ public class JdbcSchema extends PrivacySchema {
         while (!resultSet.isAfterLast() && resultSet.getString(1).equals(name)) {
             ImmutableList.Builder<PrivacyColumn> columnBuilder = new ImmutableList.Builder<>();
             String currentTable = resultSet.getString(2);
-            boolean skip = resultSet.getString(1).equals("information_schema") || resultSet.getString(1).equals("mysql") || resultSet.getString(1).equals("performance_schema")|| resultSet.getString(1).equals("sys");
             while (resultSet.getString(2).equals(currentTable)) {
-                if (!skip) {
-                    String columnName = resultSet.getString(3);
-                    if (!isCaseSensitive) {
-                        columnName = columnName.toUpperCase();
-                    }
-                    Integer dataType = null;
-                    for (String key : dataTypes.keySet()) {
-                        if (resultSet.getString(4).toUpperCase().matches(key)) {
-                            dataType = dataTypes.get(key);
-                            break;
-                        }
-                    }
-
-                    if (dataType == null) {
-                        throw new SQLException("DataType `" + resultSet.getString(4) + "` is not supported");
-                    }
-
-                    columnBuilder.add(new PrivacyColumn(columnName, dataType));
-                    LOG.debug("Adding column:  " + resultSet.getString(1) + " : "
-                            + resultSet.getString(2) + " : "
-                            + resultSet.getString(3) + " : "
-                            + resultSet.getString(4));
+                String columnName = resultSet.getString(3);
+                if (!isCaseSensitive) {
+                    columnName = columnName.toUpperCase();
                 }
+                Integer dataType = null;
+                for (String key: dataTypes.keySet()) {
+                    if (resultSet.getString(4).toUpperCase().matches(key)) {
+                        dataType = dataTypes.get(key);
+                        break;
+                    }
+                }
+
+                if (dataType == null) {
+                    throw new SQLException("DataType `" + resultSet.getString(4) + "` is not supported");
+                }
+
+                columnBuilder.add(new PrivacyColumn(columnName, dataType));
+                LOG.debug("Adding column:  " + resultSet.getString(1) + " : "
+                        + resultSet.getString(2) + " : "
+                        + resultSet.getString(3) + " : "
+                        + resultSet.getString(4));
                 if (!resultSet.next()) {
                     break;
                 }
             }
 
-            if (!skip) {
-                if (!isCaseSensitive) {
-                    currentTable = currentTable.toUpperCase();
-                }
-                tableBuilder.put(currentTable, new PrivacyTable(this, currentTable, columnBuilder.build()));
+            if (!isCaseSensitive) {
+                currentTable = currentTable.toUpperCase();
             }
+            tableBuilder.put(currentTable, new PrivacyTable(this, currentTable, columnBuilder.build()));
         }
 
         tableMap = tableBuilder.build();

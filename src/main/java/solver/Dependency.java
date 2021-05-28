@@ -4,5 +4,5 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 
 public interface Dependency {
-    BoolExpr apply(Context context, Instance instance);
+    BoolExpr apply(Instance instance);
 }

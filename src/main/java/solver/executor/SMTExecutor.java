@@ -1,4 +1,4 @@
-package solver;
+package solver.executor;
 
 import com.microsoft.z3.Status;
 
@@ -9,20 +9,24 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class SMTExecutor extends Thread {
-    private String smtString;
-    private CountDownLatch latch;
-    private String[] command;
-    private boolean satConclusive;
-    private boolean unsatConclusive;
-    private boolean runCore;
+    private final String smtString;
+    private final CountDownLatch latch;
+    private final String[] command;
+    private final boolean satConclusive;
+    private final boolean unsatConclusive;
+    private final boolean runCore;
 
     private Status result = null;
     private String[] core = null;
     private Process process = null;
-    private AtomicBoolean shuttingDown = new AtomicBoolean(false);
+    private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
     protected SMTExecutor(String smtString, CountDownLatch latch, String[] command) {
         this(smtString, latch, command, false, true, true);
+    }
+    protected SMTExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, String name) {
+        this(smtString, latch, command, satConclusive, unsatConclusive, false);
+        setName(name);
     }
     protected SMTExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
         this(smtString, latch, command, satConclusive, unsatConclusive, false);
@@ -133,7 +137,7 @@ public abstract class SMTExecutor extends Thread {
             String[] parts = output.toString().split("\n", 2);
             result = getResult(parts[0].trim());
             String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
-            core = Arrays.stream(coreParts).map(x -> x.trim()).toArray(String[]::new);
+            core = Arrays.stream(coreParts).map(String::trim).toArray(String[]::new);
         } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         } catch (Exception e) {

@@ -10,21 +10,20 @@ import java.util.Collection;
 import java.util.List;
 
 public class BasicDeterminacyFormula extends DeterminacyFormula {
-    public BasicDeterminacyFormula(Context context, Schema schema, Collection<Query> views) {
-        super(context, schema, views);
-
-        List<BoolExpr> clauses = new ArrayList<>();
-        if (inst1.constraint != null) {
-            clauses.add(inst1.constraint);
-        }
-        if (inst2.constraint != null) {
-            clauses.add(inst2.constraint);
-        }
-        assert views.size() > 0;
-        for (Query v : views) {
-            clauses.add(v.apply(context, inst1).equalsExpr(context, v.apply(context, inst2)));
-        }
-        setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
+    public BasicDeterminacyFormula(Schema schema, Collection<Query> views) {
+        super(schema, (Instance inst1, Instance inst2) -> {
+            List<BoolExpr> clauses = new ArrayList<>();
+            if (inst1.constraint != null) {
+                clauses.add(inst1.constraint);
+            }
+            if (inst2.constraint != null) {
+                clauses.add(inst2.constraint);
+            }
+            for (Query v : views) {
+                clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
+            }
+            return schema.getContext().mkAnd(clauses.toArray(new BoolExpr[0]));
+        });
     }
 
     @Override
@@ -36,7 +35,7 @@ public class BasicDeterminacyFormula extends DeterminacyFormula {
     public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         return context.mkAnd(
-                context.mkNot(query.apply(context, inst1).equalsExpr(context, query.apply(context, inst2))),
+                context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))),
                 generateTupleCheck(queries, constants)
         );
     }

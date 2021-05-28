@@ -2,40 +2,40 @@ package solver;
 
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
 import policy_checker.Policy;
 
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     private final boolean unnamedEquality;
     private final boolean eliminateIrrelevant;
-    private final Set<String> relevantAttributes;
+    private final ImmutableSet<String> relevantAttributes;
 
-    public UnsatCoreDeterminacyFormula(Context context, Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
-        super(context, schema, views);
+    public UnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
+        super(schema, (Instance inst1, Instance inst2) -> {
+            List<BoolExpr> clauses = new ArrayList<>();
+            if (inst1.constraint != null) {
+                clauses.add(inst1.constraint);
+            }
+            if (inst2.constraint != null) {
+                clauses.add(inst2.constraint);
+            }
+            for (Query v : views) {
+                clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
+            }
+            return schema.getContext().mkAnd(clauses.toArray(new BoolExpr[0]));
+        });
 
-        List<BoolExpr> clauses = new ArrayList<>();
-        if (inst1.constraint != null) {
-            clauses.add(inst1.constraint);
-        }
-        if (inst2.constraint != null) {
-            clauses.add(inst2.constraint);
-        }
-        assert views.size() > 0;
-        for (Query v : views) {
-            clauses.add(v.apply(context, inst1).equalsExpr(context, v.apply(context, inst2)));
-        }
-        setPreparedExpr(context.mkAnd(clauses.toArray(new BoolExpr[0])));
         this.unnamedEquality = unnamedEquality;
         this.eliminateIrrelevant = eliminateIrrelevant;
-        this.relevantAttributes = new HashSet<>();
-
-        for (Policy policy : policies) {
-            this.relevantAttributes.addAll(policy.getThetaColumns());
-        }
+        this.relevantAttributes = policies.stream()
+                .flatMap(policy -> policy.getThetaColumns().stream())
+                .collect(ImmutableSet.toImmutableSet());
     }
 
     private Map<Object, Integer> assertionMap = null;
@@ -55,22 +55,23 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                 Query query = queryTraceEntry.getQuery().getSolverQuery(schema, prefix, 0);
 
                 List<String> paramNames = queryTraceEntry.getQuery().paramNames;
-                Object[] parameters = queryTraceEntry.getQuery().parameters;
-                Tuple paramConstants = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.length));
-                constantsOffset += parameters.length;
+                List<Object> parameters = queryTraceEntry.getQuery().parameters;
+                Tuple paramConstants = new Tuple(schema, Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.size()));
+                constantsOffset += parameters.size();
 
-                Relation r1 = query.apply(context, inst1);
-                Relation r2 = query.apply(context, inst2);
+                Relation r1 = query.apply(inst1);
+                Relation r2 = query.apply(inst2);
                 if (!queryTraceEntry.getTuples().isEmpty() || queryTraceEntry == queries.getCurrentQuery()) {
-                    for (int i = 0; i < parameters.length; ++i) {
+                    for (int i = 0; i < parameters.size(); ++i) {
                         if (paramNames.get(i).equals("?")) {
-                            if (!equalitySets.containsKey(parameters[i])) {
+                            Object p = parameters.get(i);
+                            if (!equalitySets.containsKey(p)) {
                                 // these should be linked to the query assertions since that's the only place where the
                                 // constants are even used, except for the current query but that's special cased elsewhere
-                                exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, parameters[i])));
-                                equalitySets.put(parameters[i], new HashSet<>());
+                                exprs.put("a_pv!" + queryNumber + "!" + i, context.mkEq(paramConstants.get(i), Tuple.getExprFromObject(context, p)));
+                                equalitySets.put(p, new HashSet<>());
                             }
-                            equalitySets.get(parameters[i]).add(paramConstants.get(i));
+                            equalitySets.get(p).add(paramConstants.get(i));
                         }
                     }
                 }
@@ -82,15 +83,19 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                     List<String> attributeNames = queryTraceEntry.getQuery().getProjectColumns();
                     int attrNumber = 0;
                     for (List<Object> tuple : queryTraceEntry.getTuples()) {
-                        Tuple tupleConstant = new Tuple(Arrays.copyOfRange(constants, constantsOffset, constantsOffset + numAttrs));
+                        Tuple tupleConstant = new Tuple(schema, Arrays.copyOfRange(constants, constantsOffset, constantsOffset + numAttrs));
                         tupleConstants.add(tupleConstant);
                         for (int i = 0; i < tuple.size(); ++i) {
+                            Object curr = tuple.get(i);
+                            if (curr == null) {
+                                continue;
+                            }
                             if (!eliminateIrrelevant || relevantAttributes.contains(attributeNames.get(i))) {
-                                if (!equalitySets.containsKey(tuple.get(i))) {
-                                    exprs.put("a_v!" + queryNumber + "!" + attrNumber, context.mkEq(tupleConstant.get(i), Tuple.getExprFromObject(context, tuple.get(i))));
-                                    equalitySets.put(tuple.get(i), new HashSet<>());
+                                if (!equalitySets.containsKey(curr)) {
+                                    exprs.put("a_v!" + queryNumber + "!" + attrNumber, context.mkEq(tupleConstant.get(i), Tuple.getExprFromObject(context, curr)));
+                                    equalitySets.put(curr, new HashSet<>());
                                 }
-                                equalitySets.get(tuple.get(i)).add(tupleConstant.get(i));
+                                equalitySets.get(curr).add(tupleConstant.get(i));
                             }
 
                             ++attrNumber;
@@ -98,7 +103,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                         constantsOffset += numAttrs;
                     }
 
-                    exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContain(context, tupleConstants), r2.doesContain(context, tupleConstants)));
+                    exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContain(tupleConstants), r2.doesContain(tupleConstants)));
                 }
 
                 ++queryNumber;
@@ -143,20 +148,15 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Solver makeSolver(QueryTrace queries) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
     public Expr[] makeFormulaConstants(QueryTrace queries) {
         List<Expr> exprs = new ArrayList<>();
         int queryNumber = 0;
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
             for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
                 String prefix = (queryTraceEntry == queries.getCurrentQuery() ? "cq_p" : ("q_p!" + queryNumber));
-                Object[] parameters = queryTraceEntry.getQuery().parameters;
-                for (int i = 0; i < parameters.length; ++i) {
-                    exprs.add(context.mkConst("!" + prefix + "!" + i, Tuple.getSortFromObject(context, parameters[i])));
+                List<Object> parameters = queryTraceEntry.getQuery().parameters;
+                for (int i = 0; i < parameters.size(); ++i) {
+                    exprs.add(context.mkConst("!" + prefix + "!" + i, Tuple.getSortFromObject(context, parameters.get(i))));
                 }
                 Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
                 if (!queryTraceEntry.getTuples().isEmpty()) {
@@ -177,83 +177,11 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     @Override
     public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema, "cq_p", 0);
-        return context.mkNot(query.apply(context, inst1).equalsExpr(context, query.apply(context, inst2)));
+        return context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2)));
     }
 
     @Override
     protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
         return super.makeFormulaSMT(queries, new Expr[0]) + "\n" + generateAssertions(queries, constants);
-    }
-
-    @Override
-    public synchronized String generateSMT(QueryTrace queries) {
-        return replaceStrings(replaceInts(super.generateSMT(queries)));
-    }
-
-    private static String replaceInts(String smt) {
-        Set<String> ints = new HashSet<>();
-
-        java.util.regex.Pattern pattern = Pattern.compile("\\(- (\\d+)\\)");
-        Matcher matcher = pattern.matcher(smt);
-        StringBuffer body1 = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(body1, "");
-            String s = matcher.group(1);
-            ints.add("-" + s);
-            body1.append(" int!-").append(s);
-        }
-        matcher.appendTail(body1);
-
-        pattern = Pattern.compile("\\s(\\d+)");
-        matcher = pattern.matcher(body1.toString());
-        StringBuffer body2 = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(body2, "");
-            String s = matcher.group(1);
-            ints.add(s);
-            body2.append(" int!").append(s);
-        }
-        matcher.appendTail(body2);
-
-        StringBuffer out = new StringBuffer("(declare-sort INT 0)\n");
-        for (String i : ints) {
-            out.append("(declare-fun int!").append(i).append(" () INT)\n");
-        }
-        out.append("(assert (distinct");
-        for (String i : ints) {
-            out.append(" int!").append(i);
-        }
-        out.append("))\n").append(body2);
-
-        return out.toString().replaceAll("Int", "INT");
-    }
-
-    private static String replaceStrings(String smt) {
-        Map<String, Integer> replacement = new HashMap<>();
-
-        java.util.regex.Pattern pattern = Pattern.compile("\"([^\"]*)\"");
-        Matcher matcher = pattern.matcher(smt);
-        StringBuffer body = new StringBuffer();
-        while (matcher.find()) {
-            matcher.appendReplacement(body, "");
-            String s = matcher.group(1);
-            if (!replacement.containsKey(s)) {
-                replacement.put(s, replacement.size());
-            }
-            body.append("string!").append(replacement.get(s));
-        }
-        matcher.appendTail(body);
-
-        StringBuffer out = new StringBuffer("(declare-sort STRING 0)\n");
-        for (int i = 0; i < replacement.size(); ++i) {
-            out.append("(declare-fun string!").append(i).append(" () STRING)\n");
-        }
-        out.append("(assert (distinct");
-        for (int i = 0; i < replacement.size(); ++i) {
-            out.append(" string!").append(i);
-        }
-        out.append("))\n").append(body);
-
-        return out.toString().replaceAll("String", "STRING");
     }
 }

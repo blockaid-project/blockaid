@@ -1,6 +1,6 @@
 package server;
 
-import jdbc.ThinClientUtil;
+import edu.berkeley.cs.netsys.privacy_proxy.jdbc.ThinClientUtil;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 

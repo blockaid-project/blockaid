@@ -7,21 +7,29 @@ import java.util.*;
 
 public abstract class PrivacyQuery {
     public ParserResult parsedSql;
-    public Object[] parameters;
+    public List<Object> parameters;
     public List<String> paramNames;
+
+    /**
+     * For making wrapper.  Doesn't copy the privacy query.
+     * @param pq the privacy query to wrap over.
+     */
+    protected PrivacyQuery(PrivacyQuery pq)
+    {
+        this.parsedSql = pq.parsedSql;
+        this.parameters = pq.parameters;
+        this.paramNames = pq.paramNames;
+    }
 
     public PrivacyQuery(ParserResult parsedSql)
     {
-        this(parsedSql, new Object[0], Collections.emptyList());
+        this(parsedSql, Collections.emptyList(), Collections.emptyList());
     }
 
-    public PrivacyQuery(ParserResult parsedSql, Object[] parameters, List<String> paramNames)
+    public PrivacyQuery(ParserResult parsedSql, List<Object> parameters, List<String> paramNames)
     {
         this.parsedSql = parsedSql;
-        this.parameters = new Object[parameters.length];
-        for (int i = 0; i < parameters.length; ++i) {
-            this.parameters[i] = parameters[i];
-        }
+        this.parameters = parameters;
         this.paramNames = paramNames;
     }
 
@@ -31,9 +39,9 @@ public abstract class PrivacyQuery {
         if (o == null || getClass() != o.getClass()) return false;
         PrivacyQuery query = (PrivacyQuery) o;
         if (!parsedSql.equals(query.parsedSql)) return false;
-        if (parameters.length != query.parameters.length) return false;
-        for (int i = 0; i < parameters.length; ++i) {
-            if (paramNames.get(i).equals("?") && !parameters[i].equals(query.parameters[i])) return false;
+        if (parameters.size() != query.parameters.size()) return false;
+        for (int i = 0; i < parameters.size(); ++i) {
+            if (paramNames.get(i).equals("?") && !parameters.get(i).equals(query.parameters.get(i))) return false;
         }
         return true;
     }
@@ -41,9 +49,9 @@ public abstract class PrivacyQuery {
     @Override
     public int hashCode() {
         int result = Objects.hash(parsedSql);
-        for (int i = 0; i < parameters.length; ++i) {
+        for (int i = 0; i < parameters.size(); ++i) {
             if (paramNames.get(i).equals("?")) {
-                result = 31 * result + Objects.hash(parameters[i]);
+                result = 31 * result + Objects.hash(parameters.get(i));
             }
         }
         return result;

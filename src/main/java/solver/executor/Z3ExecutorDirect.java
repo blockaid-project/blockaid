@@ -1,15 +1,10 @@
-package solver;
+package solver.executor;
 
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
+import solver.executor.SMTExecutor;
 
-import java.io.BufferedWriter;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Z3ExecutorDirect extends SMTExecutor {
     private Solver solver;

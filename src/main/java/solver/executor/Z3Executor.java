@@ -1,6 +1,6 @@
-package solver;
+package solver.executor;
 
-import com.microsoft.z3.Solver;
+import solver.executor.SMTExecutor;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -16,7 +16,7 @@ public class Z3Executor extends SMTExecutor {
         super(solver, latch, command);
     }
 
-    public Z3Executor(String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive) {
-        super(solver, latch, command, satConclusive, unsatConclusive);
+    public Z3Executor(String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, String name) {
+        super(solver, latch, command, satConclusive, unsatConclusive, name);
     }
 }

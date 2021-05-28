@@ -2,6 +2,7 @@ package policy_checker;
 
 import com.microsoft.z3.*;
 import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.config.Lex;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -16,24 +17,12 @@ import sql.SchemaPlusWithKey;
 import java.util.*;
 
 public class Policy {
-    private ParsedPSJ parsedPSJ;
-    private boolean useSuperset;
+    private final ParsedPSJ parsedPSJ;
+    private final boolean useSuperset;
 
-    public Policy(Properties info, SchemaPlusWithKey schema, String sqlPolicy) {
-        QueryContext context = null;
-        try {
-            context = new QueryContext(info);
-        } catch (PrivacyException e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
-
+    public Policy(QueryContext context, SchemaPlusWithKey schema, String sqlPolicy) {
         parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), schema, Collections.emptyList(), Collections.emptyList());
         useSuperset = false;
-    }
-
-    public boolean checkPolicySchema(){
-        return true;
     }
 
     private SqlNode parseSql(QueryContext context, String sql){
@@ -43,6 +32,7 @@ public class Policy {
                         .setQuotedCasing(config.quotedCasing())
                         .setUnquotedCasing(config.unquotedCasing())
                         .setQuoting(config.quoting())
+                        .setLex(Lex.MYSQL)
                         .build());
         SqlNode sqlNode;
         try {
@@ -62,37 +52,25 @@ public class Policy {
         return new HashSet<>(parsedPSJ.getThetaColumns());
     }
 
-    public BoolExpr getPredicate(Context context, Schema schema) {
-        return parsedPSJ.getPredicate(context, schema);
+    public BoolExpr getPredicate(Schema schema) {
+        return parsedPSJ.getPredicate(schema);
+    }
+
+    public boolean hasNoTheta() {
+        return parsedPSJ.hasNoTheta();
     }
 
     public boolean checkApplicable(Set<String> projectColumns, Set<String> thetaColumns) {
-        if (!containsAny(parsedPSJ.getProjectColumns(), projectColumns)) {
+        if (Collections.disjoint(parsedPSJ.getProjectColumns(), projectColumns)) {
             return false;
         }
 
-        if (useSuperset && !containsAll(thetaColumns, parsedPSJ.getThetaColumns())) {
+        if (useSuperset && !thetaColumns.containsAll(parsedPSJ.getThetaColumns())) {
             return false;
         }
 
-        if (!useSuperset && !parsedPSJ.getThetaColumns().isEmpty() && !containsAny(thetaColumns, parsedPSJ.getThetaColumns())) {
-            return false;
-        }
-
-        return true;
-    }
-
-    private boolean containsAll(Collection<String> set, Collection<String> query) {
-        return set.containsAll(query);
-    }
-
-    private boolean containsAny(Collection<String> set, Collection<String> query) {
-        for (String s : query) {
-            if (set.contains(s)) {
-                return true;
-            }
-        }
-        return false;
+        return useSuperset || parsedPSJ.getThetaColumns().isEmpty()
+                || !Collections.disjoint(thetaColumns, parsedPSJ.getThetaColumns());
     }
 
     public Query getSolverQuery(Schema schema) {
