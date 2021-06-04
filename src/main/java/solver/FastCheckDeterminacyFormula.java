@@ -27,28 +27,23 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         });
     }
 
-    /**
-     *  Makes SMT formula for fast check: either "determinacy holds" or "I don't know".
-     */
-    @Override
-    public Expr[] makeFormulaConstants(QueryTrace queries) {
-        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
+    private Tuple makeTuple(Query query) {
         Sort[] headTypes = query.headTypes();
         Expr[] freshConsts = new Expr[headTypes.length];
         for (int i = 0; i < freshConsts.length; ++i) {
             freshConsts[i] = context.mkFreshConst("z", headTypes[i]);
         }
-        return freshConsts;
+        return new Tuple(schema, freshConsts);
     }
 
     @Override
-    public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
+    public BoolExpr makeFormula(QueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
-        Tuple extHeadTup = new Tuple(schema, constants);
+        Tuple extHeadTup = makeTuple(query);
         return context.mkAnd(
                 query.doesContain(inst1, extHeadTup),
                 context.mkNot(query.doesContain(inst2, extHeadTup)),
-                generateTupleCheck(queries, constants)
+                generateTupleCheck(queries)
         );
     }
 }

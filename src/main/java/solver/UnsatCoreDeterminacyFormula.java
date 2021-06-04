@@ -43,10 +43,9 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
         return assertionMap;
     }
 
-    private String generateAssertions(QueryTrace queries, Expr[] constants) {
+    private String generateAssertions(QueryTrace queries) {
         Map<String, BoolExpr> exprs = new HashMap<>();
 
-        int constantsOffset = 0;
         int queryNumber = 0;
         Map<Object, Set<Expr>> equalitySets = new HashMap<>();
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
@@ -56,8 +55,11 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
                 List<String> paramNames = queryTraceEntry.getQuery().paramNames;
                 List<Object> parameters = queryTraceEntry.getQuery().parameters;
-                Tuple paramConstants = new Tuple(schema, Arrays.copyOfRange(constants, constantsOffset, constantsOffset + parameters.size()));
-                constantsOffset += parameters.size();
+                Expr[] paramExprs = new Expr[parameters.size()];
+                for (int i = 0; i < parameters.size(); ++i) {
+                    paramExprs[i] = context.mkConst("!" + prefix + "!" + i, Tuple.getSortFromObject(context, parameters.get(i)));
+                }
+                Tuple paramConstants = new Tuple(schema, paramExprs);
 
                 Relation r1 = query.apply(inst1);
                 Relation r2 = query.apply(inst2);
@@ -83,7 +85,12 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                     List<String> attributeNames = queryTraceEntry.getQuery().getProjectColumns();
                     int attrNumber = 0;
                     for (List<Object> tuple : queryTraceEntry.getTuples()) {
-                        Tuple tupleConstant = new Tuple(schema, Arrays.copyOfRange(constants, constantsOffset, constantsOffset + numAttrs));
+                        Expr[] tupleExprs = new Expr[numAttrs];
+                        Sort[] headTypes = query.headTypes();
+                        for (int i = 0; i < numAttrs; ++i) {
+                            tupleExprs[i] = context.mkFreshConst("z", headTypes[i]);
+                        }
+                        Tuple tupleConstant = new Tuple(schema, tupleExprs);
                         tupleConstants.add(tupleConstant);
                         for (int i = 0; i < tuple.size(); ++i) {
                             Object curr = tuple.get(i);
@@ -100,7 +107,6 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
                             ++attrNumber;
                         }
-                        constantsOffset += numAttrs;
                     }
 
                     exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContain(tupleConstants), r2.doesContain(tupleConstants)));
@@ -148,40 +154,17 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Expr[] makeFormulaConstants(QueryTrace queries) {
-        List<Expr> exprs = new ArrayList<>();
-        int queryNumber = 0;
-        for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
-            for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
-                String prefix = (queryTraceEntry == queries.getCurrentQuery() ? "cq_p" : ("q_p!" + queryNumber));
-                List<Object> parameters = queryTraceEntry.getQuery().parameters;
-                for (int i = 0; i < parameters.size(); ++i) {
-                    exprs.add(context.mkConst("!" + prefix + "!" + i, Tuple.getSortFromObject(context, parameters.get(i))));
-                }
-                Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
-                if (!queryTraceEntry.getTuples().isEmpty()) {
-                    Sort[] headTypes = query.headTypes();
-
-                    for (int i = 0, numTuples = queryTraceEntry.getTuples().size(); i < numTuples; ++i) {
-                        for (Sort sort : headTypes) {
-                            exprs.add(context.mkFreshConst("z", sort));
-                        }
-                    }
-                }
-                ++queryNumber;
-            }
-        }
-        return exprs.toArray(new Expr[0]);
+    public BoolExpr makeFormula(QueryTrace queries) {
+        throw new UnsupportedOperationException();
     }
 
-    @Override
-    public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
+    private String makeMainSMT(QueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema, "cq_p", 0);
-        return context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2)));
+        return "(assert " + context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))) + ")";
     }
 
     @Override
-    protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
-        return super.makeFormulaSMT(queries, new Expr[0]) + "\n" + generateAssertions(queries, constants);
+    protected String makeFormulaSMT(QueryTrace queries) {
+        return makeMainSMT(queries) + "\n" + generateAssertions(queries);
     }
 }

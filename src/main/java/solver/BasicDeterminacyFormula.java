@@ -27,16 +27,11 @@ public class BasicDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Expr[] makeFormulaConstants(QueryTrace queries) {
-        return new Expr[0];
-    }
-
-    @Override
-    public BoolExpr makeFormula(QueryTrace queries, Expr[] constants) {
+    public BoolExpr makeFormula(QueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         return context.mkAnd(
                 context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))),
-                generateTupleCheck(queries, constants)
+                generateTupleCheck(queries)
         );
     }
 }

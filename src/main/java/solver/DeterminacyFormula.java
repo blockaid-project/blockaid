@@ -43,7 +43,7 @@ public abstract class DeterminacyFormula {
         this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
     }
 
-    protected BoolExpr generateTupleCheck(QueryTrace queries, Expr[] constants) {
+    protected BoolExpr generateTupleCheck(QueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
         for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
             for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
@@ -76,11 +76,10 @@ public abstract class DeterminacyFormula {
         return context.mkAnd(exprs.toArray(new BoolExpr[0]));
     }
 
-    protected abstract Expr[] makeFormulaConstants(QueryTrace queries);
-    protected abstract BoolExpr makeFormula(QueryTrace queries, Expr[] constants);
+    protected abstract BoolExpr makeFormula(QueryTrace queries);
 
-    protected String makeFormulaSMT(QueryTrace queries, Expr[] constants) {
-        return "(assert " + makeFormula(queries, constants).toString() + ")";
+    protected String makeFormulaSMT(QueryTrace queries) {
+        return "(assert " + makeFormula(queries).toString() + ")";
     }
 
     public String generateSMT(QueryTrace queries) {
@@ -88,7 +87,7 @@ public abstract class DeterminacyFormula {
         StringBuilder sb = new StringBuilder();
         MyZ3Context myContext = (MyZ3Context) context;
         myContext.startTrackingConsts();
-        String smt = makeFormulaSMT(queries, makeFormulaConstants(queries));
+        String smt = makeFormulaSMT(queries);
         myContext.stopTrackingConsts();
 
         for (Expr constant : myContext.getConsts()) {
