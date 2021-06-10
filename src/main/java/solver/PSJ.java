@@ -3,6 +3,8 @@ package solver;
 import com.microsoft.z3.*;
 
 import java.util.*;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -64,5 +66,45 @@ public abstract class PSJ extends Query {
         }
 
         return context.mkExists(existentialVars.toArray(new Expr[0]), context.mkAnd(bodyFormula, predicate), 1, null, null, null, null);
+    }
+
+    private void visitJoins(Instance instance, BiConsumer<Tuple[], BoolExpr[]> consumer, List<Tuple> tuples, List<BoolExpr> exists, int index) {
+        if (index == relations.size()) {
+            consumer.accept(tuples.toArray(new Tuple[0]), exists.toArray(new BoolExpr[0]));
+            return;
+        }
+        String relationName = relations.get(index);
+        ConcreteRelation relation = (ConcreteRelation) instance.get(relationName);
+        Tuple[] t = relation.getTuples();
+        BoolExpr[] e = relation.getExists();
+        for (int i = 0; i < t.length; ++i) {
+            tuples.add(t[i]);
+            exists.add(e[i]);
+            visitJoins(instance, consumer, tuples, exists, index + 1);
+            tuples.remove(tuples.size() - 1);
+        }
+    }
+
+    @Override
+    public Tuple[] generateTuples(Instance instance) {
+        checkArgument(instance.isConcrete);
+
+        final List<Tuple> tuples = new ArrayList<>();
+        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
+            tuples.add(headSelector(ts));
+        }, new ArrayList<>(), new ArrayList<>(), 0);
+        return tuples.toArray(new Tuple[0]);
+    }
+
+    @Override
+    public BoolExpr[] generateExists(Instance instance) {
+        checkArgument(instance.isConcrete);
+
+        final Context context = instance.getContext();
+        final List<BoolExpr> exprs = new ArrayList<>();
+        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
+            exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)));
+        }, new ArrayList<>(), new ArrayList<>(), 0);
+        return exprs.toArray(new BoolExpr[0]);
     }
 }

@@ -27,9 +27,7 @@ public class ImportedDependency implements Dependency {
             funcDecls.add(context.mkFuncDecl("!" + constant, new Sort[0], context.getIntSort()));
         }
         for (Map.Entry<String, Relation> e : instance.entrySet()) {
-            Function function = e.getValue().getFunction();
-            checkArgument(function instanceof Z3Function);
-            FuncDecl funcDecl = ((Z3Function) function).getFunctionDecl();
+            FuncDecl funcDecl = e.getValue().getFunction();
             funcSymbols.add(context.mkSymbol("!" + e.getKey()));
             funcDecls.add(funcDecl);
         }

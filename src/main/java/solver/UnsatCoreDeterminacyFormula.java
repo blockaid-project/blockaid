@@ -7,9 +7,6 @@ import com.microsoft.z3.*;
 import policy_checker.Policy;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     private final boolean unnamedEquality;
@@ -17,7 +14,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     private final ImmutableSet<String> relevantAttributes;
 
     public UnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
-        super(schema, (Instance inst1, Instance inst2) -> {
+        super(schema, (Integer instNum) -> schema.makeFreshInstance(), (Instance inst1, Instance inst2) -> {
             List<BoolExpr> clauses = new ArrayList<>();
             if (inst1.constraint != null) {
                 clauses.add(inst1.constraint);

@@ -5,7 +5,6 @@ import com.microsoft.z3.*;
 import java.sql.Types;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -25,7 +24,7 @@ public class Schema {
     }
 
     public Instance makeFreshInstance() {
-        Instance instance = new Instance(this);
+        Instance instance = new Instance(this, false);
         List<BoolExpr> constraints = new ArrayList<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
@@ -73,6 +72,10 @@ public class Schema {
 
         instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
         return instance;
+    }
+
+    public List<String> getRelationNames() {
+        return relations.keySet().stream().map(String::toUpperCase).collect(Collectors.toList());
     }
 
     public List<Column> getColumns(String relationName) {

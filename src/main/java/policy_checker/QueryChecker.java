@@ -51,6 +51,7 @@ public class QueryChecker {
     private final ArrayList<Policy> policySet;
     private final DeterminacyFormula fastCheckDeterminacyFormula;
     private final DeterminacyFormula determinacyFormula;
+    private final DeterminacyFormula boundedDeterminacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormulaEliminate;
     private final DecisionCache cache;
@@ -106,6 +107,7 @@ public class QueryChecker {
         List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
         this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
+        this.boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policyQueries);
         this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
         this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
 
@@ -183,6 +185,21 @@ public class QueryChecker {
             try {
                 Files.write(Paths.get(FORMULA_DIR + "/regular_" + queries.size() + ".smt2"),
                         regularSMT.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        // bounded check
+        startTime = System.currentTimeMillis();
+        String boundedSMT = this.boundedDeterminacyFormula.generateSMT(queries);
+        System.out.println("\t| Make bounded:\t" + (System.currentTimeMillis() - startTime));
+        executors.add(new Z3Executor(boundedSMT, latch, true, false, "z3_bounded"));
+
+        if (PRINT_FORMULAS) {
+            try {
+                Files.write(Paths.get(FORMULA_DIR + "/bounded_" + queries.size() + ".smt2"),
+                        boundedSMT.getBytes());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

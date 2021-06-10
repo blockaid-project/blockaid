@@ -6,9 +6,11 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Solver;
+import org.codehaus.janino.util.Producer;
 
 import java.util.*;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -23,15 +25,18 @@ public abstract class DeterminacyFormula {
     private final Map<String, Integer> preparedStringReplacement;
     private final Set<String> preparedIntReplacement;
 
-    protected DeterminacyFormula(Schema schema, BiFunction<Instance, Instance, BoolExpr> mkPreparedExpr) {
+    protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance, BiFunction<Instance, Instance, BoolExpr> mkPreparedExpr) {
         this.schema = schema;
         this.context = schema.getContext();
-        this.inst1 = schema.makeFreshInstance();
-        this.inst2 = schema.makeFreshInstance();
+        this.inst1 = makeInstance.apply(0);
+        this.inst2 = makeInstance.apply(1);
 
         // Set prepared expr.
         Solver solver = schema.getContext().mkSolver();
         solver.add(mkPreparedExpr.apply(this.inst1, this.inst2));
+        for (BoolExpr expr : extraAsserts()) {
+            solver.add(expr);
+        }
         String result = solver.toString();
         HashSet<String> preparedIntReplacement = new HashSet<>();
         result = replaceInts(result, new HashSet<>(), preparedIntReplacement, false);
@@ -41,6 +46,10 @@ public abstract class DeterminacyFormula {
         this.preparedIntReplacement = Collections.unmodifiableSet(preparedIntReplacement);
         this.preparedStringReplacement = Collections.unmodifiableMap(preparedStringReplacement);
         this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
+    }
+
+    protected List<BoolExpr> extraAsserts() {
+        return Collections.emptyList();
     }
 
     protected BoolExpr generateTupleCheck(QueryTrace queries) {

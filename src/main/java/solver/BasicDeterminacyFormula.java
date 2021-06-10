@@ -11,7 +11,7 @@ import java.util.List;
 
 public class BasicDeterminacyFormula extends DeterminacyFormula {
     public BasicDeterminacyFormula(Schema schema, Collection<Query> views) {
-        super(schema, (Instance inst1, Instance inst2) -> {
+        super(schema, (Integer instNum) -> schema.makeFreshInstance(), (Instance inst1, Instance inst2) -> {
             List<BoolExpr> clauses = new ArrayList<>();
             if (inst1.constraint != null) {
                 clauses.add(inst1.constraint);
