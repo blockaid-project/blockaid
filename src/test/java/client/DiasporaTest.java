@@ -127,7 +127,7 @@ public class DiasporaTest {
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);
 
-        String query = "INSERT INTO users(id, username, email, getting_started, disable_mail, `language`) VALUES (??, ??, ??, ??, ??, ??)";
+        String query = "INSERT INTO users(id, username, email, getting_started, disable_mail, `language`) VALUES (?, ?, ?, ?, ?, ?)";
 //        PreparedStatement s = conn.prepareStatement(query);
 //        s.setInt(1, 1);
 //        s.setString(2, "aaaa");
@@ -144,13 +144,13 @@ public class DiasporaTest {
 //        s.setString(6, "es");
 //        s.execute();
 
-        query = "SELECT id, username, email, getting_started, disable_mail, `language` FROM users WHERE users.id IN (?_MY_UID) AND users.id = ??";
+        query = "SELECT id, username, email, getting_started, disable_mail, `language` FROM users WHERE users.id IN (?_MY_UID) AND users.id = ?";
         PrivacyConnection.PrivacyPreparedStatement p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setInt(1, 1);
         p.setInt(2, 1);
         p.executeQuery();
 
-        query = "SELECT username FROM users WHERE username = ?? AND email = ?? AND `language` = ??";
+        query = "SELECT username FROM users WHERE username = ? AND email = ? AND `language` = ?";
         p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setString(1, "aaaa");
         p.setString(2, "foo@bar.com");
@@ -160,13 +160,13 @@ public class DiasporaTest {
         ((PrivacyConnection) conn).resetSequence();
         Thread.sleep(5000);
 
-        query = "SELECT id, username, email, getting_started, disable_mail, `language` FROM users WHERE users.id IN (?_MY_UID) AND users.id = ??";
+        query = "SELECT id, username, email, getting_started, disable_mail, `language` FROM users WHERE users.id IN (?_MY_UID) AND users.id = ?";
         p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setInt(1, 3);
         p.setInt(2, 1);
         p.executeQuery();
 
-        query = "SELECT username FROM users WHERE username = ?? AND email = ?? AND `language` = ??";
+        query = "SELECT username FROM users WHERE username = ? AND email = ? AND `language` = ?";
         p = (PrivacyConnection.PrivacyPreparedStatement) conn.prepareStatement(query);
         p.setString(1, "aaaa");
         p.setString(2, "foo@bar.com");
@@ -195,7 +195,7 @@ public class DiasporaTest {
         System.err.println("setup time: " + (endTime - startTime) / 1000000.0);
         startTime = System.nanoTime();
 
-        String query = "INSERT INTO users(id, username) VALUES (??, ??)";
+        String query = "INSERT INTO users(id, username) VALUES (?, ?)";
         PreparedStatement s = conn.prepareStatement(query);
         s.setInt(1, 1);
         s.setString(2, "aaaa");
@@ -394,7 +394,7 @@ public class DiasporaTest {
 
     @Test
     public void runTrace() throws Exception {
-        Class.forName("jdbc.PrivacyDriver");
+        Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("com.mysql.jdbc.Driver");
 
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
@@ -411,7 +411,7 @@ public class DiasporaTest {
         p.setInt(1, 2);
         p.executeQuery();
 
-        query = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ?? WHERE `posts`.`id` = ?? AND `share_visibilities`.`user_id` = ?_MY_UID ORDER BY `posts`.`id` ASC LIMIT 1";
+        query = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ? WHERE `posts`.`id` = ? AND `share_visibilities`.`user_id` = ?_MY_UID ORDER BY `posts`.`id` ASC LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "Post");
@@ -425,14 +425,14 @@ public class DiasporaTest {
         p.setInt(1, 2);
         p.executeQuery();
 
-        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = ?? AND `posts`.`author_id` = ?? ORDER BY `posts`.`id` ASC LIMIT 1";
+        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = ? AND `posts`.`author_id` = ? ORDER BY `posts`.`id` ASC LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
         p.setInt(2, 3);
         p.executeQuery();
 
-        query = "UPDATE `notifications` SET `unread` = 0 WHERE `recipient_id` = ?? AND `target_type` = ?? AND `target_id` = ?? AND `unread` = ??";
+        query = "UPDATE `notifications` SET `unread` = 0 WHERE `recipient_id` = ? AND `target_type` = ? AND `target_id` = ? AND `unread` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 2);
@@ -441,7 +441,7 @@ public class DiasporaTest {
         p.setInt(4, 1);
         p.execute();
 
-        query = "SELECT `mentions`.`id` FROM `mentions` WHERE `mentions`.`mentions_container_id` = ?? AND `mentions`.`mentions_container_type` = ?? AND `mentions`.`person_id` = ??";
+        query = "SELECT `mentions`.`id` FROM `mentions` WHERE `mentions`.`mentions_container_id` = ? AND `mentions`.`mentions_container_type` = ? AND `mentions`.`person_id` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
@@ -449,7 +449,7 @@ public class DiasporaTest {
         p.setInt(3, 3);
         p.executeQuery();
 
-        query = "SELECT `mentions`.`id` FROM `mentions` INNER JOIN comments ON mentions.mentions_container_id = comments.id AND mentions.mentions_container_type = ?? WHERE `comments`.`commentable_id` = ?? AND `comments`.`commentable_type` = ??";
+        query = "SELECT `mentions`.`id` FROM `mentions` INNER JOIN comments ON mentions.mentions_container_id = comments.id AND mentions.mentions_container_type = ? WHERE `comments`.`commentable_id` = ? AND `comments`.`commentable_type` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "Comment");
@@ -457,51 +457,51 @@ public class DiasporaTest {
         p.setString(3, "Post");
         p.executeQuery();
 
-        query = "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = ?? AND `mentions`.`mentions_container_type` = ??";
+        query = "SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = ? AND `mentions`.`mentions_container_type` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
         p.setString(2, "Post");
         p.executeQuery();
 
-        query = "SELECT  `people`.* FROM `people` WHERE `people`.`id` = ?? LIMIT 1";
+        query = "SELECT  `people`.* FROM `people` WHERE `people`.`id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 3);
         p.executeQuery();
 
-        query = "SELECT  profiles.id, profiles.diaspora_handle, profiles.first_name, profiles.last_name, profiles.image_url, profiles.image_url_small, profiles.image_url_medium, profiles.searchable, profiles.person_id, profiles.created_at, profiles.updated_at, profiles.full_name, profiles.nsfw, profiles.public_details FROM `profiles` WHERE `profiles`.`person_id` = ?? LIMIT 1";
+        query = "SELECT  profiles.id, profiles.diaspora_handle, profiles.first_name, profiles.last_name, profiles.image_url, profiles.image_url_small, profiles.image_url_medium, profiles.searchable, profiles.person_id, profiles.created_at, profiles.updated_at, profiles.full_name, profiles.nsfw, profiles.public_details FROM `profiles` WHERE `profiles`.`person_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 3);
         p.executeQuery();
 
-        query = "SELECT `photos`.* FROM `photos` WHERE `photos`.`status_message_guid` = ??";
+        query = "SELECT `photos`.* FROM `photos` WHERE `photos`.`status_message_guid` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "46d948707ae60139ec3e5db4b3e77b69");
         p.executeQuery();
 
-        query = "SELECT  `locations`.* FROM `locations` WHERE `locations`.`status_message_id` = ?? LIMIT 1";
+        query = "SELECT  `locations`.* FROM `locations` WHERE `locations`.`status_message_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
         p.executeQuery();
 
-        query = "SELECT  `polls`.* FROM `polls` WHERE `polls`.`status_message_id` = ?? LIMIT 1";
+        query = "SELECT  `polls`.* FROM `polls` WHERE `polls`.`status_message_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
         p.executeQuery();
 
-        query = "SELECT  1 AS one_ FROM `participations` WHERE `participations`.`author_id` = ?? AND `participations`.`target_id` = ?? LIMIT 1";
+        query = "SELECT  1 AS one_ FROM `participations` WHERE `participations`.`author_id` = ? AND `participations`.`target_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 3);
         p.setInt(2, 4);
         p.executeQuery();
 
-        query = "SELECT  `likes`.* FROM `likes` WHERE `likes`.`target_id` = ?? AND `likes`.`target_type` = ?? AND `likes`.`positive` = ?? AND `likes`.`author_id` = ?? LIMIT 1";
+        query = "SELECT  `likes`.* FROM `likes` WHERE `likes`.`target_id` = ? AND `likes`.`target_type` = ? AND `likes`.`positive` = ? AND `likes`.`author_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
@@ -510,7 +510,7 @@ public class DiasporaTest {
         p.setInt(4, 3);
         p.executeQuery();
 
-        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`type` IN (??) AND `posts`.`root_guid` = ?? AND `posts`.`author_id` = ?? LIMIT 1";
+        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`type` IN (?) AND `posts`.`root_guid` = ? AND `posts`.`author_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "Reshare");
@@ -518,7 +518,7 @@ public class DiasporaTest {
         p.setInt(3, 3);
         p.executeQuery();
 
-        query = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ?? WHERE `posts`.`id` = ?? AND `share_visibilities`.`user_id` = ?_MY_UID ORDER BY `posts`.`id` ASC LIMIT 1";
+        query = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ? WHERE `posts`.`id` = ? AND `share_visibilities`.`user_id` = ?_MY_UID ORDER BY `posts`.`id` ASC LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "Post");
@@ -526,14 +526,14 @@ public class DiasporaTest {
         p.setInt(3, 2);
         p.executeQuery();
 
-        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = ?? AND `posts`.`author_id` = ?? ORDER BY `posts`.`id` ASC LIMIT 1";
+        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = ? AND `posts`.`author_id` = ? ORDER BY `posts`.`id` ASC LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
         p.setInt(2, 3);
         p.executeQuery();
 
-        query = "SELECT  `likes`.* FROM `likes` WHERE `likes`.`target_id` = ?? AND `likes`.`target_type` = ?? AND `likes`.`positive` = ?? ORDER BY author_id = 3 DESC LIMIT 30";
+        query = "SELECT  `likes`.* FROM `likes` WHERE `likes`.`target_id` = ? AND `likes`.`target_type` = ? AND `likes`.`positive` = ? ORDER BY author_id = 3 DESC LIMIT 30";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
@@ -541,14 +541,14 @@ public class DiasporaTest {
         p.setInt(3, 1);
         p.executeQuery();
 
-        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`type` IN (??) AND `posts`.`root_guid` = ?? ORDER BY author_id = 3 DESC LIMIT 30";
+        query = "SELECT  `posts`.* FROM `posts` WHERE `posts`.`type` IN (?) AND `posts`.`root_guid` = ? ORDER BY author_id = 3 DESC LIMIT 30";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "Reshare");
         p.setString(2, "46d948707ae60139ec3e5db4b3e77b69");
         p.executeQuery();
 
-        query = "SELECT `tags`.* FROM `tags` INNER JOIN `taggings` ON `tags`.`id` = `taggings`.`tag_id` WHERE `taggings`.`taggable_id` = ?? AND `taggings`.`taggable_type` = ?? AND `taggings`.`context` = ??";
+        query = "SELECT `tags`.* FROM `tags` INNER JOIN `taggings` ON `tags`.`id` = `taggings`.`tag_id` WHERE `taggings`.`taggable_id` = ? AND `taggings`.`taggable_type` = ? AND `taggings`.`context` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 4);
@@ -556,27 +556,27 @@ public class DiasporaTest {
         p.setString(3, "tags");
         p.executeQuery();
 
-        query = "SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = ?_MY_UID AND `notifications`.`unread` = ??";
+        query = "SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = ?_MY_UID AND `notifications`.`unread` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 2);
         p.setInt(2, 1);
         p.executeQuery();
 
-        query = "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = ??";
+        query = "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 3);
         p.executeQuery();
 
-        query = "SELECT  1 AS one_ FROM `roles` WHERE `roles`.`person_id` = ?? AND `roles`.`name` = ?? LIMIT 1";
+        query = "SELECT  1 AS one_ FROM `roles` WHERE `roles`.`person_id` = ? AND `roles`.`name` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 3);
         p.setString(2, "admin");
         p.executeQuery();
 
-        query = "SELECT  1 AS one_ FROM `roles` WHERE `roles`.`name` IN (??, ??) AND `roles`.`person_id` = ?? LIMIT 1";
+        query = "SELECT  1 AS one_ FROM `roles` WHERE `roles`.`name` IN (?, ?) AND `roles`.`person_id` = ? LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setString(1, "moderator");
@@ -596,7 +596,7 @@ public class DiasporaTest {
         p.setInt(1, 2);
         p.executeQuery();
 
-        query = "SELECT COUNT(*) FROM `contacts` WHERE `contacts`.`user_id` = ?_MY_UID AND `contacts`.`receiving` = ??";
+        query = "SELECT COUNT(*) FROM `contacts` WHERE `contacts`.`user_id` = ?_MY_UID AND `contacts`.`receiving` = ?";
         System.err.println(query);
         p = conn.prepareStatement(query);
         p.setInt(1, 2);
