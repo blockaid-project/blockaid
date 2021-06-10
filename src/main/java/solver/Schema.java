@@ -33,24 +33,7 @@ public class Schema {
 
             Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
             FuncDecl func = context.mkFreshFuncDecl("v", colTypes, context.getBoolSort());
-            instance.put(relationName, new Relation(this, new Z3Function(func), colTypes));
-
-            // Apply per-column constraints.
-            Tuple tuple = this.makeFreshTuple(relationName);
-            List<BoolExpr> thisConstraints = new ArrayList<>();
-            for (int i = 0; i < tuple.size(); ++i) {
-                Column column = columns.get(i);
-                if (column.constraint == null) {
-                    continue;
-                }
-                thisConstraints.add(column.constraint.apply(tuple.get(i)));
-            }
-            if (!thisConstraints.isEmpty()) {
-                BoolExpr lhs = (BoolExpr) func.apply(tuple.toExprArray());
-                BoolExpr rhs = context.mkAnd(thisConstraints.toArray(new BoolExpr[0]));
-                BoolExpr body = context.mkImplies(lhs, rhs);
-                constraints.add(context.mkForall(tuple.toExprArray(), body, 1, null, null, null, null));
-            }
+            instance.put(relationName, new GeneralRelation(this, new Z3Function(func), colTypes));
         }
 
         // Apply dependencies.
@@ -62,21 +45,32 @@ public class Schema {
         return instance;
     }
 
-    public Instance makeConcreteInstance(Map<String, List<Tuple>> content) {
-        Instance instance = this.makeFreshInstance();
+    public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
+        Instance instance = new Instance(this, true);
         List<BoolExpr> constraints = new ArrayList<>();
-        constraints.add(instance.constraint);
-        for (Map.Entry<String, List<Tuple>> c : content.entrySet()) {
-            String relationName = c.getKey();
-            List<Tuple> tuples = c.getValue();
+        for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
+            String relationName = relation.getKey();
+            List<Column> columns = relation.getValue();
+            Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
 
-            Tuple tuple = this.makeFreshTuple(relationName);
-            BoolExpr lhs = instance.get(relationName).apply(tuple);
-            Stream<BoolExpr> rhsExprs = tuples.stream().map(tuple::tupleEqual);
-            BoolExpr rhs = context.mkOr(rhsExprs.toArray(BoolExpr[]::new));
-            BoolExpr body = context.mkEq(lhs, rhs);
-            constraints.add(context.mkForall(tuple.toExprArray(), body, 1, null, null, null, null));
+            Tuple[] tuples = new Tuple[bounds.get(relationName)];
+            BoolExpr[] exists = new BoolExpr[bounds.get(relationName)];
+            String prefix = instancePrefix + "_" + relationName;
+            for (int i = 0; i < tuples.length; ++i) {
+                List<Expr> values = new ArrayList<>();
+                for (int j = 0; j < colTypes.length; ++j) {
+                    values.add(context.mkConst(prefix + "_" + i + "_" + j, colTypes[j]));
+                }
+                tuples[i] = new Tuple(this, values.stream());
+                exists[i] = context.mkBoolConst(prefix + "_" + i + "_exists");
+            }
+            instance.put(relationName, new ConcreteRelation(this, colTypes, tuples, exists));
         }
+
+        for (Dependency d : dependencies) {
+            constraints.add(d.apply(instance));
+        }
+
         instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
         return instance;
     }

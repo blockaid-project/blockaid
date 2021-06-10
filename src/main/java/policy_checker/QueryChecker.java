@@ -79,7 +79,7 @@ public class QueryChecker {
                 Sort type = Schema.getSortFromSqlType(context, column.type);
                 // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
                 //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
-                columns.add(new Column(column.name.toUpperCase(), type, null));
+                columns.add(new Column(column.name.toUpperCase(), type));
             }
             relations.put(tableName.toUpperCase(), columns);
         }
