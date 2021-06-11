@@ -101,14 +101,7 @@ public class ConcreteRelation implements Relation {
             return context.mkTrue();
         }
 
-        // Requiring exact match...should be fine since we don't constrain order anywhere else.
-        List<BoolExpr> syms = new ArrayList<>();
-        for (int i = 0; i < this.tuples.length; ++i) {
-            syms.add(context.mkEq(this.exists[i], other_.exists[i]));
-            syms.add(this.tuples[i].tupleEqual(other_.tuples[i]));
-        }
-
-        return context.mkAnd(syms.toArray(new BoolExpr[0]));
+        return context.mkAnd(this.isContainedIn(other), other.isContainedIn(this));
     }
 
     public BoolExpr getFunctionBody() {
