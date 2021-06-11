@@ -17,9 +17,17 @@ public class UnionQuery extends Query {
         super();
 
         checkArgument(queries.length > 0);
+        for (int i = 1; i < queries.length; ++i) {
+            checkArgument(queries[i].getSchema() == queries[0].getSchema());
+        }
 
         this.queries = queries;
         this.headTypes = this.queries[0].headTypes();
+    }
+
+    @Override
+    public Schema getSchema() {
+        return queries[0].getSchema();
     }
 
     @Override
@@ -38,11 +46,11 @@ public class UnionQuery extends Query {
 
     @Override
     public Tuple[] generateTuples(Instance instance) {
-        return Arrays.stream(queries).map(x -> x.generateTuples(instance)).flatMap(Arrays::stream).toArray(Tuple[]::new);
+        return Arrays.stream(queries).map(q -> q.generateTuples(instance)).flatMap(Arrays::stream).toArray(Tuple[]::new);
     }
 
     @Override
     public BoolExpr[] generateExists(Instance instance) {
-        return Arrays.stream(queries).map(x -> x.generateExists(instance)).flatMap(Arrays::stream).toArray(BoolExpr[]::new);
+        return Arrays.stream(queries).map(q -> q.generateExists(instance)).flatMap(Arrays::stream).toArray(BoolExpr[]::new);
     }
 }

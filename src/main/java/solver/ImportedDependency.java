@@ -7,8 +7,8 @@ import java.sql.SQLException;
 import java.util.*;
 
 public class ImportedDependency implements Dependency {
-    private PrivacyQuery q1;
-    private PrivacyQuery q2;
+    private final PrivacyQuery q1;
+    private final PrivacyQuery q2;
 
     public ImportedDependency(String dependency, SchemaPlusWithKey schema, Parser parser) throws SQLException {
         String[] parts = dependency.split(";", 2);

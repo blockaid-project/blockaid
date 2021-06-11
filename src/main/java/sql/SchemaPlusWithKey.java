@@ -2,12 +2,9 @@ package sql;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import org.apache.calcite.schema.SchemaPlus;
 import solver.ForeignKeyDependency;
-
-import java.util.*;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 

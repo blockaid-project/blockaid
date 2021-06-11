@@ -27,19 +27,10 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
         });
     }
 
-    private Tuple makeTuple(Query query) {
-        Sort[] headTypes = query.headTypes();
-        Expr[] freshConsts = new Expr[headTypes.length];
-        for (int i = 0; i < freshConsts.length; ++i) {
-            freshConsts[i] = context.mkFreshConst("z", headTypes[i]);
-        }
-        return new Tuple(schema, freshConsts);
-    }
-
     @Override
     public BoolExpr makeFormula(QueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
-        Tuple extHeadTup = makeTuple(query);
+        Tuple extHeadTup = query.makeFreshHead();
         return context.mkAnd(
                 query.doesContain(inst1, extHeadTup),
                 context.mkNot(query.doesContain(inst2, extHeadTup)),

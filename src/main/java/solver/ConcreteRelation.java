@@ -5,7 +5,6 @@ import com.microsoft.z3.*;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ConcreteRelation implements Relation {
     private final Schema schema;
@@ -13,17 +12,18 @@ public class ConcreteRelation implements Relation {
     private final Sort[] signature;
     private final Tuple[] tuples;
     private final BoolExpr[] exists;
-    private final FuncDecl funcDecl;
+
+    /* If relation size is greater than this threshold, containment uses quantifiers. */
+    private static final int CONTAINMENT_USE_QUANTIFIER_THRESHOLD = Integer.parseInt(System.getProperty("privoxy.containment_use_quantifier_threshold", Integer.toString(Integer.MAX_VALUE)));
 
     public ConcreteRelation(Schema schema, Sort[] signature, Tuple[] tuples, BoolExpr[] exists) {
         checkArgument(tuples.length == exists.length, "tuples and exists differ in length");
 
-        this.schema = checkNotNull(schema);
+        this.schema = schema;
         this.context = schema.getContext();
         this.signature = signature;
         this.tuples = tuples;
         this.exists = exists;
-        this.funcDecl = context.mkFreshFuncDecl("c", this.signature, context.getBoolSort());
     }
 
     public Tuple[] getTuples() {
@@ -35,33 +35,14 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr apply(Expr... args) {
-        // FIXME(zhangwen): handle SQL NULL properly.
-        // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
-        // NULL, this is... safe?  At least not blatantly unsafe.  I need to think through this...
-        if (Arrays.asList(args).contains(null)) {
-            Expr[] convertedArgs = new Expr[args.length];
-            for (int i = 0; i < args.length; ++i) {
-                if (args[i] != null) {
-                    convertedArgs[i] = args[i];
-                } else {
-                    convertedArgs[i] = context.mkFreshConst("n", signature[i]);
-                }
-            }
-            args = convertedArgs;
-        }
-
-        Tuple tup = new Tuple(schema, args);
+    public BoolExpr apply(Tuple tup) {
+        checkArgument(tup.getSchema() == schema);
+        tup = tup.replaceNullsWithFreshConsts(signature);
         List<BoolExpr> syms = new ArrayList<>();
         for (int i = 0; i < tuples.length; ++i) {
-            syms.add(context.mkAnd(exists[i], tuples[i].tupleEqual(tup)));
+            syms.add(context.mkAnd(exists[i], tuples[i].equalsExpr(tup)));
         }
         return context.mkOr(syms.toArray(new BoolExpr[0]));
-    }
-
-    @Override
-    public BoolExpr apply(Tuple tup) {
-        return apply(tup.toExprArray());
     }
 
     @Override
@@ -78,15 +59,31 @@ public class ConcreteRelation implements Relation {
     public BoolExpr isContainedIn(Relation other) {
         checkArgument(other instanceof ConcreteRelation);
 
-        BoolExpr[] exprs = new BoolExpr[tuples.length];
-        for (int i = 0; i < exprs.length; ++i) {
-            exprs[i] = context.mkOr(context.mkNot(exists[i]), other.apply(tuples[i]));
-        }
+        if (tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD
+                || ((ConcreteRelation) other).tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD) {
+            Tuple syms = makeFreshHead();
+            BoolExpr lhs = this.apply(syms);
+            BoolExpr rhs = other.apply(syms);
+            if (syms.isEmpty()) {
+                return context.mkImplies(lhs, rhs);
+            }
+            return context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
+                    null, null, null, null);
+        } else {
+            BoolExpr[] exprs = new BoolExpr[tuples.length];
+            for (int i = 0; i < exprs.length; ++i) {
+                exprs[i] = context.mkOr(context.mkNot(exists[i]), other.apply(tuples[i]));
+            }
 
-        if (tuples.length == 0) {
-            return context.mkTrue();
+            if (tuples.length == 0) {
+                return context.mkTrue();
+            }
+            return context.mkAnd(exprs);
         }
-        return context.mkAnd(exprs);
+    }
+
+    private Tuple makeFreshHead() {
+        return new Tuple(schema, Arrays.stream(signature).map(sort -> context.mkFreshConst("v", sort)));
     }
 
     @Override

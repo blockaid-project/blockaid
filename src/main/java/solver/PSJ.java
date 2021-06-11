@@ -4,7 +4,6 @@ import com.microsoft.z3.*;
 
 import java.util.*;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -12,6 +11,11 @@ import static com.google.common.base.Preconditions.checkArgument;
 public abstract class PSJ extends Query {
     Schema schema;
     List<String> relations;
+
+    @Override
+    public Schema getSchema() {
+        return schema;
+    }
 
     public PSJ(Schema schema, List<String> relations) {
         this.schema = schema;
@@ -52,9 +56,7 @@ public abstract class PSJ extends Query {
         Context context = schema.getContext();
         BoolExpr bodyFormula = context.mkAnd(bodyExprs);
         Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
-        for (Expr expr : headSymTup.content()) {
-            existentialVars.remove(expr);
-        }
+        headSymTup.stream().forEach(existentialVars::remove);
 
         for (int i = 0; i < tuple.size(); ++i) {
             bodyFormula = (BoolExpr) bodyFormula.substitute(headSymTup.get(i), tuple.get(i));
@@ -68,7 +70,12 @@ public abstract class PSJ extends Query {
         return context.mkExists(existentialVars.toArray(new Expr[0]), context.mkAnd(bodyFormula, predicate), 1, null, null, null, null);
     }
 
+    private void visitJoins(Instance instance, BiConsumer<Tuple[], BoolExpr[]> consumer) {
+        visitJoins(instance, consumer, new ArrayList<>(), new ArrayList<>(), 0);
+    }
+
     private void visitJoins(Instance instance, BiConsumer<Tuple[], BoolExpr[]> consumer, List<Tuple> tuples, List<BoolExpr> exists, int index) {
+        checkArgument(0 <= index && index <= relations.size());
         if (index == relations.size()) {
             consumer.accept(tuples.toArray(new Tuple[0]), exists.toArray(new BoolExpr[0]));
             return;
@@ -91,9 +98,7 @@ public abstract class PSJ extends Query {
         checkArgument(instance.isConcrete);
 
         final List<Tuple> tuples = new ArrayList<>();
-        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
-            tuples.add(headSelector(ts));
-        }, new ArrayList<>(), new ArrayList<>(), 0);
+        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> tuples.add(headSelector(ts)));
         return tuples.toArray(new Tuple[0]);
     }
 
@@ -105,7 +110,7 @@ public abstract class PSJ extends Query {
         final List<BoolExpr> exprs = new ArrayList<>();
         visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
             exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)));
-        }, new ArrayList<>(), new ArrayList<>(), 0);
+        });
         return exprs.toArray(new BoolExpr[0]);
     }
 }

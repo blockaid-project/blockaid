@@ -6,7 +6,7 @@ import com.microsoft.z3.Sort;
 import java.util.Collections;
 import java.util.Objects;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.*;
 
 public class ForeignKeyDependency implements Dependency {
     private final String fromRelation;
@@ -25,8 +25,10 @@ public class ForeignKeyDependency implements Dependency {
     public BoolExpr apply(Instance instance) {
         Schema schema = instance.schema;
         int fromIndex = schema.getColumnNames(fromRelation).indexOf(fromColumn);
+        checkArgument(fromIndex >= 0);
         int toIndex = schema.getColumnNames(toRelation).indexOf(toColumn);
-        PSJ selectFromRelation = new PSJ(schema, Collections.singletonList(fromRelation)) {
+        checkArgument(toIndex >= 0);
+        PSJ selectFromQuery = new PSJ(schema, Collections.singletonList(fromRelation)) {
             @Override
             protected Tuple headSelector(Tuple... tuples) {
                 return new Tuple(schema, tuples[0].get(fromIndex));
@@ -36,7 +38,7 @@ public class ForeignKeyDependency implements Dependency {
                 return new Sort[] { types[0][fromIndex] };
             }
         };
-        PSJ selectToRelation = new PSJ(schema, Collections.singletonList(toRelation)) {
+        PSJ selectToQuery = new PSJ(schema, Collections.singletonList(toRelation)) {
             @Override
             protected Tuple headSelector(Tuple... tuples) {
                 return new Tuple(schema, tuples[0].get(toIndex));
@@ -46,7 +48,7 @@ public class ForeignKeyDependency implements Dependency {
                 return new Sort[] { types[0][toIndex] };
             }
         };
-        return selectFromRelation.apply(instance).isContainedIn(selectToRelation.apply(instance));
+        return selectFromQuery.apply(instance).isContainedIn(selectToQuery.apply(instance));
     }
 
     @Override

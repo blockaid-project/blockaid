@@ -5,8 +5,10 @@ import com.microsoft.z3.*;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -15,19 +17,14 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Tuple {
     private final Schema schema;
-    private final List<Expr> content; // Can't use `ImmutableList` because a `Tuple` can contain nulls.
+    private final ImmutableList<Optional<Expr>> content; // empty denotes null.
 
     public Tuple(Schema schema, Expr... exprs) {
-        // FIXME(zhangwen): `List.of` doesn't allow nulls, but we do?
-        this.content = List.of(exprs);
-        this.schema = schema;
+        this(schema, Arrays.stream(exprs));
     }
 
     public Tuple(Schema schema, Stream<Expr> exprs) {
-        // The "fused" version doesn't allow nulls in the list.
-        //noinspection FuseStreamOperations
-        List<Expr> exprList = exprs.collect(Collectors.toList());
-        this.content = Collections.unmodifiableList(exprList);
+        this.content = exprs.map(Optional::ofNullable).collect(ImmutableList.toImmutableList());
         this.schema = checkNotNull(schema);
     }
 
@@ -44,18 +41,14 @@ public class Tuple {
     }
 
     public Expr get(int i) {
-        return content.get(i);
+        return content.get(i).orElse(null);
     }
 
     public Stream<Expr> stream() {
-        return content.stream();
+        return content.stream().map(v -> v.orElse(null));
     }
 
-    public List<Expr> content() {
-        return content;
-    }
-
-    BoolExpr tupleEqual(Tuple other) {
+    BoolExpr equalsExpr(Tuple other) {
         checkArgument(getSchema() == other.getSchema(), "tuple schemas differ");
         checkArgument(size() == other.size(),
                 "tuple sizes are different: %s vs %s", size(), other.size());
@@ -73,7 +66,29 @@ public class Tuple {
     }
 
     public Expr[] toExprArray() {
-        return content.toArray(new Expr[0]);
+        return stream().toArray(Expr[]::new);
+    }
+
+    /**
+     * Returns a tuple with NULL elements replaced with fresh constants.
+     * @param sorts the sorts of tuple elements; provides the sorts for NULLs.
+     * @return a tuple with NULLs replaced replaced.
+     */
+    public Tuple replaceNullsWithFreshConsts(Sort[] sorts) {
+        // FIXME(zhangwen): handle SQL NULL properly.
+        // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
+        // NULL, this is... safe?  At least not blatantly unsafe.  I need to think through this...
+        checkArgument(sorts.length == size());
+        if (content.stream().noneMatch(Optional::isEmpty)) {
+            return this;
+        }
+
+        Expr[] convertedExprs = new Expr[size()];
+        for (int i = 0; i < size(); ++i) {
+            convertedExprs[i] = content.get(i).orElse(schema.getContext().mkFreshConst("null", sorts[i]));
+        }
+
+        return new Tuple(this.getSchema(), convertedExprs);
     }
 
     public static Sort getSortFromObject(Context context, Object value) {

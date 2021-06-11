@@ -484,5 +484,10 @@ public class ParsedPSJ {
             }
             return parts;
         }
+
+        @Override
+        public Schema getSchema() {
+            return schema;
+        }
     }
 }

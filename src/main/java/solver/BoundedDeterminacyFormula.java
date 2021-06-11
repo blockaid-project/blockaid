@@ -40,10 +40,4 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                 generateTupleCheck(queries)
         );
     }
-
-    @Override
-    protected String makeFormulaSMT(QueryTrace queries) {
-        return "(set-option :smt.macro-finder true)\n" +
-                "(assert " + makeFormula(queries).toString() + ")";
-    }
 }

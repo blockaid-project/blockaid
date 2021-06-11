@@ -22,27 +22,9 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public BoolExpr apply(Expr... args) {
-        // FIXME(zhangwen): handle SQL NULL properly.
-        // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
-        // NULL, this is... safe?  At least not blatantly unsafe.  I need to think through this...
-        if (Arrays.asList(args).contains(null)) {
-            Expr[] convertedArgs = new Expr[args.length];
-            for (int i = 0; i < args.length; ++i) {
-                if (args[i] != null) {
-                    convertedArgs[i] = args[i];
-                } else {
-                    convertedArgs[i] = context.mkFreshConst("n", signature[i]);
-                }
-            }
-            args = convertedArgs;
-        }
-        return this.function.apply(args);
-    }
-
-    @Override
     public BoolExpr apply(Tuple tup) {
-        return apply(tup.toExprArray());
+        Expr[] args = tup.replaceNullsWithFreshConsts(signature).toExprArray();
+        return this.function.apply(args);
     }
 
     @Override

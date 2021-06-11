@@ -1,12 +1,14 @@
 package solver;
 
 import com.microsoft.z3.BoolExpr;
+import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import java.util.Arrays;
 
 public abstract class Query {
+    public abstract Schema getSchema();
     public abstract Sort[] headTypes();
     public abstract BoolExpr doesContain(Instance instance, Tuple tuple);
     public abstract Tuple[] generateTuples(Instance instance);
@@ -18,5 +20,11 @@ public abstract class Query {
         } else {
             return new GeneralRelation(instance.schema, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
         }
+    }
+
+    public Tuple makeFreshHead() {
+        Schema schema = getSchema();
+        Context context = schema.getContext();
+        return new Tuple(getSchema(), Arrays.stream(headTypes()).map(t -> context.mkFreshConst("z", t)));
     }
 }

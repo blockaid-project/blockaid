@@ -50,7 +50,7 @@ public class PrimaryKeyDependency implements Dependency {
         BoolExpr agreeFormula = context.mkAnd(agreeFormulaExprs);
 
         BoolExpr lhs = context.mkAnd(relation.apply(tup1), relation.apply(tup2), agreeFormula);
-        BoolExpr rhs = tup1.tupleEqual(tup2);
+        BoolExpr rhs = tup1.equalsExpr(tup2);
 
         Expr[] allVars = Stream.concat(tup1.stream(), tup2.stream()).toArray(Expr[]::new);
         return context.mkForall(allVars, context.mkImplies(lhs, rhs), 1, null, null, null, null);
@@ -67,7 +67,7 @@ public class PrimaryKeyDependency implements Dependency {
 
         Tuple[] tuples = relation.getTuples();
         BoolExpr[] exists = relation.getExists();
-        Expr[][] syms = new Expr[columnNames.size()][];
+        Expr[][] syms = new Expr[columnNames.size()][]; // Maps (pk column index, tuple index) -> value at that column.
         int index = 0;
         for (int i = 0; i < allColumnNames.size(); ++i) {
             if (columnNames.contains(allColumnNames.get(i))) {
@@ -83,6 +83,7 @@ public class PrimaryKeyDependency implements Dependency {
         List<BoolExpr> exprs = new ArrayList<>();
         for (int i = 0; i < tuples.length; ++i) {
             for (int j = i + 1; j < tuples.length; ++j) {
+                // (tup i exists /\ tup j exists) ==> not (tup i[pk columns] == tup j[pk columns]).
                 BoolExpr[] constraint = new BoolExpr[syms.length + 2];
                 for (int k = 0; k < syms.length; ++k) {
                     constraint[k] = context.mkEq(syms[k][i], syms[k][j]);

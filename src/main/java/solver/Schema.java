@@ -40,25 +40,26 @@ public class Schema {
             constraints.add(d.apply(instance));
         }
 
-        instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
+        instance.constraint = constraints.isEmpty() ?
+                context.mkTrue() : context.mkAnd(constraints.toArray(new BoolExpr[0]));
         return instance;
     }
 
     public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
         Instance instance = new Instance(this, true);
-        List<BoolExpr> constraints = new ArrayList<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
             Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
 
-            Tuple[] tuples = new Tuple[bounds.get(relationName)];
-            BoolExpr[] exists = new BoolExpr[bounds.get(relationName)];
+            int numTuples = bounds.get(relationName);
+            Tuple[] tuples = new Tuple[numTuples];
+            BoolExpr[] exists = new BoolExpr[numTuples];
             String prefix = instancePrefix + "_" + relationName;
-            for (int i = 0; i < tuples.length; ++i) {
+            for (int i = 0; i < numTuples; ++i) {
                 List<Expr> values = new ArrayList<>();
-                for (int j = 0; j < colTypes.length; ++j) {
-                    values.add(context.mkConst(prefix + "_" + i + "_" + j, colTypes[j]));
+                for (Column col : columns) {
+                    values.add(context.mkConst(prefix + "_" + i + "_" + col.name, col.type));
                 }
                 tuples[i] = new Tuple(this, values.stream());
                 exists[i] = context.mkBoolConst(prefix + "_" + i + "_exists");
@@ -66,11 +67,12 @@ public class Schema {
             instance.put(relationName, new ConcreteRelation(this, colTypes, tuples, exists));
         }
 
+        List<BoolExpr> constraints = new ArrayList<>();
         for (Dependency d : dependencies) {
             constraints.add(d.apply(instance));
         }
-
         instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
+
         return instance;
     }
 

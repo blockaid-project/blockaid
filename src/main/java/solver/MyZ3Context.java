@@ -1,5 +1,6 @@
 package solver;
 
+import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
@@ -29,6 +30,17 @@ public class MyZ3Context extends Context {
             consts.add(c);
         }
         return c;
+    }
+
+    @Override
+    public BoolExpr mkAnd(BoolExpr... boolExprs) {
+        if (boolExprs.length == 0) {
+            return mkTrue();
+        }
+        if (boolExprs.length == 1) {
+            return boolExprs[0];
+        }
+        return super.mkAnd(boolExprs);
     }
 
     public void startTrackingConsts() {

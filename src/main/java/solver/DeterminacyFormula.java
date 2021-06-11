@@ -6,7 +6,6 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Solver;
-import org.codehaus.janino.util.Producer;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -32,6 +31,7 @@ public abstract class DeterminacyFormula {
         this.inst2 = makeInstance.apply(1);
 
         // Set prepared expr.
+        final long startTime = System.currentTimeMillis();
         Solver solver = schema.getContext().mkSolver();
         solver.add(mkPreparedExpr.apply(this.inst1, this.inst2));
         String result = solver.toString();
@@ -39,6 +39,7 @@ public abstract class DeterminacyFormula {
         result = replaceInts(result, new HashSet<>(), preparedIntReplacement, false);
         HashMap<String, Integer> preparedStringReplacement = new HashMap<>();
         result = replaceStrings(result, new HashMap<>(), preparedStringReplacement, false);
+        System.out.println("set prepared expr " + getClass().getName() + ":" + (System.currentTimeMillis() - startTime));
 
         this.preparedIntReplacement = Collections.unmodifiableSet(preparedIntReplacement);
         this.preparedStringReplacement = Collections.unmodifiableMap(preparedStringReplacement);
@@ -85,7 +86,6 @@ public abstract class DeterminacyFormula {
     }
 
     public String generateSMT(QueryTrace queries) {
-//        System.out.println("\t| Make SMT:");
         StringBuilder sb = new StringBuilder();
         MyZ3Context myContext = (MyZ3Context) context;
         myContext.startTrackingConsts();
