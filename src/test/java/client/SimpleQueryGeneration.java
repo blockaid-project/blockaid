@@ -231,7 +231,7 @@ public class SimpleQueryGeneration {
         String dbFile = tempFolder.newFile("Db").getPath();
         String h2File = tempFolder.newFile("DbServer").getPath();
         String policyFile = tempFolder.newFile("policies.sql").getPath();
-        String depsFile = tempFolder.newFile("deps.txt").getPath();
+        String depsFile = tempFolder.newFile("deps.sql").getPath();
         String pkFile = tempFolder.newFile("pk.txt").getPath();
         String fkFile = tempFolder.newFile("fk.txt").getPath();
         String dbUrl = "jdbc:h2:" + dbFile;

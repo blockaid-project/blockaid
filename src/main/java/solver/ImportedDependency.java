@@ -1,42 +1,27 @@
 package solver;
 
 import com.microsoft.z3.*;
+import sql.*;
 
+import java.sql.SQLException;
 import java.util.*;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 public class ImportedDependency implements Dependency {
-    private final String[] constants;
-    private final String solverFormula;
+    private PrivacyQuery q1;
+    private PrivacyQuery q2;
 
-    public ImportedDependency(String dependency) {
-        String[] parts = dependency.split("\\|", 2);
-        parts[0] = parts[0].trim();
-        this.constants = parts[0].length() == 0 ? new String[0] : parts[0].split(",");
-        this.solverFormula = parts[1];
+    public ImportedDependency(String dependency, SchemaPlusWithKey schema, Parser parser) throws SQLException {
+        String[] parts = dependency.split(";", 2);
+        q1 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[0]), schema, new Object[0], Collections.emptyList(), Collections.emptyMap());
+        q2 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[1]), schema, new Object[0], Collections.emptyList(), Collections.emptyMap());
     }
 
     @Override
     public BoolExpr apply(Instance instance) {
-        Context context = instance.getContext();
-        List<Symbol> funcSymbols = new ArrayList<>();
-        List<FuncDecl> funcDecls = new ArrayList<>();
-        for (String constant : constants) {
-            funcSymbols.add(context.mkSymbol("!" + constant));
-            funcDecls.add(context.mkFuncDecl("!" + constant, new Sort[0], context.getIntSort()));
-        }
-        for (Map.Entry<String, Relation> e : instance.entrySet()) {
-            FuncDecl funcDecl = e.getValue().getFunction();
-            funcSymbols.add(context.mkSymbol("!" + e.getKey()));
-            funcDecls.add(funcDecl);
-        }
-        return context.mkAnd(context.parseSMTLIB2String(
-                solverFormula,
-                null,
-                null,
-                funcSymbols.toArray(new Symbol[0]),
-                funcDecls.toArray(new FuncDecl[0])
-        ));
+        Schema schema = instance.schema;
+        Query solverQuery1 = q1.getSolverQuery(schema);
+        Query solverQuery2 = q2.getSolverQuery(schema);
+
+        return solverQuery1.apply(instance).isContainedIn(solverQuery2.apply(instance));
     }
 }

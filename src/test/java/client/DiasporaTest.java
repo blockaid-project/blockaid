@@ -12,7 +12,6 @@ import server.EndToEndTest;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
@@ -70,7 +69,7 @@ public class DiasporaTest {
         java.nio.file.Path pk_resPath = java.nio.file.Paths.get(pk_url.toURI());
         java.net.URL fk_url = EndToEndTest.class.getResource("/DiasporaTest/fk.txt");
         java.nio.file.Path fk_resPath = java.nio.file.Paths.get(fk_url.toURI());
-        java.net.URL deps_url = EndToEndTest.class.getResource("/DiasporaTest/deps.txt");
+        java.net.URL deps_url = EndToEndTest.class.getResource("/DiasporaTest/deps.sql");
         java.nio.file.Path deps_resPath = java.nio.file.Paths.get(deps_url.toURI());
 
 //        String dbFile = tempFolder.newFile("Db").getPath();

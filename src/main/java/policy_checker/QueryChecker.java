@@ -9,6 +9,7 @@ import planner.PrivacyColumn;
 import planner.PrivacyTable;
 import solver.*;
 import solver.executor.*;
+import sql.Parser;
 import sql.PrivacyQuery;
 import sql.SchemaPlusWithKey;
 
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.PrintWriter;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -61,13 +63,13 @@ public class QueryChecker {
      */
     private static final ConcurrentHashMap<Properties, DecisionCache> decisionCaches = new ConcurrentHashMap<>();
 
-    public static QueryChecker getInstance(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
-                                           String[] deps, String[] uks, String[] fks) {
-        return new QueryChecker(info, policySet, rawSchema, deps, uks, fks);
+    public static QueryChecker getInstance(Properties info, Parser parser, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
+                                           String[] deps, String[] uks, String[] fks) throws SQLException {
+        return new QueryChecker(info, parser, policySet, rawSchema, deps, uks, fks);
     }
 
-    private QueryChecker(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema, String[] deps,
-                         String[] uks, String[] fks)
+    private QueryChecker(Properties info, Parser parser, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
+                         String[] deps, String[] uks, String[] fks) throws SQLException
     {
         this.policySet = policySet;
         MyZ3Context context = new MyZ3Context();
@@ -99,8 +101,9 @@ public class QueryChecker {
             String[] to = parts[1].split("\\.", 2);
             dependencies.add(new ForeignKeyDependency(from[0], from[1], to[0], to[1]));
         }
+
         for (String dep : deps) {
-            dependencies.add(new ImportedDependency(dep));
+            dependencies.add(new ImportedDependency(dep, rawSchema, parser));
         }
 
         this.schema = new Schema(context, relations, dependencies);

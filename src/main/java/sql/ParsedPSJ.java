@@ -13,6 +13,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ParsedPSJ {
     private final List<String> relations;
@@ -23,6 +24,7 @@ public class ParsedPSJ {
     private final List<Object> parameters;
     private final List<String> paramNames;
     private final List<SqlBasicCall> theta;
+    private final boolean trivialWhereClause;
     private List<Boolean> resultBitmap;
 
     public ParsedPSJ(SqlNode parsedSql, SchemaPlusWithKey schema, List<Object> parameters, List<String> paramNames) {
@@ -126,13 +128,20 @@ public class ParsedPSJ {
             }
         }
 
-        // not WHERE TRUE, WHERE FALSE
-        // FIXME(zhangwen): how does WHERE FALSE get handled?
-        if (sqlSelect.getWhere() != null && sqlSelect.getWhere().getKind() != SqlKind.LITERAL) {
+        // not WHERE TRUE, WHERE FALSE - converted to WHERE ?
+        if (sqlSelect.getWhere() != null && sqlSelect.getWhere().getKind() != SqlKind.DYNAMIC_PARAM) {
             SqlBasicCall mainTheta = (SqlBasicCall) sqlSelect.getWhere();
             if (mainTheta != null) {
                 addTheta(mainTheta);
             }
+            trivialWhereClause = false;
+        } else if (sqlSelect.getWhere() != null) {
+            Object value = parameters.get(parameters.size() - 1);
+            checkNotNull(value);
+            checkArgument(value instanceof Boolean);
+            trivialWhereClause = true;
+        } else {
+            trivialWhereClause = false;
         }
     }
 
@@ -227,6 +236,10 @@ public class ParsedPSJ {
 
     private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
         Context context = schema.getContext();
+        if (trivialWhereClause) {
+            Boolean value = (Boolean) parameters.get(parameters.size() - 1);
+            return context.mkBool(value);
+        }
         if (theta instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {

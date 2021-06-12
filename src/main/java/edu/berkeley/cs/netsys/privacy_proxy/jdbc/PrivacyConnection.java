@@ -74,6 +74,7 @@ public class PrivacyConnection implements Connection {
 
     this.query_checker = QueryChecker.getInstance(
             direct_info,
+            this.parser,
             this.policy_list,
             this.schema,
             deps.lines().toArray(String[]::new),
