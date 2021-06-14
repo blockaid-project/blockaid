@@ -37,7 +37,7 @@ public class PrimaryKeyDependency implements Dependency {
         Tuple tup2 = schema.makeFreshTuple(relationName);
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
-        checkArgument(!columnNames.isEmpty(), "the instance does not contain relation %s", relationName);
+        checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);
         BoolExpr[] agreeFormulaExprs = new BoolExpr[columnNames.size()];
         int index = 0;
         for (int i = 0; i < allColumnNames.size(); ++i) {
@@ -63,7 +63,7 @@ public class PrimaryKeyDependency implements Dependency {
         Schema schema = instance.schema;
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
-        checkArgument(!columnNames.isEmpty(), "the instance does not contain relation %s", relationName);
+        checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);
 
         Tuple[] tuples = relation.getTuples();
         BoolExpr[] exists = relation.getExists();
@@ -78,6 +78,7 @@ public class PrimaryKeyDependency implements Dependency {
                 ++index;
             }
         }
+        checkArgument(index == columnNames.size(), "some column(s) not found: %s.%s", relationName, columnNames);
 
         List<BoolExpr> exprs = new ArrayList<>();
         for (int i = 0; i < tuples.length; ++i) {

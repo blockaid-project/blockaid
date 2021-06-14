@@ -35,11 +35,6 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public FuncDecl getFunction() {
-        return funcDecl;
-    }
-
-    @Override
     public BoolExpr apply(Expr... args) {
         // FIXME(zhangwen): handle SQL NULL properly.
         // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
@@ -87,6 +82,10 @@ public class ConcreteRelation implements Relation {
         for (int i = 0; i < exprs.length; ++i) {
             exprs[i] = context.mkOr(context.mkNot(exists[i]), other.apply(tuples[i]));
         }
+
+        if (tuples.length == 0) {
+            return context.mkTrue();
+        }
         return context.mkAnd(exprs);
     }
 
@@ -95,22 +94,7 @@ public class ConcreteRelation implements Relation {
         checkArgument(other instanceof ConcreteRelation);
         ConcreteRelation other_ = (ConcreteRelation) other;
         checkArgument(Arrays.equals(this.signature, other_.signature));
-        checkArgument(this.tuples.length == other_.tuples.length);
-
-        if (this.tuples.length == 0) {
-            return context.mkTrue();
-        }
 
         return context.mkAnd(this.isContainedIn(other), other.isContainedIn(this));
-    }
-
-    public BoolExpr getFunctionBody() {
-        // for use with (set-option :smt.macro-finder true), since Java Z3 bindings doesn't support declare-fun with bodies
-        Tuple tuple = new Tuple(schema, Arrays.stream(signature).map(sort -> context.mkFreshConst("v", sort)));
-        BoolExpr[] bodyExprs = new BoolExpr[tuples.length];
-        for (int i = 0; i < tuples.length; ++i) {
-            bodyExprs[i] = context.mkAnd(tuple.tupleEqual(tuples[i]), exists[i]);
-        }
-        return context.mkForall(tuple.toExprArray(), context.mkEq(funcDecl.apply(tuple.toExprArray()), context.mkOr(bodyExprs)), 1, null, null, null, null);
     }
 }

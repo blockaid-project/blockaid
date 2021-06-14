@@ -22,12 +22,6 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public FuncDecl getFunction() {
-        checkArgument(function instanceof Z3Function);
-        return ((Z3Function) function).getFunctionDecl();
-    }
-
-    @Override
     public BoolExpr apply(Expr... args) {
         // FIXME(zhangwen): handle SQL NULL properly.
         // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned

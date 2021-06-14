@@ -81,6 +81,7 @@ public abstract class PSJ extends Query {
             tuples.add(t[i]);
             exists.add(e[i]);
             visitJoins(instance, consumer, tuples, exists, index + 1);
+            exists.remove(exists.size() - 1);
             tuples.remove(tuples.size() - 1);
         }
     }

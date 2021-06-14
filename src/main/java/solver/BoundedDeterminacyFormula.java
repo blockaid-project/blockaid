@@ -32,15 +32,6 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
         });
     }
 
-
-    @Override
-    protected List<BoolExpr> extraAsserts() {
-        List<BoolExpr> functionBodies = new ArrayList<>();
-        functionBodies.addAll(inst1.values().stream().map(x -> ((ConcreteRelation) x).getFunctionBody()).collect(Collectors.toList()));
-        functionBodies.addAll(inst2.values().stream().map(x -> ((ConcreteRelation) x).getFunctionBody()).collect(Collectors.toList()));
-        return functionBodies;
-    }
-
     @Override
     public BoolExpr makeFormula(QueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
