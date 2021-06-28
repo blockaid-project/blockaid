@@ -6,23 +6,23 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TraceCache {
-    private class Entry {
-        private CachedQueryTrace trace;
-        private boolean compliance;
+    private static class Entry {
+        private final CachedQueryTrace trace;
+        private final boolean compliance;
 
         public Entry(CachedQueryTrace trace, boolean compliance) {
             this.trace = trace;
             this.compliance = compliance;
         }
     }
-    private Map<String, List<Entry>> cache = new HashMap<>();
-    private ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final Map<String, List<Entry>> cache = new HashMap<>();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public Boolean checkCache(QueryTrace queryTrace) {
         Lock readLock = lock.readLock();
         readLock.lock();
         try {
-            List<Entry> entryList = cache.getOrDefault(queryTrace.currentQuery.getQuery().parsedSql.getParsedSql(), Collections.emptyList());
+            List<Entry> entryList = cache.getOrDefault(queryTrace.getCurrentQuery().getParsedSql(), Collections.emptyList());
             ListIterator<Entry> iterator = entryList.listIterator(entryList.size());
             while (iterator.hasPrevious()) {
                 Entry entry = iterator.previous();

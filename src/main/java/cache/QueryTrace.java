@@ -1,5 +1,7 @@
 package cache;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
 import sql.PrivacyQuery;
 
 import java.util.*;
@@ -8,9 +10,8 @@ import static com.google.common.base.Preconditions.checkState;
 
 public class QueryTrace {
     // order of past queries is irrelevant, so using a map for cache lookup
-    Map<String, List<QueryTraceEntry>> queries = new HashMap<>();
-    QueryTraceEntry currentQuery = null;
-    private int sz = 0;
+    private final Multimap<String, QueryTraceEntry> queries = ArrayListMultimap.create();
+    private QueryTraceEntry currentQuery = null;
 
     // Maps constants to their values (e.g., _MY_UID -> 2).
     // TODO(zhangwen): The existing code seems to assume constants are integers (in ParsedPSJ.getPredicate),
@@ -43,20 +44,21 @@ public class QueryTrace {
             endQuery(Collections.emptyList());
         }
         currentQuery = new QueryTraceEntry(query, parameters);
-        queries.putIfAbsent(query.parsedSql.getParsedSql(), new ArrayList<>());
-        queries.get(query.parsedSql.getParsedSql()).add(currentQuery);
-
-        ++sz;
+        queries.put(query.parsedSql.getParsedSql(), currentQuery);
     }
 
     public void endQuery(List<List<Object>> tuples) {
         checkState(currentQuery != null);
-        queries.get(currentQuery.query.parsedSql.getParsedSql()).set(queries.get(currentQuery.query.parsedSql.getParsedSql()).size() - 1, new QueryTraceEntry(currentQuery, tuples));
+        currentQuery.setTuples(tuples);
         currentQuery = null;
     }
 
-    public Map<String, List<QueryTraceEntry>> getQueries() {
-        return queries;
+    public Iterable<QueryTraceEntry> getAllEntries() {
+        return queries.values();
+    }
+
+    public Iterable<QueryTraceEntry> getEntriesByText(String queryText) {
+        return queries.get(queryText);
     }
 
     public QueryTraceEntry getCurrentQuery() {
@@ -64,6 +66,6 @@ public class QueryTrace {
     }
 
     public int size() {
-        return sz;
+        return queries.size();
     }
 }

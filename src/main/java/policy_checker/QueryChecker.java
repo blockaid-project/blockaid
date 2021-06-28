@@ -356,105 +356,101 @@ public class QueryChecker {
             Set<Integer> paramAssertions = new HashSet<>();
             Map<Integer, Integer> assertionOccurrences  = new HashMap<>();
             // check used values, assertions
-            for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
-                for (QueryTraceEntry queryEntry : queryEntries) {
-                    boolean keptQuery = core.core.contains("a_q!" + queryNumber) || queryEntry == queries.getCurrentQuery();
-                    List<Object> parameters = queryEntry.getParameters();
-                    for (int i = 0; i < parameters.size(); ++i) {
-                        Object parameter = parameters.get(i);
-                        if (core.core.contains("a_pv!" + queryNumber + "!" + i)) {
-                            valueConstraints.add(parameter);
+            for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
+                boolean keptQuery = core.core.contains("a_q!" + queryNumber) || queryEntry == queries.getCurrentQuery();
+                List<Object> parameters = queryEntry.getParameters();
+                for (int i = 0; i < parameters.size(); ++i) {
+                    Object parameter = parameters.get(i);
+                    if (core.core.contains("a_pv!" + queryNumber + "!" + i)) {
+                        valueConstraints.add(parameter);
+                    }
+                    if (!keptQuery || !core.equalityMap.containsKey(parameter)) {
+                        continue;
+                    }
+                    int assertionNum = core.equalityMap.get(parameter);
+                    if (UNNAMED_EQUALITY || core.core.contains("a_e!" + assertionNum)) {
+                        paramAssertions.add(assertionNum);
+                        assertionOccurrences.put(assertionNum, assertionOccurrences.getOrDefault(assertionNum, 0) + 1);
+                    }
+                }
+
+                int attrNum = 0;
+                for (List<Object> tuple : queryEntry.getTuples()) {
+                    for (Object value : tuple) {
+                        if (core.core.contains("a_v!" + queryNumber + "!" + attrNum)) {
+                            valueConstraints.add(value);
                         }
-                        if (!keptQuery || !core.equalityMap.containsKey(parameter)) {
+                        if (!keptQuery || !core.equalityMap.containsKey(value)) {
+                            ++attrNum;
                             continue;
                         }
-                        int assertionNum = core.equalityMap.get(parameter);
+                        int assertionNum = core.equalityMap.get(value);
                         if (UNNAMED_EQUALITY || core.core.contains("a_e!" + assertionNum)) {
-                            paramAssertions.add(assertionNum);
                             assertionOccurrences.put(assertionNum, assertionOccurrences.getOrDefault(assertionNum, 0) + 1);
                         }
+                        ++attrNum;
                     }
-
-                    int attrNum = 0;
-                    for (List<Object> tuple : queryEntry.getTuples()) {
-                        for (Object value : tuple) {
-                            if (core.core.contains("a_v!" + queryNumber + "!" + attrNum)) {
-                                valueConstraints.add(value);
-                            }
-                            if (!keptQuery || !core.equalityMap.containsKey(value)) {
-                                ++attrNum;
-                                continue;
-                            }
-                            int assertionNum = core.equalityMap.get(value);
-                            if (UNNAMED_EQUALITY || core.core.contains("a_e!" + assertionNum)) {
-                                assertionOccurrences.put(assertionNum, assertionOccurrences.getOrDefault(assertionNum, 0) + 1);
-                            }
-                            ++attrNum;
-                        }
-                    }
-                    ++queryNumber;
                 }
+                ++queryNumber;
             }
             queryNumber = 0;
             // generate cache entry
-            for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
-                for (QueryTraceEntry queryEntry : queryEntries) {
-                    if (!core.core.contains("a_q!" + queryNumber) && queryEntry != queries.getCurrentQuery()) {
-                        ++queryNumber;
+            for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
+                if (!core.core.contains("a_q!" + queryNumber) && queryEntry != queries.getCurrentQuery()) {
+                    ++queryNumber;
+                    continue;
+                }
+                // equalities
+                List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
+                for (Object parameter : queryEntry.getParameters()) {
+                    if (!core.equalityMap.containsKey(parameter)) {
+                        parameterEquality.add(null);
                         continue;
                     }
-                    // equalities
-                    List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
-                    for (Object parameter : queryEntry.getParameters()) {
-                        if (!core.equalityMap.containsKey(parameter)) {
-                            parameterEquality.add(null);
+                    int assertionNum = core.equalityMap.get(parameter);
+                    if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
+                        parameterEquality.add(new CachedQueryTraceEntry.Index(assertionNum));
+                    } else {
+                        parameterEquality.add(null);
+                    }
+                }
+                List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
+                for (List<Object> tuple : queryEntry.getTuples()) {
+                    List<CachedQueryTraceEntry.Index> indices = new ArrayList<>();
+                    for (Object value : tuple) {
+                        if (!core.equalityMap.containsKey(value)) {
+                            indices.add(null);
                             continue;
                         }
-                        int assertionNum = core.equalityMap.get(parameter);
+                        int assertionNum = core.equalityMap.get(value);
                         if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
-                            parameterEquality.add(new CachedQueryTraceEntry.Index(assertionNum));
+                            indices.add(new CachedQueryTraceEntry.Index(assertionNum));
                         } else {
-                            parameterEquality.add(null);
+                            indices.add(null);
                         }
                     }
-                    List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
-                    for (List<Object> tuple : queryEntry.getTuples()) {
-                        List<CachedQueryTraceEntry.Index> indices = new ArrayList<>();
-                        for (Object value : tuple) {
-                            if (!core.equalityMap.containsKey(value)) {
-                                indices.add(null);
-                                continue;
-                            }
-                            int assertionNum = core.equalityMap.get(value);
-                            if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
-                                indices.add(new CachedQueryTraceEntry.Index(assertionNum));
-                            } else {
-                                indices.add(null);
-                            }
-                        }
-                        tupleEquality.add(indices);
-                    }
-                    // values
-                    QueryTraceEntry processedQuery = new QueryTraceEntry(queryEntry);
-                    List<Object> parameters = processedQuery.getParameters();
-                    for (int i = 0; i < parameters.size(); ++i) {
-                        if (!valueConstraints.contains(parameters.get(i))) {
-                            parameters.set(i, null);
-                        }
-                    }
-                    for (List<Object> tuple : processedQuery.getTuples()) {
-                        for (int j = 0; j < tuple.size(); ++j) {
-                            if (!valueConstraints.contains(tuple.get(j))) {
-                                tuple.set(j, null);
-                            }
-                        }
-                    }
-                    CachedQueryTraceEntry entry = new CachedQueryTraceEntry(processedQuery, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality);
-                    if (!entry.isEmpty()) {
-                        cacheTrace.addEntry(entry);
-                    }
-                    ++queryNumber;
+                    tupleEquality.add(indices);
                 }
+                // values
+                QueryTraceEntry processedQuery = new QueryTraceEntry(queryEntry);
+                List<Object> parameters = processedQuery.getParameters();
+                for (int i = 0; i < parameters.size(); ++i) {
+                    if (!valueConstraints.contains(parameters.get(i))) {
+                        parameters.set(i, null);
+                    }
+                }
+                for (List<Object> tuple : processedQuery.getTuples()) {
+                    for (int j = 0; j < tuple.size(); ++j) {
+                        if (!valueConstraints.contains(tuple.get(j))) {
+                            tuple.set(j, null);
+                        }
+                    }
+                }
+                CachedQueryTraceEntry entry = new CachedQueryTraceEntry(processedQuery, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality);
+                if (!entry.isEmpty()) {
+                    cacheTrace.addEntry(entry);
+                }
+                ++queryNumber;
             }
             System.err.println(cacheTrace);
             cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
@@ -462,22 +458,20 @@ public class QueryChecker {
             System.err.println("no core, using value match");
             // no unsat core found (or not unsat) - all queries all values no equality
             CachedQueryTrace cacheTrace = new CachedQueryTrace();
-            for (List<QueryTraceEntry> queryEntries : queries.getQueries().values()) {
-                for (QueryTraceEntry queryEntry : queryEntries) {
-                    List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
-                    for (int i = 0; i < queryEntry.getParameters().size(); ++i) {
-                        parameterEquality.add(null);
-                    }
-                    List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
-                    for (int i = 0; i < queryEntry.getTuples().size(); ++i) {
-                        List<CachedQueryTraceEntry.Index> tuple = new ArrayList<>();
-                        for (int j = 0; j < queryEntry.getTuples().get(i).size(); ++j) {
-                            tuple.add(null);
-                        }
-                        tupleEquality.add(tuple);
-                    }
-                    cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality));
+            for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
+                List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
+                for (int i = 0; i < queryEntry.getParameters().size(); ++i) {
+                    parameterEquality.add(null);
                 }
+                List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
+                for (List<Object> queryEntryTuple : queryEntry.getTuples()) {
+                    List<CachedQueryTraceEntry.Index> tuple = new ArrayList<>();
+                    for (int j = 0; j < queryEntryTuple.size(); ++j) {
+                        tuple.add(null);
+                    }
+                    tupleEquality.add(tuple);
+                }
+                cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality));
             }
             System.err.println(cacheTrace);
             cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);

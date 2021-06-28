@@ -1,5 +1,7 @@
 package cache;
 
+import com.google.common.collect.Lists;
+
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,15 +57,15 @@ public class CachedQueryTraceEntry {
     private int maxEqualityNumber;
     private boolean isEmpty;
 
-    public CachedQueryTraceEntry(QueryTraceEntry trace, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
-        this(trace.query.parsedSql.getParsedSql(), trace.parameters, trace.tuples, isCurrentQuery, parameterEquality, tupleEquality);
+    public CachedQueryTraceEntry(QueryTraceEntry traceEntry, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+        this(traceEntry.getParsedSql(), traceEntry.getParameters(), traceEntry.getTuples(), isCurrentQuery, parameterEquality, tupleEquality);
     }
 
-    private CachedQueryTraceEntry(String queryText, List<Object> parameters, List<List<Object>> tuples, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+    private CachedQueryTraceEntry(String queryText, List<Object> parameters, Iterable<List<Object>> tuples, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
         this.queryText = queryText;
         this.isCurrentQuery = isCurrentQuery;
         this.parameters = parameters;
-        this.tuples = tuples;
+        this.tuples = Lists.newArrayList(tuples);
         this.parameterEquality = parameterEquality;
         this.tupleEquality = tupleEquality;
 
@@ -129,12 +131,12 @@ public class CachedQueryTraceEntry {
     }
 
     public boolean checkQueryText(QueryTraceEntry query) {
-        return queryText.equals(query.query.parsedSql.getParsedSql());
+        return queryText.equals(query.getParsedSql());
     }
 
     public boolean checkParameters(QueryTraceEntry query, Map<Index, Object> mappedIndices) {
         Iterator<Object> cacheParamIter = parameters.iterator();
-        Iterator<Object> queryParamIter = query.parameters.iterator();
+        Iterator<Object> queryParamIter = query.getParameters().iterator();
         Iterator<Index> paramEqualityIter = parameterEquality.iterator();
 
         while (cacheParamIter.hasNext() && queryParamIter.hasNext() && paramEqualityIter.hasNext()) {
@@ -182,17 +184,18 @@ public class CachedQueryTraceEntry {
         checkState(!cacheTupleIter.hasNext() && !tupleEqualityIter.hasNext(),
                 "cacheTuple, tupleEquality must have the same size");
 
-        return checkTuplesContained(tupleChecks.listIterator(), query.tuples);
+        return checkTuplesContained(tupleChecks.listIterator(), query.getTuples());
     }
 
     // TODO: is it okay to allow multiple tuples from cache to map to the same tuple in query
-    private boolean checkTuplesContained(ListIterator<List<Object>> cacheTuples, List<List<Object>> queryTuples) {
+    private boolean checkTuplesContained(ListIterator<List<Object>> cacheTuples, Iterable<List<Object>> queryTuples) {
         if (!cacheTuples.hasNext()) {
             return true;
         }
 
         List<Object> cacheTuple = cacheTuples.next();
 
+        // FIXME(zhangwen): this code can be simplified?
         Iterator<List<Object>> queryTupleIter = queryTuples.iterator();
         int i = 0;
         while (queryTupleIter.hasNext()) {

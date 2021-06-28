@@ -66,7 +66,7 @@ public class TestCache {
                 Q3,
                 Collections.singletonList(null)
         );
-        q3.tuples.add(Arrays.asList(null, null, null, null));
+        q3.setTuples(List.of(Arrays.asList(null, null, null, null)));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q3,
                 false,
@@ -78,7 +78,7 @@ public class TestCache {
                 Q4,
                 Arrays.asList(null, null)
         );
-        q4.tuples.add(Arrays.asList(null, null, null, null));
+        q4.setTuples(List.of(Arrays.asList(null, null, null, null)));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q4,
                 false,
@@ -181,7 +181,7 @@ public class TestCache {
                 Q3,
                 Collections.singletonList(null)
         );
-        q3.tuples.add(Arrays.asList(null, null, null, null));
+        q3.setTuples(List.of(Arrays.asList(null, null, null, null)));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q3,
                 false,
@@ -193,7 +193,7 @@ public class TestCache {
                 Q4,
                 Arrays.asList(null, null)
         );
-        q4.tuples.add(Arrays.asList(null, null, null, null));
+        q4.setTuples(List.of(Arrays.asList(null, null, null, null)));
         cacheTrace.addEntry(new CachedQueryTraceEntry(
                 q4,
                 false,

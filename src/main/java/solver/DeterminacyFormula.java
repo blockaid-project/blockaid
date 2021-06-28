@@ -48,19 +48,17 @@ public abstract class DeterminacyFormula {
 
     protected BoolExpr generateTupleCheck(QueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
-        for (List<QueryTraceEntry> queryTraceEntries : queries.getQueries().values()) {
-            for (QueryTraceEntry queryTraceEntry : queryTraceEntries) {
-                Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
-                Relation r1 = query.apply(inst1);
-                Relation r2 = query.apply(inst2);
-                if (!queryTraceEntry.getTuples().isEmpty()) {
-                    List<Tuple> tuples = queryTraceEntry.getTuples().stream().map(
-                            tuple -> new Tuple(schema, tuple.stream().map(
-                                    v -> Tuple.getExprFromObject(context, v)
-                            ))).collect(Collectors.toList());
-                    exprs.add(r1.doesContain(tuples));
-                    exprs.add(r2.doesContain(tuples));
-                }
+        for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
+            Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
+            Relation r1 = query.apply(inst1);
+            Relation r2 = query.apply(inst2);
+            List<Tuple> tuples = queryTraceEntry.getTuplesStream().map(
+                    tuple -> new Tuple(schema, tuple.stream().map(
+                            v -> Tuple.getExprFromObject(context, v)
+                    ))).collect(Collectors.toList());
+            if (!tuples.isEmpty()) {
+                exprs.add(r1.doesContain(tuples));
+                exprs.add(r2.doesContain(tuples));
             }
         }
 
