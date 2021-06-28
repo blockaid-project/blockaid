@@ -24,7 +24,8 @@ public abstract class DeterminacyFormula {
     private final Map<String, Integer> preparedStringReplacement;
     private final Set<String> preparedIntReplacement;
 
-    protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance, BiFunction<Instance, Instance, BoolExpr> mkPreparedExpr) {
+    protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance,
+                                 BiFunction<Instance, Instance, List<BoolExpr>> mkPreparedExpr) {
         this.schema = schema;
         this.context = schema.getContext();
         this.inst1 = makeInstance.apply(0);
@@ -33,7 +34,7 @@ public abstract class DeterminacyFormula {
         // Set prepared expr.
         final long startTime = System.currentTimeMillis();
         Solver solver = schema.getContext().mkSolver();
-        solver.add(mkPreparedExpr.apply(this.inst1, this.inst2));
+        solver.add(mkPreparedExpr.apply(this.inst1, this.inst2).toArray(new BoolExpr[0]));
         String result = solver.toString();
         HashSet<String> preparedIntReplacement = new HashSet<>();
         result = replaceInts(result, new HashSet<>(), preparedIntReplacement, false);

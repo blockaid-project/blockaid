@@ -3,26 +3,24 @@ package solver;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Instance extends HashMap<String, Relation> {
     final Schema schema;
-    BoolExpr constraint;
+    List<BoolExpr> constraints;
     final boolean isConcrete;
 
     Instance(Schema schema, boolean isConcrete) {
-        this(schema, isConcrete, null);
-    }
-
-    Instance(Schema schema, boolean isConcrete, BoolExpr constraint) {
         this.schema = checkNotNull(schema);
         this.isConcrete = isConcrete;
-        this.constraint = constraint;
+        this.constraints = Collections.emptyList();
     }
 
-    Context getContext() {
+    public Context getContext() {
         return schema.getContext();
     }
 }

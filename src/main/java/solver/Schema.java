@@ -40,8 +40,7 @@ public class Schema {
             constraints.add(d.apply(instance));
         }
 
-        instance.constraint = constraints.isEmpty() ?
-                context.mkTrue() : context.mkAnd(constraints.toArray(new BoolExpr[0]));
+        instance.constraints = constraints;
         return instance;
     }
 
@@ -71,7 +70,7 @@ public class Schema {
         for (Dependency d : dependencies) {
             constraints.add(d.apply(instance));
         }
-        instance.constraint = context.mkAnd(constraints.toArray(new BoolExpr[0]));
+        instance.constraints = constraints;
 
         return instance;
     }

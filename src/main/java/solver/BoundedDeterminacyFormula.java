@@ -4,7 +4,6 @@ import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
     // TODO this
@@ -19,16 +18,12 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views) {
         super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, makeBoundsMap(schema)), (Instance inst1, Instance inst2) -> {
             List<BoolExpr> clauses = new ArrayList<>();
-            if (inst1.constraint != null) {
-                clauses.add(inst1.constraint);
-            }
-            if (inst2.constraint != null) {
-                clauses.add(inst2.constraint);
-            }
+            clauses.addAll(inst1.constraints);
+            clauses.addAll(inst2.constraints);
             for (Query v : views) {
                 clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
             }
-            return schema.getContext().mkAnd(clauses.toArray(new BoolExpr[0]));
+            return clauses;
         });
     }
 
