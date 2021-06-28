@@ -236,10 +236,6 @@ public class ParsedPSJ {
 
     private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
         Context context = schema.getContext();
-        if (trivialWhereClause) {
-            Boolean value = (Boolean) parameters.get(parameters.size() - 1);
-            return context.mkBool(value);
-        }
         if (theta instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {
@@ -386,6 +382,10 @@ public class ParsedPSJ {
             }
             return context.mkAnd(exprs);
         } else {
+            if (trivialWhereClause) {
+                Boolean value = (Boolean) parameters.get(parameters.size() - 1);
+                return context.mkBool(value);
+            }
             return context.mkTrue();
         }
     }
