@@ -2,6 +2,7 @@ package solver;
 
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
@@ -47,7 +48,7 @@ public abstract class DeterminacyFormula {
         this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
     }
 
-    protected BoolExpr generateTupleCheck(QueryTrace queries) {
+    protected Iterable<BoolExpr> generateTupleCheck(QueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
         for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
             Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
@@ -72,16 +73,26 @@ public abstract class DeterminacyFormula {
 //            ));
 //        }
 
-        if (exprs.isEmpty()) {
-            return context.mkTrue();
-        }
-        return context.mkAnd(exprs.toArray(new BoolExpr[0]));
+        return exprs;
     }
 
-    protected abstract BoolExpr makeFormula(QueryTrace queries);
+    protected Iterable<BoolExpr> makeFormula(QueryTrace queries) {
+        /* Both regular and fast unsat share this formula form -- by symmetry, we can write Q(D1) != Q(D2) using
+        "not contained in". */
+        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
+        Tuple extHeadTup = query.makeFreshHead();
+        List<BoolExpr> notContainsFormulas = List.of(
+                query.doesContain(inst1, extHeadTup),
+                context.mkNot(query.doesContain(inst2, extHeadTup)));
+        return Iterables.concat(generateTupleCheck(queries), notContainsFormulas);
+    }
 
     protected String makeFormulaSMT(QueryTrace queries) {
-        return "(assert " + makeFormula(queries).toString() + ")";
+        StringBuilder sb = new StringBuilder();
+        for (BoolExpr formula : makeFormula(queries)) {
+            sb.append("(assert ").append(formula).append(")\n");
+        }
+        return sb.toString();
     }
 
     public String generateSMT(QueryTrace queries) {

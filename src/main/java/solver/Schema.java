@@ -23,7 +23,7 @@ public class Schema {
         return context;
     }
 
-    public Instance makeFreshInstance() {
+    public Instance makeFreshInstance(String instancePrefix) {
         Instance instance = new Instance(this, false);
         List<BoolExpr> constraints = new ArrayList<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
@@ -31,7 +31,8 @@ public class Schema {
             List<Column> columns = relation.getValue();
 
             Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
-            FuncDecl func = context.mkFreshFuncDecl("v", colTypes, context.getBoolSort());
+            FuncDecl func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName, colTypes,
+                    context.getBoolSort());
             instance.put(relationName, new GeneralRelation(this, new Z3Function(func), colTypes));
         }
 

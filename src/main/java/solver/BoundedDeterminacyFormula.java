@@ -1,6 +1,5 @@
 package solver;
 
-import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 
 import java.util.*;
@@ -25,14 +24,5 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
             }
             return clauses;
         });
-    }
-
-    @Override
-    public BoolExpr makeFormula(QueryTrace queries) {
-        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
-        return context.mkAnd(
-                context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))),
-                generateTupleCheck(queries)
-        );
     }
 }

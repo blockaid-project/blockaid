@@ -14,15 +14,17 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     private final ImmutableSet<String> relevantAttributes;
 
     public UnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views, boolean unnamedEquality, boolean eliminateIrrelevant) {
-        super(schema, (Integer instNum) -> schema.makeFreshInstance(), (Instance inst1, Instance inst2) -> {
-            List<BoolExpr> clauses = new ArrayList<>();
-            clauses.addAll(inst1.constraints);
-            clauses.addAll(inst2.constraints);
-            for (Query v : views) {
-                clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
-            }
-            return clauses;
-        });
+        super(schema,
+                (Integer instNum) -> schema.makeFreshInstance("instance" + instNum),
+                (Instance inst1, Instance inst2) -> {
+                    List<BoolExpr> clauses = new ArrayList<>();
+                    clauses.addAll(inst1.constraints);
+                    clauses.addAll(inst2.constraints);
+                    for (Query v : views) {
+                        clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
+                    }
+                    return clauses;
+                });
 
         this.unnamedEquality = unnamedEquality;
         this.eliminateIrrelevant = eliminateIrrelevant;
@@ -145,7 +147,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public BoolExpr makeFormula(QueryTrace queries) {
+    public Iterable<BoolExpr> makeFormula(QueryTrace queries) {
         throw new UnsupportedOperationException();
     }
 
