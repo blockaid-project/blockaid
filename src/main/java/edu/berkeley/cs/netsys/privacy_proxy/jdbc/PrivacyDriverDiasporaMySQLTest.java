@@ -53,7 +53,7 @@ public class PrivacyDriverDiasporaMySQLTest {
         String diasporaPath = checkNotNull(System.getenv("DIASPORA_PATH"));
         String proxyUrl = String.format("jdbc:privacy:thin:%s,%s,%s,%s,%s,%s,%s",
                 diasporaPath + "/policy/policies.sql", // Policy file.
-                diasporaPath + "/policy/deps.txt", // Misc dependencies.
+                diasporaPath + "/policy/deps.sql", // Misc dependencies.
                 setupDbUrl,
                 dbUrl,
                 diasporaPath + "/policy/pk.txt", // Primary key dependencies.
