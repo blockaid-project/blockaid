@@ -36,7 +36,7 @@ public class QueryChecker {
 
     public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.COARSE;
 
-    private static final boolean PRINT_FORMULAS = false;
+    private static final boolean PRINT_FORMULAS = Objects.equals(System.getProperty("privoxy.print_formulas"), "true");
     private static final String FORMULA_DIR = System.getenv("PRIVOXY_FORMULA_PATH");
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
