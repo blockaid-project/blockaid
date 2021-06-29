@@ -77,8 +77,13 @@ public class ExtractParams extends SqlTransformer {
                 SqlJoin join = (SqlJoin) sqlCall;
                 SqlNode newLeft = join.getLeft().accept(this);
                 SqlNode newRight = join.getRight().accept(this);
+                SqlNode condition = join.getCondition();
+                SqlNode newCondition = null;
+                if (condition != null) {
+                    newCondition = condition.accept(this);
+                }
                 return new SqlJoin(join.getParserPosition(), newLeft, join.isNaturalNode(), join.getJoinTypeNode(),
-                        newRight, join.getConditionTypeNode(), join.getCondition().accept(this));
+                        newRight, join.getConditionTypeNode(), newCondition);
         }
 
         return super.visit(sqlCall);
