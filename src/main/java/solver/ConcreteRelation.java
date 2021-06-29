@@ -5,6 +5,7 @@ import com.microsoft.z3.*;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ConcreteRelation implements Relation {
     private final Schema schema;
@@ -19,7 +20,7 @@ public class ConcreteRelation implements Relation {
     public ConcreteRelation(Schema schema, Sort[] signature, Tuple[] tuples, BoolExpr[] exists) {
         checkArgument(tuples.length == exists.length, "tuples and exists differ in length");
 
-        this.schema = schema;
+        this.schema = checkNotNull(schema);
         this.context = schema.getContext();
         this.signature = signature;
         this.tuples = tuples;
