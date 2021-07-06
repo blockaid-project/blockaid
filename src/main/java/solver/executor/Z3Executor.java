@@ -17,4 +17,8 @@ public class Z3Executor extends ProcessSMTExecutor {
     public Z3Executor(String name, String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
         super(name, solver, latch, command, satConclusive, unsatConclusive, unknownConclusive, false);
     }
+
+    public Z3Executor(String name, String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean unsatCore) {
+        super(name, solver, latch, command, satConclusive, unsatConclusive, unknownConclusive, unsatCore);
+    }
 }

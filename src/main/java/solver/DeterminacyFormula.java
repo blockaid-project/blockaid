@@ -36,6 +36,7 @@ public abstract class DeterminacyFormula {
         final long startTime = System.currentTimeMillis();
         Solver solver = schema.getContext().mkSolver();
         solver.add(mkPreparedExpr.apply(this.inst1, this.inst2).toArray(new BoolExpr[0]));
+        solver.add(additionalAssertion(context));
         String result = solver.toString();
         HashSet<String> preparedIntReplacement = new HashSet<>();
         result = replaceInts(result, new HashSet<>(), preparedIntReplacement, false);
@@ -46,6 +47,10 @@ public abstract class DeterminacyFormula {
         this.preparedIntReplacement = Collections.unmodifiableSet(preparedIntReplacement);
         this.preparedStringReplacement = Collections.unmodifiableMap(preparedStringReplacement);
         this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
+    }
+
+    protected BoolExpr additionalAssertion(Context context) {
+        return context.mkTrue();
     }
 
     protected Iterable<BoolExpr> generateTupleCheck(QueryTrace queries) {

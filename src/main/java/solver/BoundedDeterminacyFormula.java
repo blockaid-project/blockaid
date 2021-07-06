@@ -1,10 +1,8 @@
 package solver;
 
-import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 
 import java.util.*;
-import java.util.function.Function;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds) {

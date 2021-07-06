@@ -46,6 +46,9 @@ public abstract class SMTExecutor extends Thread {
 
     protected void setUnsatCore(String[] core) {
         this.core = core;
+        if (this.core.length == 1 && this.core[0].equals("")) {
+            this.core = new String[0];
+        }
     }
 
     public abstract void signalShutdown();

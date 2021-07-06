@@ -18,4 +18,8 @@ public class CVC4Executor extends ProcessSMTExecutor {
     public CVC4Executor(String name, String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
         super(name, solver, latch, command, satConclusive, unsatConclusive, unknownConclusive, false);
     }
+
+    public CVC4Executor(String name, String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
+        super(name, solver, latch, command, satConclusive, unsatConclusive, unknownConclusive, runCore);
+    }
 }
