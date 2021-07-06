@@ -11,7 +11,7 @@ public abstract class VampireExecutor extends ProcessSMTExecutor {
             "--output_mode", "smtcomp",
     };
 
-    protected VampireExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
-        super(name, smtString, latch, command, satConclusive, unsatConclusive);
+    protected VampireExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
+        super(name, smtString, latch, command, satConclusive, unsatConclusive, unknownConclusive);
     }
 }

@@ -76,7 +76,7 @@ public abstract class DeterminacyFormula {
         return exprs;
     }
 
-    protected Iterable<BoolExpr> makeFormula(QueryTrace queries) {
+    public Iterable<BoolExpr> makeFormula(QueryTrace queries) {
         /* Both regular and fast unsat share this formula form -- by symmetry, we can write Q(D1) != Q(D2) using
         "not contained in". */
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);

@@ -8,15 +8,17 @@ public abstract class SMTExecutor extends Thread {
     private final CountDownLatch latch;
     private final boolean satConclusive;
     private final boolean unsatConclusive;
+    private final boolean unknownConclusive;
     private final boolean runCore;
 
     private Status result = null;
     private String[] core = null;
 
-    protected SMTExecutor(String name, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean runCore) {
+    protected SMTExecutor(String name, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
         this.latch = latch;
         this.satConclusive = satConclusive;
         this.unsatConclusive = unsatConclusive;
+        this.unknownConclusive = unknownConclusive;
         this.runCore = runCore;
         setName(name);
     }
@@ -29,28 +31,36 @@ public abstract class SMTExecutor extends Thread {
         }
     }
 
-    protected abstract Status doRunNormal();
+    protected abstract Status doRunNormal() throws InterruptedException;
 
     private void runNormal() {
-        result = doRunNormal();
-        if ((this.result == Status.UNSATISFIABLE && unsatConclusive) || (this.result == Status.SATISFIABLE && satConclusive)) {
-            this.latch.countDown();
-        } else {
+        try {
+            result = doRunNormal();
+            if ((this.result == Status.UNSATISFIABLE && unsatConclusive) || (this.result == Status.SATISFIABLE && satConclusive) || (this.result == Status.UNKNOWN && unknownConclusive)) {
+                this.latch.countDown();
+            } else {
+                result = Status.UNKNOWN;
+            }
+        } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         }
     }
 
-    protected abstract Status doRunUnsatCore();
+    protected abstract Status doRunUnsatCore() throws InterruptedException;
 
     protected void setUnsatCore(String[] core) {
         this.core = core;
     }
 
     private void runUnsatCore() {
-        result = doRunUnsatCore();
-        if (this.result == Status.UNSATISFIABLE) {
-            this.latch.countDown();
-        } else {
+        try {
+            result = doRunUnsatCore();
+            if (this.result == Status.UNSATISFIABLE) {
+                this.latch.countDown();
+            } else {
+                result = Status.UNKNOWN;
+            }
+        } catch (InterruptedException e) {
             result = Status.UNKNOWN;
         }
     }

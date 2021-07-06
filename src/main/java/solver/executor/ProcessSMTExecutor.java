@@ -15,17 +15,17 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     private Process process = null;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
-    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
-        this(name, smtString, latch, command, satConclusive, unsatConclusive, false);
+    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
+        this(name, smtString, latch, command, satConclusive, unsatConclusive,  unknownConclusive,false);
     }
-    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean runCore) {
-        super(name, latch, satConclusive, unsatConclusive, runCore);
+    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
+        super(name, latch, satConclusive, unsatConclusive, unknownConclusive, runCore);
         this.smtString = smtString;
         this.command = command;
     }
 
     @Override
-    protected Status doRunNormal() {
+    protected Status doRunNormal() throws InterruptedException {
         InputStream stderr = null;
         try {
             String smtString = this.smtString + "(check-sat)";
@@ -73,7 +73,7 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     }
 
     @Override
-    protected Status doRunUnsatCore() {
+    protected Status doRunUnsatCore() throws InterruptedException {
         InputStream stderr = null;
         try {
             String smtString = "(set-option :produce-unsat-cores true)" + this.smtString + "(check-sat)(get-unsat-core)";
