@@ -1,16 +1,12 @@
 package solver;
 
 import cache.QueryTrace;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 
 import java.util.*;
 import java.util.function.Function;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
-    private QueryTrace queryTrace;
-
     private static Function<Integer, Instance> getInstanceMaker(Schema schema, BoundEstimator bounds, QueryTrace queries) {
         final Map<String, Integer> calculatedBounds = bounds.calculateBounds(schema, queries);
         return (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, calculatedBounds);
@@ -26,6 +22,5 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
             }
             return clauses;
         });
-        this.queryTrace = queries;
     }
 }
