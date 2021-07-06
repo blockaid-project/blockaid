@@ -24,18 +24,12 @@ public abstract class SMTExecutor extends Thread {
     }
 
     public void run() {
-        if (this.runCore) {
-            this.runUnsatCore();
-        } else {
-            this.runNormal();
-        }
-    }
-
-    protected abstract Status doRunNormal() throws InterruptedException;
-
-    private void runNormal() {
         try {
-            result = doRunNormal();
+            if (this.runCore) {
+                result = doRunUnsatCore();
+            } else {
+                result = doRunNormal();
+            }
             if ((this.result == Status.UNSATISFIABLE && unsatConclusive) || (this.result == Status.SATISFIABLE && satConclusive) || (this.result == Status.UNKNOWN && unknownConclusive)) {
                 this.latch.countDown();
             } else {
@@ -46,23 +40,12 @@ public abstract class SMTExecutor extends Thread {
         }
     }
 
+    protected abstract Status doRunNormal() throws InterruptedException;
+
     protected abstract Status doRunUnsatCore() throws InterruptedException;
 
     protected void setUnsatCore(String[] core) {
         this.core = core;
-    }
-
-    private void runUnsatCore() {
-        try {
-            result = doRunUnsatCore();
-            if (this.result == Status.UNSATISFIABLE) {
-                this.latch.countDown();
-            } else {
-                result = Status.UNKNOWN;
-            }
-        } catch (InterruptedException e) {
-            result = Status.UNKNOWN;
-        }
     }
 
     public abstract void signalShutdown();
