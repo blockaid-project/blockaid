@@ -15,9 +15,6 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     private Process process = null;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
-    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
-        this(name, smtString, latch, command, satConclusive, unsatConclusive,  unknownConclusive,false);
-    }
     protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
         super(name, latch, satConclusive, unsatConclusive, unknownConclusive, runCore);
         this.smtString = smtString;

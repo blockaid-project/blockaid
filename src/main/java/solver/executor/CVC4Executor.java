@@ -12,10 +12,10 @@ public class CVC4Executor extends ProcessSMTExecutor {
 
     // unsat core
     public CVC4Executor(String name, String solver, CountDownLatch latch) {
-        super(name, solver, latch, command, false, true, false);
+        super(name, solver, latch, command, false, true, false, true);
     }
 
     public CVC4Executor(String name, String solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
-        super(name, solver, latch, command, satConclusive, unsatConclusive, unknownConclusive);
+        super(name, solver, latch, command, satConclusive, unsatConclusive, unknownConclusive, false);
     }
 }
