@@ -54,6 +54,15 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     }
 
     @Override
+    public List<String> getRelations() {
+        List<String> result = new ArrayList<>();
+        for (PrivacyQuery query : queries) {
+            result.addAll(query.getRelations());
+        }
+        return result;
+    }
+
+    @Override
     public Query getSolverQuery(Schema schema) {
         return new UnionQuery(queries.stream().map(q -> q.getSolverQuery(schema)).toArray(Query[]::new));
     }

@@ -1,8 +1,8 @@
 package solver;
 
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
+import java.util.List;
 
-public interface Dependency {
-    BoolExpr apply(Instance instance);
+public interface Dependency extends Constraint {
+    List<String> getFromRelations();
+    List<String> getToRelations();
 }

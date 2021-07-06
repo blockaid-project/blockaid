@@ -50,10 +50,10 @@ public class QueryChecker {
     public static long SOLVE_TIMEOUT = 20000; // ms
 
     private final Schema schema;
-    private final ArrayList<Policy> policySet;
+    private final List<Policy> policySet;
+    private final List<Query> policyQueries;
     private final DeterminacyFormula fastCheckDeterminacyFormula;
     private final DeterminacyFormula determinacyFormula;
-    private final DeterminacyFormula boundedDeterminacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
     private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormulaEliminate;
     private final DecisionCache cache;
@@ -87,12 +87,12 @@ public class QueryChecker {
             relations.put(tableName.toUpperCase(), columns);
         }
 
-        List<Dependency> dependencies = new ArrayList<>();
+        List<Constraint> dependencies = new ArrayList<>();
         for (String uk : uks) {
             uk = uk.toUpperCase();
             String[] parts = uk.split(":", 2);
             String[] columns = parts[1].split(",");
-            dependencies.add(new PrimaryKeyDependency(parts[0], Arrays.asList(columns)));
+            dependencies.add(new UniqueConstraint(parts[0], Arrays.asList(columns)));
         }
         for (String fk : fks) {
             fk = fk.toUpperCase();
@@ -107,10 +107,9 @@ public class QueryChecker {
         }
 
         this.schema = new Schema(context, relations, dependencies);
-        List<Query> policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
+        this.policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
         this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
-        this.boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policyQueries);
         this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
         this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
 
@@ -193,9 +192,10 @@ public class QueryChecker {
             }
         }
 
-        // bounded check
+        // bounded check - TODO: unless formula generation is faster it should be in its own thread while unsat checks run
         startTime = System.currentTimeMillis();
-        String boundedSMT = this.boundedDeterminacyFormula.generateSMT(queries);
+        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policyQueries, new UnsatCoreBoundEstimator(new FixedBoundEstimator(0)), queries);
+        String boundedSMT = boundedDeterminacyFormula.generateSMT(queries);
         System.out.println("\t| Make bounded:\t" + (System.currentTimeMillis() - startTime));
         executors.add(new Z3Executor(boundedSMT, latch, true, false, "z3_bounded"));
 

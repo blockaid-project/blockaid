@@ -17,6 +17,16 @@ public class ImportedDependency implements Dependency {
     }
 
     @Override
+    public List<String> getFromRelations() {
+        return q1.getRelations();
+    }
+
+    @Override
+    public List<String> getToRelations() {
+        return q2.getRelations();
+    }
+
+    @Override
     public BoolExpr apply(Instance instance) {
         Schema schema = instance.schema;
         Query solverQuery1 = q1.getSolverQuery(schema);

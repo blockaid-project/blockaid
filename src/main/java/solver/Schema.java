@@ -11,9 +11,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class Schema {
     private final MyZ3Context context;
     private final Map<String, List<Column>> relations;
-    private final List<Dependency> dependencies;
+    private final List<Constraint> dependencies;
 
-    public Schema(MyZ3Context context, Map<String, List<Column>> relations, List<Dependency> dependencies) {
+    public Schema(MyZ3Context context, Map<String, List<Column>> relations, List<Constraint> dependencies) {
         this.context = checkNotNull(context);
         this.relations = checkNotNull(relations);
         this.dependencies = checkNotNull(dependencies);
@@ -23,9 +23,13 @@ public class Schema {
         return context;
     }
 
+    public List<Constraint> getDependencies() {
+        return dependencies;
+    }
+
     public Instance makeFreshInstance(String instancePrefix) {
         Instance instance = new Instance(this, false);
-        List<BoolExpr> constraints = new ArrayList<>();
+        Map<Constraint, BoolExpr> constraints = new HashMap<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -37,11 +41,11 @@ public class Schema {
         }
 
         // Apply dependencies.
-        for (Dependency d : dependencies) {
-            constraints.add(d.apply(instance));
+        for (Constraint d : dependencies) {
+            constraints.put(d, d.apply(instance));
         }
 
-        instance.constraints = constraints;
+        instance.setConstraints(constraints);
         return instance;
     }
 
@@ -67,12 +71,11 @@ public class Schema {
             instance.put(relationName, new ConcreteRelation(this, colTypes, tuples, exists));
         }
 
-        List<BoolExpr> constraints = new ArrayList<>();
-        for (Dependency d : dependencies) {
-            constraints.add(d.apply(instance));
+        Map<Constraint, BoolExpr> constraints = new HashMap<>();
+        for (Constraint d : dependencies) {
+            constraints.put(d, d.apply(instance));
         }
-        instance.constraints = constraints;
-
+        instance.setConstraints(constraints);
         return instance;
     }
 

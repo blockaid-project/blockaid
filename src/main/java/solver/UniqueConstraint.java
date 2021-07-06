@@ -9,11 +9,11 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public class PrimaryKeyDependency implements Dependency {
+public class UniqueConstraint implements Constraint {
     private final String relationName;
     private final Set<String> columnNames;
 
-    public PrimaryKeyDependency(String relationName, Collection<String> columnNames) {
+    public UniqueConstraint(String relationName, Collection<String> columnNames) {
         this.relationName = relationName;
         checkArgument(!columnNames.isEmpty());
         this.columnNames = new HashSet<>(columnNames);

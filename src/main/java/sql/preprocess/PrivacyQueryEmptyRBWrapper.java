@@ -30,6 +30,11 @@ class PrivacyQueryEmptyRBWrapper extends PrivacyQuery {
     }
 
     @Override
+    public List<String> getRelations() {
+        return pq.getRelations();
+    }
+
+    @Override
     public Query getSolverQuery(Schema schema) {
         return pq.getSolverQuery(schema);
     }

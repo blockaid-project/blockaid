@@ -42,6 +42,11 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
+    public List<String> getRelations() {
+        return new ArrayList<>(parsedPSJ.getRelations());
+    }
+
+    @Override
     public Query getSolverQuery(Schema schema) {
         return parsedPSJ.getSolverQuery(schema);
     }

@@ -4,6 +4,7 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 import static com.google.common.base.Preconditions.*;
@@ -49,6 +50,24 @@ public class ForeignKeyDependency implements Dependency {
             }
         };
         return selectFromQuery.apply(instance).isContainedIn(selectToQuery.apply(instance));
+    }
+
+    @Override
+    public List<String> getFromRelations() {
+        return Collections.singletonList(fromRelation);
+    }
+
+    public String getFromColumn() {
+        return fromColumn;
+    }
+
+    @Override
+    public List<String> getToRelations() {
+        return Collections.singletonList(toRelation);
+    }
+
+    public String getToColumn() {
+        return toColumn;
     }
 
     @Override

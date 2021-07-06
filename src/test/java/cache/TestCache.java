@@ -37,6 +37,11 @@ public class TestCache {
         }
 
         @Override
+        public List<String> getRelations() {
+            return null;
+        }
+
+        @Override
         public Query getSolverQuery(Schema schema) {
             return null;
         }
