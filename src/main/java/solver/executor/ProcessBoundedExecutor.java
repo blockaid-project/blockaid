@@ -8,6 +8,7 @@ import com.microsoft.z3.Status;
 import solver.*;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 public class ProcessBoundedExecutor extends SMTExecutor {
@@ -29,7 +30,9 @@ public class ProcessBoundedExecutor extends SMTExecutor {
         long startTime = System.currentTimeMillis();
 
         // this sucks - this executor cannot exit even if we get a fast unsat, until formula generation is done
-        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, new UnsatCoreBoundEstimator(new FixedBoundEstimator(0)), queries);
+        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
+        Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
+        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, bounds);
 
         CountDownLatch latch = new CountDownLatch(1);
         synchronized (this) {
