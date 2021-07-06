@@ -2,7 +2,7 @@ package solver.executor;
 
 import java.util.concurrent.CountDownLatch;
 
-public abstract class VampireExecutor extends SMTExecutor {
+public abstract class VampireExecutor extends ProcessSMTExecutor {
     protected static final String[] BASE_COMMAND = new String[]{
             "term_to_kill",
             "vampire",
@@ -11,7 +11,7 @@ public abstract class VampireExecutor extends SMTExecutor {
             "--output_mode", "smtcomp",
     };
 
-    protected VampireExecutor(String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, String name) {
-        super(smtString, latch, command, satConclusive, unsatConclusive, name);
+    protected VampireExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive) {
+        super(name, smtString, latch, command, satConclusive, unsatConclusive);
     }
 }

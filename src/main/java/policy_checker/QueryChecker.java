@@ -134,17 +134,17 @@ public class QueryChecker {
         return !policy.checkApplicable(new HashSet<>(query.getProjectColumns()), new HashSet<>(query.getThetaColumns()));
     }
 
-    private void runExecutors(List<SMTExecutor> executors, CountDownLatch latch) {
-        for (SMTExecutor executor : executors) {
+    private void runExecutors(List<ProcessSMTExecutor> executors, CountDownLatch latch) {
+        for (ProcessSMTExecutor executor : executors) {
             executor.start();
         }
 
         try {
             latch.await(SOLVE_TIMEOUT, TimeUnit.MILLISECONDS);
-            for (SMTExecutor executor : executors) {
+            for (ProcessSMTExecutor executor : executors) {
                 executor.signalShutdown();
             }
-            for (SMTExecutor executor : executors) {
+            for (ProcessSMTExecutor executor : executors) {
                 executor.join();
             }
         } catch (InterruptedException e) {
@@ -154,16 +154,16 @@ public class QueryChecker {
 
     private boolean doCheckPolicy(QueryTrace queries) {
         CountDownLatch latch = new CountDownLatch(1);
-        List<SMTExecutor> executors = new ArrayList<>();
+        List<ProcessSMTExecutor> executors = new ArrayList<>();
 
         // fast check
         long startTime = System.currentTimeMillis();
         String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
         System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
-        executors.add(new Z3Executor(fastCheckSMT, latch, false, true, "z3_fast"));
-        executors.add(new VampireLrsExecutor(fastCheckSMT, latch, false, true, "vampire_lrs_fast"));
-//        executors.add(new VampireOttExecutor(fastCheckSMT, latch, false, true, "vampire_ott_fast"));
-//        executors.add(new VampireDisExecutor(fastCheckSMT, latch, false, true, "vampire_dis_fast"));
+        executors.add(new Z3Executor("z3_fast", fastCheckSMT, latch, false, true));
+        executors.add(new VampireLrsExecutor("vampire_lrs_fast", fastCheckSMT, latch, false, true));
+//        executors.add(new VampireOttExecutor("vampire_ott_fast", fastCheckSMT, latch, false, true));
+//        executors.add(new VampireDisExecutor("vampire_dis_fast", fastCheckSMT, latch, false, true));
 
         if (PRINT_FORMULAS) {
             try {
@@ -181,7 +181,7 @@ public class QueryChecker {
 //        executors.add(new Z3Executor(regularSMT, latch, true, true));
 //        executors.add(new VampireCascExecutor(regularSMT, latch, true, true));
 //        executors.add(new VampireFMBExecutor(regularSMT, latch, true, true));
-        executors.add(new CVC4Executor(regularSMT, latch, true, true, "cvc4"));
+        executors.add(new CVC4Executor("cvc4", regularSMT, latch, true, true));
 
         if (PRINT_FORMULAS) {
             try {
@@ -197,7 +197,7 @@ public class QueryChecker {
         DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policyQueries, new UnsatCoreBoundEstimator(new FixedBoundEstimator(0)), queries);
         String boundedSMT = boundedDeterminacyFormula.generateSMT(queries);
         System.out.println("\t| Make bounded:\t" + (System.currentTimeMillis() - startTime));
-        executors.add(new Z3Executor(boundedSMT, latch, true, false, "z3_bounded"));
+        executors.add(new Z3Executor("z3_bounded", boundedSMT, latch, true, false));
 
         if (PRINT_FORMULAS) {
             try {
@@ -212,7 +212,7 @@ public class QueryChecker {
         runExecutors(executors, latch);
         final long solverDuration = System.currentTimeMillis() - startTime;
 
-        for (SMTExecutor executor : executors) {
+        for (ProcessSMTExecutor executor : executors) {
             if (executor.getResult() != Status.UNKNOWN) {
                 String winner = executor.getName();
                 System.out.println("\t| Invoke solvers:\t" + solverDuration + "," + winner);
@@ -237,11 +237,11 @@ public class QueryChecker {
 
     private UnsatCore tryGetUnsatCore(QueryTrace queries) {
         CountDownLatch latch = new CountDownLatch(2);
-        List<SMTExecutor> executors = new ArrayList<>();
+        List<ProcessSMTExecutor> executors = new ArrayList<>();
 
         String smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
         Map<Object, Integer> equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
-        executors.add(new CVC4Executor(smt, latch));
+        executors.add(new CVC4Executor("cvc4_unsat", smt, latch));
         if (PRINT_FORMULAS) {
             try {
                 PrintWriter pw = new PrintWriter(FORMULA_DIR + "/gen_" + queries.size() + ".smt2");
@@ -257,7 +257,7 @@ public class QueryChecker {
 
         smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
         Map<Object, Integer> equalityMapEliminate = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
-        executors.add(new CVC4Executor(smt, latch));
+        executors.add(new CVC4Executor("cvc4_unsat_eliminate", smt, latch));
         if (PRINT_FORMULAS) {
             try {
                 PrintWriter pw = new PrintWriter(FORMULA_DIR + "/gen_elim_" + queries.size() + ".smt2");
@@ -276,7 +276,7 @@ public class QueryChecker {
         String[] minCore = null;
         Map<Object, Integer> usedEqualityMap = null;
         for (int i = 0; i < executors.size(); ++i) {
-            SMTExecutor executor = executors.get(i);
+            ProcessSMTExecutor executor = executors.get(i);
             String[] core = executor.getUnsatCore();
             if (core != null) {
                 System.err.println(Arrays.asList(core));

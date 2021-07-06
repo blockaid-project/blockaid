@@ -2,11 +2,10 @@ package solver.executor;
 
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
-import solver.executor.SMTExecutor;
 
 import java.util.concurrent.CountDownLatch;
 
-public class Z3ExecutorDirect extends SMTExecutor {
+public class Z3ExecutorDirect extends ProcessSMTExecutor {
     private Solver solver;
     private CountDownLatch latch;
     private boolean satConclusive;
@@ -14,8 +13,8 @@ public class Z3ExecutorDirect extends SMTExecutor {
     private Status result = Status.UNKNOWN;
     private Thread thisThread = null;
 
-    public Z3ExecutorDirect(Solver solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive) {
-        super(solver.toString(), latch, new String[]{}, satConclusive, unsatConclusive);
+    public Z3ExecutorDirect(String name, Solver solver, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive) {
+        super(name, solver.toString(), latch, new String[]{}, satConclusive, unsatConclusive);
         this.solver = solver;
         this.latch = latch;
         this.satConclusive = satConclusive;
