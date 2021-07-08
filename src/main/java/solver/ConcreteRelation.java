@@ -47,6 +47,11 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
+    public BoolExpr isEmpty() {
+        return context.mkOr(exists);
+    }
+
+    @Override
     public BoolExpr doesContain(List<Tuple> other) {
         if (other.isEmpty()) {
             return context.mkTrue();

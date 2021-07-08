@@ -28,6 +28,12 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
+    public BoolExpr isEmpty() {
+        Tuple tup = makeFreshHead();
+        return context.mkForall(tup.toExprArray(), context.mkNot(apply(tup)), 1, null, null, null, null);
+    }
+
+    @Override
     public BoolExpr isContainedIn(Relation other) {
         Tuple syms = makeFreshHead();
         BoolExpr lhs = this.apply(syms);

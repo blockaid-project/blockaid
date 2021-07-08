@@ -1,16 +1,9 @@
 package solver.executor;
 
 import cache.QueryTrace;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
-import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import solver.*;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -32,39 +25,38 @@ public class ProcessBoundedExecutor extends SMTExecutor {
     @Override
     protected Status doRunNormal() throws InterruptedException {
         // this sucks - this executor cannot exit even if we get a fast unsat, until initial bound estimation is done
-        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
-        // BoundEstimator boundEstimator = new FixedBoundEstimator(0);
+        // BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
+        BoundEstimator boundEstimator = new FixedBoundEstimator(0);
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
 
         while (!shuttingDown) {
             System.err.println(bounds);
-            DeterminacyFormula boundedDeterminacyFormula = new BoundedPlusOneDeterminacyFormula(schema, views, bounds);
+            DeterminacyFormula boundedDeterminacyFormula = new BoundedPlusOneDeterminacyFormula(schema, views, bounds, true);
             String smt = boundedDeterminacyFormula.generateSMT(queries);
 
             CountDownLatch latch = new CountDownLatch(1);
+            long startTime;
             synchronized (this) {
                 if (shuttingDown) {
                     return Status.UNKNOWN;
                 }
                 // executor = new Z3Executor("z3_bounded_runner", smt, latch, true, true, true, true);
                 executor = new CVC4Executor("cvc4_bounded_runner", smt, latch, true, true, true, true);
+                startTime = System.nanoTime();
                 executor.start();
             }
 
             latch.await();
-
-            System.err.println(executor.getResult());
+            System.err.println("bounded solve time: " + (System.nanoTime() - startTime) / 1e9);
 
             if (executor.getResult() == Status.SATISFIABLE) {
                 return Status.SATISFIABLE;
             } else if (executor.getResult() == Status.UNSATISFIABLE && executor.getUnsatCore().length > 0) {
                 for (String relation : executor.getUnsatCore()) {
-                    System.err.println(relation + " in core");
                     bounds.computeIfPresent(relation, (k, v) -> v + 1);
                 }
             } else {
                 // UNKNOWN - just increment everything
-                System.err.println("no core, incrementing all");
                 for (String relation : bounds.keySet()) {
                     bounds.computeIfPresent(relation, (k, v) -> v + 1);
                 }

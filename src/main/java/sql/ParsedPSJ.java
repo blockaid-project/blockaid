@@ -7,10 +7,12 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
 import solver.*;
+import util.UnionFind;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -18,22 +20,27 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class ParsedPSJ {
     private final List<String> relations;
     private boolean hasRelAlias = false;
-    private final HashMap<String, Integer> relAliasToIdx;
+    private final Map<String, Integer> relAliasToIdx;
     private final List<String> projectColumns;
     private final List<String> thetaColumns;
     private final List<Object> parameters;
     private final List<String> paramNames;
-    private final List<SqlBasicCall> theta;
+    private final LinkedHashMap<SqlBasicCall, PredicateInfo> theta; // identical predicates are not equal so this works
     private final boolean trivialWhereClause;
     private List<Boolean> resultBitmap;
 
+    private class PredicateInfo {
+        private List<String> columns = new ArrayList<>();
+        private int parameterOffset = -1;
+        private int parameterCount = 0;
+    }
+
     public ParsedPSJ(SqlNode parsedSql, SchemaPlusWithKey schema, List<Object> parameters, List<String> paramNames) {
         projectColumns = new ArrayList<>();
-        thetaColumns = new ArrayList<>();
         this.relAliasToIdx = new HashMap<>(); // Maps relation aliases (and alias-less relation names) to index.
         this.parameters = parameters;
         this.paramNames = paramNames;
-        this.theta = new ArrayList<>();
+        this.theta = new LinkedHashMap<>();
         this.resultBitmap = new ArrayList<>();
 
         SqlSelect sqlSelect = (SqlSelect) parsedSql;
@@ -143,6 +150,42 @@ public class ParsedPSJ {
         } else {
             trivialWhereClause = false;
         }
+
+        this.thetaColumns = new ArrayList<>();
+        int parameterOffset = 0;
+        for (PredicateInfo info : this.theta.values()) {
+            this.thetaColumns.addAll(info.columns);
+            info.parameterOffset = parameterOffset;
+            parameterOffset += info.parameterCount;
+        }
+    }
+
+    private ParsedPSJ(List<String> relations, boolean hasRelAlias, Map<String, Integer> relAliasToIdx,
+                     List<String> projectColumns, List<Object> parameters,
+                     List<String> paramNames, List<SqlBasicCall> theta, boolean trivialWhereClause) {
+        this.relations = relations;
+        this.hasRelAlias = hasRelAlias;
+        this.relAliasToIdx = relAliasToIdx;
+        this.projectColumns = new ArrayList<>();
+        this.thetaColumns = new ArrayList<>();
+        this.parameters = parameters;
+        this.paramNames = paramNames;
+        this.theta = new LinkedHashMap<>();
+        this.trivialWhereClause = trivialWhereClause;
+        this.resultBitmap = null;
+
+        for (String col : projectColumns) {
+            addProjectColumn(col);
+        }
+        for (SqlBasicCall t : theta) {
+            addTheta(t);
+        }
+        int parameterOffset = 0;
+        for (PredicateInfo info : this.theta.values()) {
+            this.thetaColumns.addAll(info.columns);
+            info.parameterOffset = parameterOffset;
+            parameterOffset += info.parameterCount;
+        }
     }
 
     private String getRelationNameForAlias(String alias) {
@@ -206,31 +249,37 @@ public class ParsedPSJ {
     }
 
     private void addTheta(SqlBasicCall predicate) {
-        addTheta(predicate, true);
+        addTheta(predicate, null);
     }
 
-    private void addTheta(SqlBasicCall predicate, boolean addToList) {
-        if (addToList) {
-            theta.add(predicate);
+    private void addTheta(SqlBasicCall predicate, PredicateInfo info) {
+        boolean isAnd = (predicate.getKind() == SqlKind.AND);
+        if (info == null && !isAnd) {
+            info = new PredicateInfo();
+            theta.put(predicate, info);
         }
 
         SqlNode left = predicate.operand(0);
         SqlNode right = predicate.operand(1);
         if (left instanceof SqlBasicCall) {
-            addTheta((SqlBasicCall) left, false);
+            addTheta((SqlBasicCall) left, info);
         } else if (left instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) left);
             if (!name.startsWith("!")) {
-                thetaColumns.add(name);
+                info.columns.add(name);
             }
+        } else if (left instanceof SqlDynamicParam) {
+            ++info.parameterCount;
         }
         if (right instanceof SqlBasicCall) {
-            addTheta((SqlBasicCall) right, false);
+            addTheta((SqlBasicCall) right, info);
         } else if (right instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) right);
             if (!name.startsWith("!")) {
-                thetaColumns.add(name);
+                info.columns.add(name);
             }
+        } else if (right instanceof SqlDynamicParam) {
+            ++info.parameterCount;
         }
     }
 
@@ -377,8 +426,9 @@ public class ParsedPSJ {
             }
             Collections.reverse(names);
             BoolExpr[] exprs = new BoolExpr[theta.size()];
+            Iterator<SqlBasicCall> iter = theta.keySet().iterator();
             for (int i = 0; i < theta.size(); ++i) {
-                exprs[i] = (BoolExpr) getPredicate(theta.get(i), symbolMap, params, names, schema);
+                exprs[i] = (BoolExpr) getPredicate(iter.next(), symbolMap, params, names, schema);
             }
             return context.mkAnd(exprs);
         } else {
@@ -423,7 +473,7 @@ public class ParsedPSJ {
         String prefix;
         int parameterOffset;
 
-        public SolverQuery(Schema schema, String prefix, int parameterOffset) {
+        private SolverQuery(Schema schema, String prefix, int parameterOffset) {
             super(schema, relations);
 
             projectRelationIndex = new int[projectColumns.size()];
@@ -456,6 +506,65 @@ public class ParsedPSJ {
                             + " in columns: " + columnNames);
                 }
             }
+        }
+
+        public Iterable<Query> getComponents() {
+            UnionFind<String> uf = new UnionFind<>(relAliasToIdx.keySet());
+            for (PredicateInfo info : theta.values()) {
+                List<String> thetaColumns = info.columns;
+                if (thetaColumns.size() < 2) {
+                    continue;
+                }
+                for (int i = 0; i < thetaColumns.size() - 1; ++i) {
+                    uf.union(thetaColumns.get(i).split("\\.", 2)[0], thetaColumns.get(i + 1).split("\\.", 2)[0]);
+                }
+            }
+            Map<String, Set<String>> components = new HashMap<>();
+            for (String relation : relAliasToIdx.keySet()) {
+                String root = uf.find(relation);
+                components.putIfAbsent(root, new HashSet<>());
+                components.get(root).add(relation);
+            }
+            if (components.size() == 1) {
+                return super.getComponents();
+            }
+            List<Query> queries = new ArrayList<>();
+            for (Set<String> component : components.values()) {
+                List<String> relations = new ArrayList<>();
+                boolean hasRelAlias = false;
+                Map<String, Integer> relAliasToIdx = new HashMap<>();
+                for (String alias : component) {
+                    String relation = ParsedPSJ.this.relations.get(ParsedPSJ.this.relAliasToIdx.get(alias));
+                    relAliasToIdx.put(alias, relations.size());
+                    relations.add(relation);
+                    hasRelAlias = hasRelAlias || !relation.equals(alias);
+                }
+
+                List<String> projectColumns = ParsedPSJ.this.projectColumns.stream()
+                        .filter(col -> component.contains(col.split("\\.", 2)[0]))
+                        .collect(Collectors.toList());
+                List<Object> parameters = new ArrayList<>();
+                List<String> paramNames = new ArrayList<>();
+                List<SqlBasicCall> theta = new ArrayList<>();
+                for (Map.Entry<SqlBasicCall, PredicateInfo> entry : ParsedPSJ.this.theta.entrySet()) {
+                    PredicateInfo info = entry.getValue();
+                    if (info.columns.stream().map(c -> c.split("\\.", 2)[0]).allMatch(component::contains)) {
+                        theta.add(entry.getKey());
+                        parameters.addAll(ParsedPSJ.this.parameters.subList(info.parameterOffset, info.parameterOffset + info.parameterCount));
+                        paramNames.addAll(ParsedPSJ.this.paramNames.subList(info.parameterOffset, info.parameterOffset + info.parameterCount));
+                    }
+                }
+
+                if (trivialWhereClause) {
+                    parameters.add(ParsedPSJ.this.parameters.get(ParsedPSJ.this.parameters.size() - 1));
+                    paramNames.add(ParsedPSJ.this.paramNames.get(ParsedPSJ.this.paramNames.size() - 1));
+                }
+
+                queries.add(new ParsedPSJ(relations, hasRelAlias, relAliasToIdx, projectColumns, parameters,
+                        paramNames, theta, trivialWhereClause).getSolverQuery(schema, prefix, parameterOffset));
+            }
+
+            return queries;
         }
 
         @Override

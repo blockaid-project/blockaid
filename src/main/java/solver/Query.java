@@ -6,6 +6,7 @@ import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 public abstract class Query {
     public abstract Schema getSchema();
@@ -13,6 +14,10 @@ public abstract class Query {
     public abstract BoolExpr doesContain(Instance instance, Tuple tuple);
     public abstract Tuple[] generateTuples(Instance instance);
     public abstract BoolExpr[] generateExists(Instance instance);
+
+    public Iterable<Query> getComponents() {
+        return Collections.singletonList(this);
+    }
 
     public Relation apply(Instance instance) {
         if (instance.isConcrete) {
