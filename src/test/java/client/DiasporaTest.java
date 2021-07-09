@@ -410,6 +410,25 @@ public class DiasporaTest {
         p.setInt(1, 2);
         p.executeQuery();
 
+        query = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT 1";
+        System.err.println(query);
+        p = conn.prepareStatement(query);
+        p.setInt(1, 2);
+        p.executeQuery();
+
+        // TODO fix
+        query = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT 1";
+        System.err.println(query);
+        p = conn.prepareStatement(query);
+        p.setInt(1, 3);
+        p.executeQuery();
+
+        query = "SELECT  `users`.* FROM `users` WHERE `users`.`invited_by_id` = ? ORDER BY `users`.`id` ASC LIMIT 1";
+        System.err.println(query);
+        p = conn.prepareStatement(query);
+        p.setInt(1, 3);
+        p.executeQuery();
+
         query = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ? WHERE `posts`.`id` = ? AND `share_visibilities`.`user_id` = ?_MY_UID ORDER BY `posts`.`id` ASC LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);

@@ -10,7 +10,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class GeneralRelation implements Relation {
     private final Schema schema;
-    private final Context context;
+    private final MyZ3Context context;
     private final Function function;
     private final Sort[] signature;
 

@@ -9,7 +9,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ConcreteRelation implements Relation {
     private final Schema schema;
-    private final Context context;
+    private final MyZ3Context context;
     private final Sort[] signature;
     private final Tuple[] tuples;
     private final BoolExpr[] exists;

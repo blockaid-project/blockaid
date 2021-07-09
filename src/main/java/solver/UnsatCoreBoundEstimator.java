@@ -3,7 +3,6 @@ package solver;
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
 import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import sql.PrivacyQuery;
@@ -28,7 +27,7 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
         int iters = 0;
         boolean unsat;
         do {
-            Context context = schema.getContext();
+            MyZ3Context context = schema.getContext();
             Solver solver = context.mkSolver();
             Instance instance = schema.makeConcreteInstance("inst", bounds);
 

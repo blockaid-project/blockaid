@@ -29,7 +29,7 @@ public abstract class Query {
 
     public Tuple makeFreshHead() {
         Schema schema = getSchema();
-        Context context = schema.getContext();
+        MyZ3Context context = schema.getContext();
         return new Tuple(getSchema(), Arrays.stream(headTypes()).map(t -> context.mkFreshConst("z", t)));
     }
 }

@@ -29,7 +29,7 @@ public class BoundedExecutor extends SMTExecutor {
     protected Status doRunNormal() {
         long startTime = System.currentTimeMillis();
 
-        Context context = schema.getContext();
+        MyZ3Context context = schema.getContext();
         // this sucks - this executor cannot exit even if we get a fast unsat, until formula generation is done
         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);

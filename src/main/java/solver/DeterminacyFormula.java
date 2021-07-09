@@ -16,14 +16,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public abstract class DeterminacyFormula {
-    protected final Context context;
+    protected final MyZ3Context context;
     protected final Schema schema;
     protected final Instance inst1;
     protected final Instance inst2;
 
     private final String preparedExprSMT;
-    private final Map<String, Integer> preparedStringReplacement;
-    private final Set<String> preparedIntReplacement;
 
     protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance,
                                  BiFunction<Instance, Instance, List<BoolExpr>> mkPreparedExpr) {
@@ -38,18 +36,11 @@ public abstract class DeterminacyFormula {
         solver.add(mkPreparedExpr.apply(this.inst1, this.inst2).toArray(new BoolExpr[0]));
         solver.add(additionalAssertion(context));
         String result = solver.toString();
-        HashSet<String> preparedIntReplacement = new HashSet<>();
-        result = replaceInts(result, new HashSet<>(), preparedIntReplacement, false);
-        HashMap<String, Integer> preparedStringReplacement = new HashMap<>();
-        result = replaceStrings(result, new HashMap<>(), preparedStringReplacement, false);
         System.out.println("set prepared expr " + getClass().getName() + ":" + (System.currentTimeMillis() - startTime));
-
-        this.preparedIntReplacement = Collections.unmodifiableSet(preparedIntReplacement);
-        this.preparedStringReplacement = Collections.unmodifiableMap(preparedStringReplacement);
-        this.preparedExprSMT = "(declare-sort STRING 0)(declare-sort INT 0)\n(declare-fun lt (INT INT) Bool)\n(declare-fun gt (INT INT) Bool)" + result;
+        this.preparedExprSMT = result;
     }
 
-    protected BoolExpr additionalAssertion(Context context) {
+    protected BoolExpr additionalAssertion(MyZ3Context context) {
         return context.mkTrue();
     }
 
@@ -102,7 +93,7 @@ public abstract class DeterminacyFormula {
 
     public String generateSMT(QueryTrace queries) {
         StringBuilder sb = new StringBuilder();
-        MyZ3Context myContext = (MyZ3Context) context;
+        MyZ3Context myContext = context;
         myContext.startTrackingConsts();
         String smt = makeFormulaSMT(queries);
         myContext.stopTrackingConsts();
@@ -114,91 +105,6 @@ public abstract class DeterminacyFormula {
         sb.append(smt);
 
         String body = sb.toString();
-        body = replaceInts(body, this.preparedIntReplacement, new HashSet<>(), true);
-        body = replaceStrings(body, this.preparedStringReplacement, new HashMap<>(), true);
         return this.preparedExprSMT + body;
-    }
-
-    private static String replaceInts(String smt, Set<String> existingInts, Set<String> newInts, boolean finishUp) {
-        java.util.regex.Pattern pattern = Pattern.compile("\\(- (\\d+)\\)");
-        Matcher matcher = pattern.matcher(smt);
-        StringBuilder body1 = new StringBuilder();
-        while (matcher.find()) {
-            matcher.appendReplacement(body1, "");
-            String s = "-" + matcher.group(1);
-            if (!existingInts.contains(s)) {
-                newInts.add(s);
-            }
-            body1.append(" int!-").append(s);
-        }
-        matcher.appendTail(body1);
-
-        pattern = Pattern.compile("\\s(\\d+)");
-        matcher = pattern.matcher(body1.toString());
-        StringBuilder body2 = new StringBuilder();
-        while (matcher.find()) {
-            matcher.appendReplacement(body2, "");
-            String s = matcher.group(1);
-            if (!existingInts.contains(s)) {
-                newInts.add(s);
-            }
-            body2.append(" int!").append(s);
-        }
-        matcher.appendTail(body2);
-
-        StringBuilder out = new StringBuilder();
-        for (String i : newInts) {
-            out.append("(declare-fun int!").append(i).append(" () INT)\n");
-        }
-        if (finishUp) {
-            out.append("(assert (distinct");
-            for (String i : existingInts) { out.append(" int!").append(i); }
-            for (String i : newInts) { out.append(" int!").append(i); }
-            out.append("))\n");
-        }
-        out.append(body2);
-
-        String transformed = out.toString();
-        return transformed.replaceAll("<", "lt").replaceAll("\\(>", "(gt").replaceAll("Int", "INT");
-    }
-
-    private static String replaceStrings(String smt, Map<String, Integer> existingRep, Map<String, Integer> newRep, boolean finishUp) {
-        java.util.regex.Pattern pattern = Pattern.compile("\"([^\"]*)\"");
-        Matcher matcher = pattern.matcher(smt);
-        StringBuilder body = new StringBuilder();
-        int nextId = existingRep.size();
-        while (matcher.find()) {
-            matcher.appendReplacement(body, "");
-            String s = matcher.group(1);
-            Integer rep = existingRep.get(s);
-            if (rep == null) { rep = newRep.get(s); }
-            if (rep == null) {
-                newRep.put(s, nextId);
-                rep = nextId;
-                nextId += 1;
-            }
-            body.append("string!").append(rep);
-        }
-        matcher.appendTail(body);
-
-        StringBuilder out = new StringBuilder();
-        for (Map.Entry<String, Integer> entry : newRep.entrySet()) {
-            out.append("(declare-fun string!").append(entry.getValue()).append(" () STRING)");
-            if (entry.getKey().length() < 10) {
-                out.append("; ").append(entry.getKey());
-            }
-            out.append("\n");
-        }
-
-        if (finishUp) {
-            out.append("(assert (distinct");
-            for (int i = 0; i < existingRep.size() + newRep.size(); ++i) {
-                out.append(" string!").append(i);
-            }
-            out.append("))\n");
-        }
-        out.append(body);
-
-        return out.toString().replaceAll("String", "STRING");
     }
 }

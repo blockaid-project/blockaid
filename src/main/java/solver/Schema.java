@@ -100,23 +100,24 @@ public class Schema {
         return new Tuple(this, columns.stream().map(column -> context.mkFreshConst("v", column.type)));
     }
 
-    public static Sort getSortFromSqlType(Context context, int type) {
+    public static Sort getSortFromSqlType(MyZ3Context context, int type) {
         switch (type) {
             case Types.INTEGER:
             case Types.BIGINT:
             case Types.TINYINT:
-                return context.getIntSort();
+                return context.getCustomIntSort();
             case Types.DOUBLE:
-                return context.getRealSort();
+                return context.getCustomRealSort();
             case Types.BOOLEAN:
                 return context.getBoolSort();
             case Types.VARCHAR:
             case Types.LONGVARCHAR:
             case Types.CLOB:
-                return context.getStringSort();
+                return context.getCustomStringSort();
             case Types.TIMESTAMP:
+                return context.getTimestampSort();
             case Types.DATE:
-                return context.getIntSort();
+                return context.getDateSort();
             default:
                 throw new UnsupportedOperationException("bad column type: " + type);
         }

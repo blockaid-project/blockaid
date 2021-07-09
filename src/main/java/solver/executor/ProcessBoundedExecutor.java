@@ -25,8 +25,8 @@ public class ProcessBoundedExecutor extends SMTExecutor {
     @Override
     protected Status doRunNormal() throws InterruptedException {
         // this sucks - this executor cannot exit even if we get a fast unsat, until initial bound estimation is done
-        // BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
-        BoundEstimator boundEstimator = new FixedBoundEstimator(0);
+         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
+//        BoundEstimator boundEstimator = new FixedBoundEstimator(0);
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
 
         while (!shuttingDown) {
@@ -40,8 +40,8 @@ public class ProcessBoundedExecutor extends SMTExecutor {
                 if (shuttingDown) {
                     return Status.UNKNOWN;
                 }
-                // executor = new Z3Executor("z3_bounded_runner", smt, latch, true, true, true, true);
-                executor = new CVC4Executor("cvc4_bounded_runner", smt, latch, true, true, true, true);
+                 executor = new Z3Executor("z3_bounded_runner", smt, latch, true, true, true, true);
+//                executor = new CVC4Executor("cvc4_bounded_runner", smt, latch, true, true, true, true);
                 startTime = System.nanoTime();
                 executor.start();
             }

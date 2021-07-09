@@ -6,17 +6,18 @@ import com.microsoft.z3.Context;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import solver.DeterminacyFormula;
+import solver.MyZ3Context;
 
 import java.util.concurrent.CountDownLatch;
 
 public class Z3ExecutorDirect extends SMTExecutor {
-    private final Context context;
+    private final MyZ3Context context;
     private final DeterminacyFormula formula;
     private final QueryTrace queries;
     private Solver solver = null;
     private boolean shuttingDown = false;
 
-    public Z3ExecutorDirect(String name, Context context, DeterminacyFormula formula, QueryTrace queries, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
+    public Z3ExecutorDirect(String name, MyZ3Context context, DeterminacyFormula formula, QueryTrace queries, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
         super(name, latch, satConclusive, unsatConclusive, unknownConclusive, false);
         this.context = context;
         this.formula = formula;

@@ -53,7 +53,7 @@ public abstract class PSJ extends Query {
             bodyExprs[i] = instance.get(relationName).apply(tup);
         }
 
-        Context context = schema.getContext();
+        MyZ3Context context = schema.getContext();
         BoolExpr bodyFormula = context.mkAnd(bodyExprs);
         Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
         headSymTup.stream().forEach(existentialVars::remove);
@@ -106,7 +106,7 @@ public abstract class PSJ extends Query {
     public BoolExpr[] generateExists(Instance instance) {
         checkArgument(instance.isConcrete);
 
-        final Context context = instance.getContext();
+        final MyZ3Context context = instance.getContext();
         final List<BoolExpr> exprs = new ArrayList<>();
         visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
             exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)));

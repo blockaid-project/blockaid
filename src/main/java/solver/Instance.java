@@ -29,7 +29,7 @@ public class Instance extends HashMap<String, Relation> {
         return constraints;
     }
 
-    public Context getContext() {
+    public MyZ3Context getContext() {
         return schema.getContext();
     }
 }

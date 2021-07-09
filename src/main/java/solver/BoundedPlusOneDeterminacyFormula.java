@@ -20,7 +20,7 @@ public class BoundedPlusOneDeterminacyFormula extends DeterminacyFormula {
 
     public BoundedPlusOneDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds, boolean splitProducts) {
         super(schema, getInstanceMaker(schema, bounds), (Instance inst1, Instance inst2) -> {
-            Context context = schema.getContext();
+            MyZ3Context context = schema.getContext();
             List<BoolExpr> clauses = new ArrayList<>();
             clauses.addAll(inst1.getConstraints().values());
             clauses.addAll(inst2.getConstraints().values());
@@ -56,7 +56,7 @@ public class BoundedPlusOneDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    protected BoolExpr additionalAssertion(Context context) {
+    protected BoolExpr additionalAssertion(MyZ3Context context) {
         Map<String, BoolExpr> exprs = new HashMap<>();
 
         for (String relation : schema.getRelationNames()) {

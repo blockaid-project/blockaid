@@ -531,20 +531,9 @@ public class PrivacyConnection implements Connection {
                 row.add(resultSet.getBoolean(i));
                 break;
               case Types.DATE:
-                Date d = resultSet.getDate(i);
-                if (d == null) {
-                  row.add(null);
-                } else {
-                  row.add(d.getTime());
-                }
-                break;
+                row.add(resultSet.getDate(i));
               case Types.TIMESTAMP:
-                Timestamp ts = resultSet.getTimestamp(i);
-                if (ts == null) {
-                  row.add(null);
-                } else {
-                  row.add(ts.getTime());
-                }
+                row.add(resultSet.getTimestamp(i));
                 break;
               default:
                 throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));

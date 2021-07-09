@@ -29,7 +29,7 @@ public class UniqueConstraint implements Constraint {
     }
 
     private BoolExpr applyGeneral(Instance instance) {
-        Context context = instance.getContext();
+        MyZ3Context context = instance.getContext();
 
         Relation relation = instance.get(this.relationName);
         Schema schema = instance.schema;
@@ -57,7 +57,7 @@ public class UniqueConstraint implements Constraint {
     }
 
     private BoolExpr applyConcrete(Instance instance) {
-        Context context = instance.getContext();
+        MyZ3Context context = instance.getContext();
 
         ConcreteRelation relation = (ConcreteRelation) instance.get(this.relationName);
         Schema schema = instance.schema;

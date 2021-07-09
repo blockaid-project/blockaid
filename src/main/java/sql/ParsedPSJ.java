@@ -284,7 +284,7 @@ public class ParsedPSJ {
     }
 
     private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
-        Context context = schema.getContext();
+        MyZ3Context context = schema.getContext();
         if (theta instanceof SqlIdentifier) {
             String name = quantifyName((SqlIdentifier) theta);
             if (symbolMap.containsKey(name)) {
@@ -302,16 +302,16 @@ public class ParsedPSJ {
 
                 throw new RuntimeException("unknown type for column " + name);
             } else {
-                return context.mkConst(name, context.getIntSort());
+                return context.mkConst(name, context.getCustomIntSort());
             }
         } else if (theta instanceof SqlLiteral) {
             SqlLiteral literal = (SqlLiteral) theta;
             if (literal.getTypeName() == SqlTypeName.BOOLEAN) {
                 return context.mkBool(literal.booleanValue());
             } else if (literal.getTypeName() == SqlTypeName.INTEGER || literal.getTypeName() == SqlTypeName.DECIMAL) {
-                return context.mkInt(literal.intValue(true));
+                return context.mkCustomInt(literal.intValue(true));
             } else if (literal.getTypeName() == SqlTypeName.CHAR) {
-                return context.mkString(literal.getValueAs(String.class));
+                return context.mkCustomString(literal.getValueAs(String.class));
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall) {
@@ -333,15 +333,15 @@ public class ParsedPSJ {
             Expr right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (left instanceof ArithExpr && right instanceof SeqExpr) {
                 try {
-                    System.out.println("!!!*** " + theta);
-                    System.out.println("\t" + right);
-                    right = context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime());
+                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime();
+                    throw new RuntimeException(); // TODO: is this ever used
                 } catch (ParseException e) {
                     // do nothing
                 }
             } else if (right instanceof ArithExpr && left instanceof SeqExpr) {
                 try {
-                    left = context.mkInt(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(left.getString()).getTime());
+                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(left.getString()).getTime();
+                    throw new RuntimeException(); // TODO: is this ever used
                 } catch (ParseException e) {
                     // do nothing
                 }
@@ -412,7 +412,7 @@ public class ParsedPSJ {
     }
 
     private BoolExpr getPredicate(Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
-        Context context = schema.getContext();
+        MyZ3Context context = schema.getContext();
         if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
