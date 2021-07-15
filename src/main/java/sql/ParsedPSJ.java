@@ -530,38 +530,38 @@ public class ParsedPSJ {
             }
             List<Query> queries = new ArrayList<>();
             for (Set<String> component : components.values()) {
-                List<String> relations = new ArrayList<>();
-                boolean hasRelAlias = false;
-                Map<String, Integer> relAliasToIdx = new HashMap<>();
+                List<String> componentRelations = new ArrayList<>();
+                boolean componentHasRelAlias = false;
+                Map<String, Integer> componentRelAliasToIdx = new HashMap<>();
                 for (String alias : component) {
-                    String relation = ParsedPSJ.this.relations.get(ParsedPSJ.this.relAliasToIdx.get(alias));
-                    relAliasToIdx.put(alias, relations.size());
-                    relations.add(relation);
-                    hasRelAlias = hasRelAlias || !relation.equals(alias);
+                    String relation = relations.get(relAliasToIdx.get(alias));
+                    componentRelAliasToIdx.put(alias, componentRelations.size());
+                    componentRelations.add(relation);
+                    componentHasRelAlias = componentHasRelAlias || !relation.equals(alias);
                 }
 
-                List<String> projectColumns = ParsedPSJ.this.projectColumns.stream()
+                List<String> componentProjectColumns = projectColumns.stream()
                         .filter(col -> component.contains(col.split("\\.", 2)[0]))
                         .collect(Collectors.toList());
-                List<Object> parameters = new ArrayList<>();
-                List<String> paramNames = new ArrayList<>();
-                List<SqlBasicCall> theta = new ArrayList<>();
-                for (Map.Entry<SqlBasicCall, PredicateInfo> entry : ParsedPSJ.this.theta.entrySet()) {
+                List<Object> componentParameters = new ArrayList<>();
+                List<String> componentParamNames = new ArrayList<>();
+                List<SqlBasicCall> componentTheta = new ArrayList<>();
+                for (Map.Entry<SqlBasicCall, PredicateInfo> entry : theta.entrySet()) {
                     PredicateInfo info = entry.getValue();
-                    if (info.columns.stream().map(c -> c.split("\\.", 2)[0]).allMatch(component::contains)) {
-                        theta.add(entry.getKey());
-                        parameters.addAll(ParsedPSJ.this.parameters.subList(info.parameterOffset, info.parameterOffset + info.parameterCount));
-                        paramNames.addAll(ParsedPSJ.this.paramNames.subList(info.parameterOffset, info.parameterOffset + info.parameterCount));
+                    if (info.columns.stream().map(c -> c.split("\\.", 2)[0]).anyMatch(component::contains)) {
+                        componentTheta.add(entry.getKey());
+                        componentParameters.addAll(parameters.subList(info.parameterOffset, info.parameterOffset + info.parameterCount));
+                        componentParamNames.addAll(paramNames.subList(info.parameterOffset, info.parameterOffset + info.parameterCount));
                     }
                 }
 
                 if (trivialWhereClause) {
-                    parameters.add(ParsedPSJ.this.parameters.get(ParsedPSJ.this.parameters.size() - 1));
-                    paramNames.add(ParsedPSJ.this.paramNames.get(ParsedPSJ.this.paramNames.size() - 1));
+                    componentParameters.add(parameters.get(parameters.size() - 1));
+                    componentParamNames.add(paramNames.get(paramNames.size() - 1));
                 }
 
-                queries.add(new ParsedPSJ(relations, hasRelAlias, relAliasToIdx, projectColumns, parameters,
-                        paramNames, theta, trivialWhereClause).getSolverQuery(schema, prefix, parameterOffset));
+                queries.add(new ParsedPSJ(componentRelations, componentHasRelAlias, componentRelAliasToIdx, componentProjectColumns, componentParameters,
+                        componentParamNames, componentTheta, trivialWhereClause).getSolverQuery(schema, prefix, parameterOffset));
             }
 
             return queries;

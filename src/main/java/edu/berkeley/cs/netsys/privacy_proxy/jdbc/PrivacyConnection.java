@@ -121,6 +121,7 @@ public class PrivacyConnection implements Connection {
 
   public void resetSequence() {
     current_trace = new QueryTrace();
+    query_checker.resetSequence();
   }
 
   @Override

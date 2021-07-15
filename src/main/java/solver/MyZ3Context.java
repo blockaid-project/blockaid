@@ -4,39 +4,112 @@ import com.microsoft.z3.*;
 
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
 
+/**
+ * Custom Z3 Context to track constants and use uninterpreted sorts for everything.
+ * Assumes that mkSolver is only called after the formula is generated (otherwise,
+ * some values may be missing).
+ */
 public class MyZ3Context extends Context {
     private boolean isTrackingConsts;
     private final HashSet<Expr> consts;
+    private final CustomSorts customSorts;
 
-    private final Sort dateSort;
-    private final Map<Date, Expr> dateValues;
-    private final Sort tsSort;
-    private final Map<Timestamp, Expr> tsValues;
-    private final Sort intSort;
-    private final Map<Long, Expr> intValues;
-    private final Sort realSort;
-    private final Map<Double, Expr> realValues;
-    private final Sort stringSort;
-    private final Map<String, Expr> stringValues;
+    private class CustomSorts {
+        private final Sort dateSort;
+        private final Sort tsSort;
+        private final Sort intSort;
+        private final Sort realSort;
+        private final Sort stringSort;
+        private final List<Values> valuesStack;
+
+        private class Values {
+            private final Map<Date, Expr> dateValues;
+            private final Map<Timestamp, Expr> tsValues;
+            private final Map<Long, Expr> intValues;
+            private final Map<Double, Expr> realValues;
+            private final Map<String, Expr> stringValues;
+
+            private Values() {
+                dateValues = new HashMap<>();
+                tsValues = new HashMap<>();
+                intValues = new HashMap<>();
+                realValues = new HashMap<>();
+                stringValues = new HashMap<>();
+            }
+        }
+
+        private CustomSorts() {
+            dateSort = MyZ3Context.this.mkUninterpretedSort("DATE");
+            tsSort = MyZ3Context.this.mkUninterpretedSort("TS");
+            intSort = MyZ3Context.this.mkUninterpretedSort("INT");
+            realSort = MyZ3Context.this.mkUninterpretedSort("REAL");
+            stringSort = MyZ3Context.this.mkUninterpretedSort("STRING");
+            valuesStack = new ArrayList<>();
+            valuesStack.add(new Values());
+        }
+
+        private void push() {
+            valuesStack.add(new Values());
+        }
+
+        private void pop() {
+            valuesStack.remove(valuesStack.size() - 1);
+        }
+
+        private Expr getDate(Date date) {
+            return valuesStack.get(valuesStack.size() - 1).dateValues.computeIfAbsent(date, k -> mkFreshConst("DATE", dateSort));
+        }
+
+        private Expr getTimestamp(Timestamp ts) {
+            return valuesStack.get(valuesStack.size() - 1).tsValues.computeIfAbsent(ts, k -> mkFreshConst("TS", tsSort));
+        }
+
+        private Expr getInt(long value) {
+            return valuesStack.get(valuesStack.size() - 1).intValues.computeIfAbsent(value, k -> mkFreshConst("INT", intSort));
+        }
+
+        private Expr getReal(double value) {
+            return valuesStack.get(valuesStack.size() - 1).realValues.computeIfAbsent(value, k -> mkFreshConst("REAL", realSort));
+        }
+
+        private Expr getString(String value) {
+            return valuesStack.get(valuesStack.size() - 1).stringValues.computeIfAbsent(value, k -> mkFreshConst("STRING", stringSort));
+        }
+
+        private Solver prepareSolver(Solver solver) {
+            Map<Date, Expr> dateValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.dateValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
+            if (!dateValues.isEmpty()) {
+                solver.add(mkDistinct(dateValues.values().toArray(new Expr[0])));
+            }
+            Map<Timestamp, Expr> tsValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.tsValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
+            if (!tsValues.isEmpty()) {
+                solver.add(mkDistinct(tsValues.values().toArray(new Expr[0])));
+            }
+            Map<Long, Expr> intValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.intValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
+            if (!intValues.isEmpty()) {
+                solver.add(mkDistinct(intValues.values().toArray(new Expr[0])));
+            }
+            Map<Double, Expr> realValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.realValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
+            if (!realValues.isEmpty()) {
+                solver.add(mkDistinct(realValues.values().toArray(new Expr[0])));
+            }
+            Map<String, Expr> stringValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.stringValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
+            if (!stringValues.isEmpty()) {
+                solver.add(mkDistinct(stringValues.values().toArray(new Expr[0])));
+            }
+            return solver;
+        }
+
+    }
+
 
     public MyZ3Context() {
         super();
         isTrackingConsts = false;
         consts = new HashSet<>();
-        dateSort = this.mkUninterpretedSort("DATE");
-        dateValues = new HashMap<>();
-        tsSort = this.mkUninterpretedSort("TS");
-        tsValues = new HashMap<>();
-        intSort = this.mkUninterpretedSort("INT");
-        intValues = new HashMap<>();
-        realSort = this.mkUninterpretedSort("REAL");
-        realValues = new HashMap<>();
-        stringSort = this.mkUninterpretedSort("STRING");
-        stringValues = new HashMap<>();
+        customSorts = new CustomSorts();
     }
 
     @Override
@@ -81,74 +154,64 @@ public class MyZ3Context extends Context {
         return consts;
     }
 
+    public void customSortsPush() {
+        customSorts.push();
+    }
+
+    public void customSortsPop() {
+        customSorts.pop();
+    }
+
     @Override
     public Solver mkSolver() {
-        return prepareSolver(super.mkSolver());
+        return customSorts.prepareSolver(super.mkSolver());
     }
 
     @Override
     public Solver mkSolver(Symbol symbol) {
-        return prepareSolver(super.mkSolver(symbol));
+        return customSorts.prepareSolver(super.mkSolver(symbol));
     }
 
     @Override
     public Solver mkSolver(String s) {
-        return prepareSolver(super.mkSolver(s));
+        return customSorts.prepareSolver(super.mkSolver(s));
     }
 
     @Override
     public Solver mkSimpleSolver() {
-        return prepareSolver(super.mkSimpleSolver());
+        return customSorts.prepareSolver(super.mkSimpleSolver());
     }
 
     @Override
     public Solver mkSolver(Tactic tactic) {
-        return prepareSolver(super.mkSolver(tactic));
-    }
-
-    private Solver prepareSolver(Solver solver) {
-        if (!tsValues.isEmpty()) {
-            solver.add(mkDistinct(tsValues.values().toArray(new Expr[0])));
-        }
-        if (!dateValues.isEmpty()) {
-            solver.add(mkDistinct(dateValues.values().toArray(new Expr[0])));
-        }
-        if (!intValues.isEmpty()) {
-            solver.add(mkDistinct(intValues.values().toArray(new Expr[0])));
-        }
-        if (!realValues.isEmpty()) {
-            solver.add(mkDistinct(realValues.values().toArray(new Expr[0])));
-        }
-        if (!stringValues.isEmpty()) {
-            solver.add(mkDistinct(stringValues.values().toArray(new Expr[0])));
-        }
-        return solver;
+        return customSorts.prepareSolver(super.mkSolver(tactic));
     }
 
     public Sort getDateSort() {
-        return dateSort;
+        return customSorts.dateSort;
     }
 
     public Expr mkDate(Date date) {
-        return dateValues.computeIfAbsent(date, k -> mkFreshConst("DATE", dateSort));
+        return customSorts.getDate(date);
     }
 
     public Sort getTimestampSort() {
-        return tsSort;
+        return customSorts.tsSort;
     }
 
     public Expr mkTimestamp(Timestamp ts) {
-        return tsValues.computeIfAbsent(ts, k -> mkFreshConst("TS", tsSort));
+        return customSorts.getTimestamp(ts);
     }
 
     public Sort getCustomIntSort() {
-        return intSort;
+        return customSorts.intSort;
     }
 
     public Expr mkCustomInt(long value) {
-        return intValues.computeIfAbsent(value, k -> mkFreshConst("INT", intSort));
+        return customSorts.getInt(value);
     }
 
+    // Overrides to deprecate Z3's standard sorts where we have custom uninterpreted sorts.
     @Override
     @Deprecated
     public IntSort getIntSort() {
@@ -192,11 +255,11 @@ public class MyZ3Context extends Context {
     }
 
     public Sort getCustomRealSort() {
-        return realSort;
+        return customSorts.realSort;
     }
 
     public Expr mkCustomReal(double value) {
-        return realValues.computeIfAbsent(value, k -> mkFreshConst("REAL", intSort));
+        return customSorts.getReal(value);
     }
 
     @Override
@@ -248,11 +311,11 @@ public class MyZ3Context extends Context {
     }
 
     public Sort getCustomStringSort() {
-        return stringSort;
+        return customSorts.stringSort;
     }
 
     public Expr mkCustomString(String value) {
-        return stringValues.computeIfAbsent(value, k -> mkFreshConst("STRING", stringSort));
+        return customSorts.getString(value);
     }
 
     @Override

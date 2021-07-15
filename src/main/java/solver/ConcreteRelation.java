@@ -48,7 +48,7 @@ public class ConcreteRelation implements Relation {
 
     @Override
     public BoolExpr isEmpty() {
-        return context.mkOr(exists);
+        return context.mkNot(context.mkOr(exists));
     }
 
     @Override

@@ -26,7 +26,7 @@ public class BoundedPlusOneDeterminacyFormula extends DeterminacyFormula {
             clauses.addAll(inst2.getConstraints().values());
             if (splitProducts) {
                 for (Query v : views) {
-                    // (equal under each part && nonempty under each part/instance) || (empty on one+ part per instance)
+                    // (equal under each part) || (empty on one+ part per instance)
                     List<BoolExpr> equalityParts = new ArrayList<>();
                     List<BoolExpr> nonempty1Parts = new ArrayList<>();
                     List<BoolExpr> nonempty2Parts = new ArrayList<>();
@@ -41,7 +41,7 @@ public class BoundedPlusOneDeterminacyFormula extends DeterminacyFormula {
                     BoolExpr nonempty2 = context.mkAnd(nonempty2Parts.toArray(new BoolExpr[0]));
                     clauses.add(
                             context.mkOr(
-                                    context.mkAnd(equality, nonempty1, nonempty2),
+                                    equality,
                                     context.mkAnd(context.mkNot(nonempty1), context.mkNot(nonempty2))
                             )
                     );

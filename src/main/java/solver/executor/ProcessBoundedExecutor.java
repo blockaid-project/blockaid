@@ -31,11 +31,10 @@ public class ProcessBoundedExecutor extends SMTExecutor {
 
         while (!shuttingDown) {
             System.err.println(bounds);
-            DeterminacyFormula boundedDeterminacyFormula = new BoundedPlusOneDeterminacyFormula(schema, views, bounds, true);
+            DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, bounds, true);
             String smt = boundedDeterminacyFormula.generateSMT(queries);
 
             CountDownLatch latch = new CountDownLatch(1);
-            long startTime;
             synchronized (this) {
                 if (shuttingDown) {
                     return Status.UNKNOWN;

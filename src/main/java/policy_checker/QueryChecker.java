@@ -115,6 +115,14 @@ public class QueryChecker {
 
         // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
         this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
+
+        // Start custom sort value tracking for first query
+        context.customSortsPush();
+    }
+
+    public void resetSequence() {
+        schema.getContext().customSortsPop();
+        schema.getContext().customSortsPush();
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {

@@ -15,6 +15,11 @@ public abstract class Query {
     public abstract Tuple[] generateTuples(Instance instance);
     public abstract BoolExpr[] generateExists(Instance instance);
 
+    /**
+     * Returns a set of queries which, when joined together by cartesian product,
+     * yields a query equivalent to the original query. Used to optimize bounded formula
+     * generation for policies with cartesian products.
+     */
     public Iterable<Query> getComponents() {
         return Collections.singletonList(this);
     }

@@ -33,7 +33,7 @@ public class BoundedExecutor extends SMTExecutor {
         // this sucks - this executor cannot exit even if we get a fast unsat, until formula generation is done
         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
-        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, bounds);
+        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, bounds, true);
 
         synchronized (this) {
             if (shuttingDown) {
