@@ -449,7 +449,7 @@ public class QueryChecker {
                 ++queryNumber;
             }
             System.err.println(cacheTrace);
-            cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
+            cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), queries.getCurrentQuery().getQuery().paramNames, cacheTrace, policyResult);
         } else {
             System.err.println("no core, using value match");
             // no unsat core found (or not unsat) - all queries all values no equality
@@ -470,7 +470,7 @@ public class QueryChecker {
                 cacheTrace.addEntry(new CachedQueryTraceEntry(queryEntry, queryEntry == queries.getCurrentQuery(), parameterEquality, tupleEquality));
             }
             System.err.println(cacheTrace);
-            cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), cacheTrace, policyResult);
+            cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), queries.getCurrentQuery().getQuery().paramNames, cacheTrace, policyResult);
         }
     }
 

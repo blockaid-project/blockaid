@@ -416,11 +416,10 @@ public class DiasporaTest {
         p.setInt(1, 2);
         p.executeQuery();
 
-        // TODO fix
         query = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT 1";
         System.err.println(query);
         p = conn.prepareStatement(query);
-        p.setInt(1, 3);
+        p.setInt(1, 2);
         p.executeQuery();
 
         query = "SELECT  `users`.* FROM `users` WHERE `users`.`invited_by_id` = ? ORDER BY `users`.`id` ASC LIMIT 1";

@@ -7,6 +7,7 @@ import sql.ParserResult;
 import sql.PrivacyQuery;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -218,7 +219,7 @@ public class TestCache {
         );
 
         TraceCache cache = new TraceCache();
-        cache.addToCache(Q5.parsedSql.getParsedSql(), cacheTrace, true);
+        cache.addToCache(Q5.parsedSql.getParsedSql(), Arrays.asList("?", "?"), cacheTrace, true);
 
         QueryTrace testTrace = new QueryTrace();
 
