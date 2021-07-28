@@ -9,59 +9,23 @@ import java.util.regex.Pattern;
 import static com.google.common.base.Preconditions.checkState;
 
 public class CachedQueryTraceEntry {
-    public static class Index {
-        public Integer index = null;
-        public String variable = null;
-
-        public Index(Integer index) {
-            this.index = index;
-        }
-
-        public Index(String variable) {
-            this.variable = variable;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            Index index1 = (Index) o;
-            return Objects.equals(index, index1.index) &&
-                    Objects.equals(variable, index1.variable);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(index, variable);
-        }
-
-        @Override
-        public String toString() {
-            if (index != null) {
-                return index.toString();
-            } else {
-                return variable;
-            }
-        }
-    }
-
     private final String queryText;
     private final boolean isCurrentQuery;
     // exact value comparisons, null if value is irrelevant
     private final List<Object> parameters;
     private final List<List<Object>> tuples;
     // equalities - using indices shared across entire CachedQueryTrace, null if no constraint
-    private final List<Index> parameterEquality;
-    private final List<List<Index>> tupleEquality;
+    private final List<Integer> parameterEquality;
+    private final List<List<Integer>> tupleEquality;
 
     private int maxEqualityNumber;
     private boolean isEmpty;
 
-    public CachedQueryTraceEntry(QueryTraceEntry traceEntry, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+    public CachedQueryTraceEntry(QueryTraceEntry traceEntry, boolean isCurrentQuery, List<Integer> parameterEquality, List<List<Integer>> tupleEquality) {
         this(traceEntry.getParsedSql(), traceEntry.getParameters(), traceEntry.getTuples(), isCurrentQuery, parameterEquality, tupleEquality);
     }
 
-    private CachedQueryTraceEntry(String queryText, List<Object> parameters, Iterable<List<Object>> tuples, boolean isCurrentQuery, List<Index> parameterEquality, List<List<Index>> tupleEquality) {
+    private CachedQueryTraceEntry(String queryText, List<Object> parameters, Iterable<List<Object>> tuples, boolean isCurrentQuery, List<Integer> parameterEquality, List<List<Integer>> tupleEquality) {
         this.queryText = queryText;
         this.isCurrentQuery = isCurrentQuery;
         this.parameters = parameters;
@@ -70,15 +34,15 @@ public class CachedQueryTraceEntry {
         this.tupleEquality = tupleEquality;
 
         this.maxEqualityNumber = 0;
-        for (Index index : parameterEquality) {
-            if (index != null && index.index != null) {
-                this.maxEqualityNumber = Math.max(this.maxEqualityNumber, index.index);
+        for (Integer index : parameterEquality) {
+            if (index != null) {
+                this.maxEqualityNumber = Math.max(this.maxEqualityNumber, index);
             }
         }
-        for (List<Index> tuple : tupleEquality) {
-            for (Index index : tuple) {
-                if (index != null && index.index != null) {
-                    this.maxEqualityNumber = Math.max(this.maxEqualityNumber, index.index);
+        for (List<Integer> tuple : tupleEquality) {
+            for (Integer index : tuple) {
+                if (index != null) {
+                    this.maxEqualityNumber = Math.max(this.maxEqualityNumber, index);
                 }
             }
         }
@@ -106,7 +70,7 @@ public class CachedQueryTraceEntry {
                 return;
             }
         }
-        for (Index index : parameterEquality) {
+        for (Integer index : parameterEquality) {
             if (index != null) {
                 return;
             }
@@ -134,13 +98,13 @@ public class CachedQueryTraceEntry {
         return queryText.equals(query.getParsedSql());
     }
 
-    public boolean checkParameters(QueryTraceEntry query, Map<Index, Object> mappedIndices) {
+    public boolean checkParameters(QueryTraceEntry query, Map<Integer, Object> mappedIndices) {
         Iterator<Object> cacheParamIter = parameters.iterator();
         Iterator<Object> queryParamIter = query.getParameters().iterator();
-        Iterator<Index> paramEqualityIter = parameterEquality.iterator();
+        Iterator<Integer> paramEqualityIter = parameterEquality.iterator();
 
         while (cacheParamIter.hasNext() && queryParamIter.hasNext() && paramEqualityIter.hasNext()) {
-            Index equalityIndex = paramEqualityIter.next();
+            Integer equalityIndex = paramEqualityIter.next();
             Object cacheValue = cacheParamIter.next();
             Object queryValue = queryParamIter.next();
             if (cacheValue != null && !cacheValue.equals(queryValue)) {
@@ -158,20 +122,20 @@ public class CachedQueryTraceEntry {
         return true;
     }
 
-    public boolean checkValues(QueryTraceEntry query, Map<Index, Object> mappedIndices) {
+    public boolean checkValues(QueryTraceEntry query, Map<Integer, Object> mappedIndices) {
         // assuming that there are no new parameters in tuples; copy of tuples with equalities filled in
         List<List<Object>> tupleChecks = new ArrayList<>();
 
         Iterator<List<Object>> cacheTupleIter = tuples.iterator();
-        Iterator<List<Index>> tupleEqualityIter = tupleEquality.iterator();
+        Iterator<List<Integer>> tupleEqualityIter = tupleEquality.iterator();
         while (cacheTupleIter.hasNext() && tupleEqualityIter.hasNext()) {
             List<Object> completeTuple = new ArrayList<>(cacheTupleIter.next());
-            List<Index> equality = tupleEqualityIter.next();
+            List<Integer> equality = tupleEqualityIter.next();
 
             ListIterator<Object> tupleIter = completeTuple.listIterator();
-            Iterator<Index> equalityIter = equality.iterator();
+            Iterator<Integer> equalityIter = equality.iterator();
             while (tupleIter.hasNext() && equalityIter.hasNext()) {
-                Index index = equalityIter.next();
+                Integer index = equalityIter.next();
                 tupleIter.next();
                 if (index != null) {
                     tupleIter.set(mappedIndices.get(index));

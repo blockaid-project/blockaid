@@ -403,8 +403,10 @@ public class DiasporaTest {
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);
 
+        Statement statement = conn.createStatement();
+        statement.execute("SET @_MY_UID=2");
 
-        String query = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ?_MY_UID ORDER BY `users`.`id` ASC LIMIT 1";
+        String query = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT 1";
         System.err.println(query);
         PreparedStatement p = conn.prepareStatement(query);
         p.setInt(1, 2);

@@ -10,5 +10,5 @@ import java.util.Optional;
 
 public interface Preprocessor {
     Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                   List<String> paramNames, Map<Integer, String> revConstMap);
+                                   List<String> paramNames);
 }

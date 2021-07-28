@@ -16,7 +16,7 @@ public class StripUnaryOpSubquery implements Preprocessor {
     private StripUnaryOpSubquery() {}
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames, Map<Integer, String> revConstMap) {
+                                          List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
         }
@@ -49,7 +49,7 @@ public class StripUnaryOpSubquery implements Preprocessor {
                 false, false) {};
         // After stripping, need to set result bitmap to empty so that the results of this query are not processed.
         PrivacyQuery pq = new PrivacyQueryEmptyRBWrapper(
-                PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames, revConstMap));
+                PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
         return Optional.of(pq);
     }
 }

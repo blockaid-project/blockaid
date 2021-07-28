@@ -16,7 +16,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
      * Takes "ownership" of arguments.
      */
     public PrivacyQueryUnion(ParserResult parsedSql, SchemaPlusWithKey schema, List<Object> parameters,
-                             List<String> paramNames, Map<Integer, String> reverseConstMap) {
+                             List<String> paramNames) {
         super(parsedSql, parameters, paramNames);
         checkArgument(parsedSql.getSqlNode() instanceof SqlBasicCall);
         SqlBasicCall unionNode = (SqlBasicCall) parsedSql.getSqlNode();
@@ -28,7 +28,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
             List<Object> partParameters = parameters.subList(paramOffset, paramOffset + paramCount);
             List<String> partParamNames = paramNames.subList(paramOffset, paramOffset + paramCount);
             PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new UnionPartParserResult(operand), schema,
-                    partParameters.toArray(new Object[0]), partParamNames, reverseConstMap);
+                    partParameters.toArray(new Object[0]), partParamNames);
             queries.add(query);
 
             paramOffset += paramCount;

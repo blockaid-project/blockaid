@@ -109,6 +109,13 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
             ++queryNumber;
         }
 
+        for (Map.Entry<String, Integer> constants : queries.getConstMap().entrySet()) {
+            if (!equalitySets.containsKey(constants.getValue())) {
+                equalitySets.put(constants.getValue(), new HashSet<>());
+            }
+            equalitySets.get(constants.getValue()).add(context.mkConst("!" + constants.getKey(), context.getCustomIntSort()));
+        }
+
         this.assertionMap = new HashMap<>();
         int assertionNum = 0;
         for (Map.Entry<Object, Set<Expr>> entry : equalitySets.entrySet()) {
@@ -153,11 +160,16 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
     private String makeMainSMT(QueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema, "cq_p", 0);
-        return "(assert " + context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))) + ")";
+        StringBuilder out = new StringBuilder("(assert " + context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))) + ")");
+        for (BoolExpr expr : generateConstantCheck(queries)) {
+            out.append("(assert ").append(expr.toString()).append(")\n");
+        }
+        return out.toString();
     }
 
     @Override
     protected String makeFormulaSMT(QueryTrace queries) {
-        return makeMainSMT(queries) + "\n" + generateAssertions(queries);
+        String assertions = generateAssertions(queries);
+        return makeMainSMT(queries) + "\n" + assertions;
     }
 }

@@ -20,7 +20,7 @@ public class StripOrderBy implements Preprocessor {
     private StripOrderBy() {}
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames, Map<Integer, String> revConstMap) {
+                                          List<String> paramNames) {
         if (result.getKind() != SqlKind.ORDER_BY) {
             return Optional.empty();
         }
@@ -38,6 +38,6 @@ public class StripOrderBy implements Preprocessor {
             paramNames = paramNames.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
         }
 
-        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames, revConstMap));
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
     }
 }

@@ -15,14 +15,14 @@ public class PrivacyQueryFactory {
     };
 
     public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                                  List<String> paramNames, Map<Integer, String> revConstMap)
+                                                  List<String> paramNames)
     {
         if (result == null){
             return null;
         }
 
         for (Preprocessor p : preprocessors) {
-            Optional<PrivacyQuery> res = p.perform(result, schema, parameters, paramNames, revConstMap);
+            Optional<PrivacyQuery> res = p.perform(result, schema, parameters, paramNames);
             if (res.isPresent()) {
                 return res.get();
             }
@@ -43,15 +43,6 @@ public class PrivacyQueryFactory {
             }
             sb.append(queryText, si, nextSi);
             si = nextSi;
-
-            Object param = newParams.get(pi);
-            if (param instanceof Integer && newParamNames.get(pi).equals("?")) {
-                String name = revConstMap.get(param);
-                if (name != null) {
-                    newParamNames.set(pi, name);
-                    sb.append(name);
-                }
-            }
         }
         result.setParsedSql(sb.toString());
 
@@ -60,7 +51,7 @@ public class PrivacyQueryFactory {
             case ORDER_BY:
                 return new PrivacyQuerySelect(result, schema, newParams, newParamNames);
             case UNION:
-                return new PrivacyQueryUnion(result, schema, newParams, newParamNames, revConstMap);
+                return new PrivacyQueryUnion(result, schema, newParams, newParamNames);
             default:
                 throw new AssertionError("unexpected");
         }

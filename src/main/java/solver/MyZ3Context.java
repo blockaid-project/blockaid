@@ -13,7 +13,8 @@ import java.util.*;
  */
 public class MyZ3Context extends Context {
     private boolean isTrackingConsts;
-    private final HashSet<Expr> consts;
+    private final HashSet<Expr> untrackedConsts;
+    private final HashSet<Expr> trackedConsts;
     private final CustomSorts customSorts;
 
     private class CustomSorts {
@@ -41,11 +42,11 @@ public class MyZ3Context extends Context {
         }
 
         private CustomSorts() {
-            dateSort = MyZ3Context.this.mkUninterpretedSort("DATE");
-            tsSort = MyZ3Context.this.mkUninterpretedSort("TS");
-            intSort = MyZ3Context.this.mkUninterpretedSort("INT");
-            realSort = MyZ3Context.this.mkUninterpretedSort("REAL");
-            stringSort = MyZ3Context.this.mkUninterpretedSort("STRING");
+            dateSort = MyZ3Context.this.mkUninterpretedSort("CS!DATE");
+            tsSort = MyZ3Context.this.mkUninterpretedSort("CS!TS");
+            intSort = MyZ3Context.this.mkUninterpretedSort("CS!INT");
+            realSort = MyZ3Context.this.mkUninterpretedSort("CS!REAL");
+            stringSort = MyZ3Context.this.mkUninterpretedSort("CS!STRING");
             valuesStack = new ArrayList<>();
             valuesStack.add(new Values());
         }
@@ -59,47 +60,151 @@ public class MyZ3Context extends Context {
         }
 
         private Expr getDate(Date date) {
-            return valuesStack.get(valuesStack.size() - 1).dateValues.computeIfAbsent(date, k -> mkFreshConst("DATE", dateSort));
+            for (int i = valuesStack.size(); i-- > 0; ) {
+                if (valuesStack.get(i).dateValues.containsKey(date)) {
+                    return valuesStack.get(i).dateValues.get(date);
+                }
+            }
+            Expr c = mkFreshConst(dateSort.getSExpr(), dateSort);
+            valuesStack.get(valuesStack.size() - 1).dateValues.put(date, c);
+            return c;
         }
 
         private Expr getTimestamp(Timestamp ts) {
-            return valuesStack.get(valuesStack.size() - 1).tsValues.computeIfAbsent(ts, k -> mkFreshConst("TS", tsSort));
+            for (int i = valuesStack.size(); i-- > 0; ) {
+                if (valuesStack.get(i).tsValues.containsKey(ts)) {
+                    return valuesStack.get(i).tsValues.get(ts);
+                }
+            }
+            Expr c = mkFreshConst(tsSort.getSExpr(), tsSort);
+            valuesStack.get(valuesStack.size() - 1).tsValues.put(ts, c);
+            return c;
         }
 
         private Expr getInt(long value) {
-            return valuesStack.get(valuesStack.size() - 1).intValues.computeIfAbsent(value, k -> mkFreshConst("INT", intSort));
+            for (int i = valuesStack.size(); i-- > 0; ) {
+                if (valuesStack.get(i).intValues.containsKey(value)) {
+                    return valuesStack.get(i).intValues.get(value);
+                }
+            }
+            Expr c = mkFreshConst(intSort.getSExpr(), intSort);
+            valuesStack.get(valuesStack.size() - 1).intValues.put(value, c);
+            return c;
         }
 
         private Expr getReal(double value) {
-            return valuesStack.get(valuesStack.size() - 1).realValues.computeIfAbsent(value, k -> mkFreshConst("REAL", realSort));
+            for (int i = valuesStack.size(); i-- > 0; ) {
+                if (valuesStack.get(i).realValues.containsKey(value)) {
+                    return valuesStack.get(i).realValues.get(value);
+                }
+            }
+            Expr c = mkFreshConst(realSort.getSExpr(), realSort);
+            valuesStack.get(valuesStack.size() - 1).realValues.put(value, c);
+            return c;
         }
 
         private Expr getString(String value) {
-            return valuesStack.get(valuesStack.size() - 1).stringValues.computeIfAbsent(value, k -> mkFreshConst("STRING", stringSort));
+            for (int i = valuesStack.size(); i-- > 0; ) {
+                if (valuesStack.get(i).stringValues.containsKey(value)) {
+                    return valuesStack.get(i).stringValues.get(value);
+                }
+            }
+            Expr c = mkFreshConst(stringSort.getSExpr(), stringSort);
+            valuesStack.get(valuesStack.size() - 1).stringValues.put(value, c);
+            return c;
         }
 
         private Solver prepareSolver(Solver solver) {
+            if (solver.getNumAssertions() > 0) {
+                return solver;
+            }
             Map<Date, Expr> dateValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.dateValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
-            if (!dateValues.isEmpty()) {
+            if (dateValues.size() > 1) {
                 solver.add(mkDistinct(dateValues.values().toArray(new Expr[0])));
             }
             Map<Timestamp, Expr> tsValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.tsValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
-            if (!tsValues.isEmpty()) {
+            if (tsValues.size() > 1) {
                 solver.add(mkDistinct(tsValues.values().toArray(new Expr[0])));
             }
             Map<Long, Expr> intValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.intValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
-            if (!intValues.isEmpty()) {
+            if (intValues.size() > 1) {
                 solver.add(mkDistinct(intValues.values().toArray(new Expr[0])));
             }
             Map<Double, Expr> realValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.realValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
-            if (!realValues.isEmpty()) {
+            if (realValues.size() > 1) {
                 solver.add(mkDistinct(realValues.values().toArray(new Expr[0])));
             }
             Map<String, Expr> stringValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.stringValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
-            if (!stringValues.isEmpty()) {
+            if (stringValues.size() > 1) {
                 solver.add(mkDistinct(stringValues.values().toArray(new Expr[0])));
             }
             return solver;
+        }
+
+        private String prepareSortDeclaration() {
+            // Reusing prepareSolver is messy - some constants and sorts may not be used/declared.
+            StringBuilder sb = new StringBuilder();
+            sb.append("(declare-sort ").append(dateSort.getSExpr()).append(" 0)\n");
+            sb.append("(declare-sort ").append(tsSort.getSExpr()).append(" 0)\n");
+            sb.append("(declare-sort ").append(intSort.getSExpr()).append(" 0)\n");
+            sb.append("(declare-sort ").append(realSort.getSExpr()).append(" 0)\n");
+            sb.append("(declare-sort ").append(stringSort.getSExpr()).append(" 0)\n");
+
+            Collection<Expr> values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.dateValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
+            StringBuilder distinct = new StringBuilder("(assert (distinct");
+            for (Expr expr : values) {
+                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
+                distinct.append(' ').append(expr.getSExpr());
+            }
+            distinct.append("))\n");
+            if (values.size() > 1) {
+                sb.append(distinct);
+            }
+
+            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.tsValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
+            distinct = new StringBuilder("(assert (distinct");
+            for (Expr expr : values) {
+                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
+                distinct.append(' ').append(expr.getSExpr());
+            }
+            distinct.append("))\n");
+            if (values.size() > 1) {
+                sb.append(distinct);
+            }
+
+            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.intValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
+            distinct = new StringBuilder("(assert (distinct");
+            for (Expr expr : values) {
+                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
+                distinct.append(' ').append(expr.getSExpr());
+            }
+            distinct.append("))\n");
+            if (values.size() > 1) {
+                sb.append(distinct);
+            }
+
+            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.realValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
+            distinct = new StringBuilder("(assert (distinct");
+            for (Expr expr : values) {
+                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
+                distinct.append(' ').append(expr.getSExpr());
+            }
+            distinct.append("))\n");
+            if (values.size() > 1) {
+                sb.append(distinct);
+            }
+
+            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.stringValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
+            distinct = new StringBuilder("(assert (distinct");
+            for (Expr expr : values) {
+                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
+                distinct.append(' ').append(expr.getSExpr());
+            }
+            distinct.append("))\n");
+            if (values.size() > 1) {
+                sb.append(distinct);
+            }
+            return sb.toString();
         }
 
     }
@@ -108,15 +213,18 @@ public class MyZ3Context extends Context {
     public MyZ3Context() {
         super();
         isTrackingConsts = false;
-        consts = new HashSet<>();
+        untrackedConsts = new HashSet<>();
+        trackedConsts = new HashSet<>();
         customSorts = new CustomSorts();
     }
 
     @Override
     public Expr mkConst(String s, Sort sort) {
         Expr c = super.mkConst(s, sort);
-        if (isTrackingConsts) {
-            consts.add(c);
+        if (isTrackingConsts && !untrackedConsts.contains(c)) {
+            trackedConsts.add(c);
+        } else {
+            untrackedConsts.add(c);
         }
         return c;
     }
@@ -124,8 +232,10 @@ public class MyZ3Context extends Context {
     @Override
     public Expr mkFreshConst(String s, Sort sort) {
         Expr c = super.mkFreshConst(s, sort);
-        if (isTrackingConsts) {
-            consts.add(c);
+        if (isTrackingConsts && !untrackedConsts.contains(c)) {
+            trackedConsts.add(c);
+        } else {
+            untrackedConsts.add(c);
         }
         return c;
     }
@@ -142,7 +252,7 @@ public class MyZ3Context extends Context {
     }
 
     public void startTrackingConsts() {
-        consts.clear();
+        trackedConsts.clear();
         isTrackingConsts = true;
     }
 
@@ -151,7 +261,7 @@ public class MyZ3Context extends Context {
     }
 
     public Iterable<Expr> getConsts() {
-        return consts;
+        return trackedConsts;
     }
 
     public void customSortsPush() {
@@ -160,6 +270,16 @@ public class MyZ3Context extends Context {
 
     public void customSortsPop() {
         customSorts.pop();
+    }
+
+    public String prepareSortDeclaration() {
+        return customSorts.prepareSortDeclaration();
+    }
+
+    // Return solver without unique constraints on custom sorts; useful when only generating partial
+    // SMT formulas.
+    public Solver mkRawSolver() {
+        return super.mkSolver();
     }
 
     @Override

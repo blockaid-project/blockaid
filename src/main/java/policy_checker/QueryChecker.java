@@ -389,6 +389,15 @@ public class QueryChecker {
                 }
                 ++queryNumber;
             }
+            for (Integer value : queries.getConstMap().values()) {
+                if (core.equalityMap.containsKey(value)) {
+                    int assertionNum = core.equalityMap.get(value);
+                    if (UNNAMED_EQUALITY || core.core.contains("a_e!" + assertionNum)) {
+                        assertionOccurrences.put(assertionNum, assertionOccurrences.getOrDefault(assertionNum, 0) + 1);
+                    }
+                }
+            }
+
             queryNumber = 0;
             // generate cache entry
             for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
@@ -397,7 +406,7 @@ public class QueryChecker {
                     continue;
                 }
                 // equalities
-                List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
+                List<Integer> parameterEquality = new ArrayList<>();
                 for (Object parameter : queryEntry.getParameters()) {
                     if (!core.equalityMap.containsKey(parameter)) {
                         parameterEquality.add(null);
@@ -405,14 +414,14 @@ public class QueryChecker {
                     }
                     int assertionNum = core.equalityMap.get(parameter);
                     if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
-                        parameterEquality.add(new CachedQueryTraceEntry.Index(assertionNum));
+                        parameterEquality.add(assertionNum);
                     } else {
                         parameterEquality.add(null);
                     }
                 }
-                List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
+                List<List<Integer>> tupleEquality = new ArrayList<>();
                 for (List<Object> tuple : queryEntry.getTuples()) {
-                    List<CachedQueryTraceEntry.Index> indices = new ArrayList<>();
+                    List<Integer> indices = new ArrayList<>();
                     for (Object value : tuple) {
                         if (!core.equalityMap.containsKey(value)) {
                             indices.add(null);
@@ -420,7 +429,7 @@ public class QueryChecker {
                         }
                         int assertionNum = core.equalityMap.get(value);
                         if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
-                            indices.add(new CachedQueryTraceEntry.Index(assertionNum));
+                            indices.add(assertionNum);
                         } else {
                             indices.add(null);
                         }
@@ -448,6 +457,21 @@ public class QueryChecker {
                 }
                 ++queryNumber;
             }
+            for (Map.Entry<String, Integer> c : queries.getConstMap().entrySet()) {
+                String name = c.getKey();
+                Integer value = c.getValue();
+                if (!core.equalityMap.containsKey(value)) {
+                    cacheTrace.addVariable(name, null);
+                    continue;
+                }
+                int assertionNum = core.equalityMap.get(value);
+                // TODO is it ok to ignore equalities solely between constants and maybe tuple values?
+                if (paramAssertions.contains(assertionNum) && assertionOccurrences.getOrDefault(assertionNum, 0) > 1) {
+                    cacheTrace.addVariable(name, assertionNum);
+                } else {
+                    cacheTrace.addVariable(name, null);
+                }
+            }
             System.err.println(cacheTrace);
             cache.policyDecisionCacheFine.addToCache(queries.getCurrentQuery().getQuery().parsedSql.getParsedSql(), queries.getCurrentQuery().getQuery().paramNames, cacheTrace, policyResult);
         } else {
@@ -455,13 +479,13 @@ public class QueryChecker {
             // no unsat core found (or not unsat) - all queries all values no equality
             CachedQueryTrace cacheTrace = new CachedQueryTrace();
             for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
-                List<CachedQueryTraceEntry.Index> parameterEquality = new ArrayList<>();
+                List<Integer> parameterEquality = new ArrayList<>();
                 for (int i = 0; i < queryEntry.getParameters().size(); ++i) {
                     parameterEquality.add(null);
                 }
-                List<List<CachedQueryTraceEntry.Index>> tupleEquality = new ArrayList<>();
+                List<List<Integer>> tupleEquality = new ArrayList<>();
                 for (List<Object> queryEntryTuple : queryEntry.getTuples()) {
-                    List<CachedQueryTraceEntry.Index> tuple = new ArrayList<>();
+                    List<Integer> tuple = new ArrayList<>();
                     for (int j = 0; j < queryEntryTuple.size(); ++j) {
                         tuple.add(null);
                     }

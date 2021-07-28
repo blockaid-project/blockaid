@@ -21,7 +21,7 @@ public class DesugarLeftJoinIntoInner implements Preprocessor {
 
     @Override
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                          List<String> paramNames, Map<Integer, String> revConstMap) {
+                                          List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
         }
@@ -78,6 +78,6 @@ public class DesugarLeftJoinIntoInner implements Preprocessor {
 
         ParserResult newPR = new ParserResult(newSelect.toString(), newSelect.getKind(), newSelect, false,
                 false) {};
-        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames, revConstMap));
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
     }
 }

@@ -3,10 +3,7 @@ package solver;
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
 import com.google.common.collect.Iterables;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
-import com.microsoft.z3.Expr;
-import com.microsoft.z3.Solver;
+import com.microsoft.z3.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -32,10 +29,13 @@ public abstract class DeterminacyFormula {
 
         // Set prepared expr.
         final long startTime = System.currentTimeMillis();
-        Solver solver = schema.getContext().mkSolver();
+        Solver solver = schema.getContext().mkRawSolver();
         solver.add(mkPreparedExpr.apply(this.inst1, this.inst2).toArray(new BoolExpr[0]));
         solver.add(additionalAssertion(context));
         String result = solver.toString();
+        // Remove the custom sorts from preamble -- we add them back when generating the rest of the formula,
+        // because here, sorts that are not used in the preamble but are used later on won't be declared.
+        result = result.replaceAll("\\(declare-sort CS![A-Z]+ 0\\)|\\(declare-fun CS![A-Z]+!\\d+ \\(\\) CS![A-Z]+\\)", "");
         System.out.println("set prepared expr " + getClass().getName() + ":" + (System.currentTimeMillis() - startTime));
         this.preparedExprSMT = result;
     }
@@ -59,15 +59,19 @@ public abstract class DeterminacyFormula {
                 exprs.add(r2.doesContain(tuples));
             }
         }
+        return exprs;
+    }
 
+    protected Iterable<BoolExpr> generateConstantCheck(QueryTrace queries) {
+        List<BoolExpr> exprs = new ArrayList<>();
         // Constrain constant values.
-//        for (Map.Entry<String, Integer> entry : queries.getConstMap().entrySet()) {
-//            StringSymbol nameSymbol = context.mkSymbol("!" + entry.getKey());
-//            exprs.add(context.mkEq(
-//                    context.mkConst(nameSymbol, context.getIntSort()),
-//                    context.mkInt(entry.getValue())
-//            ));
-//        }
+        for (Map.Entry<String, Integer> entry : queries.getConstMap().entrySet()) {
+            StringSymbol nameSymbol = context.mkSymbol("!" + entry.getKey());
+            exprs.add(context.mkEq(
+                    context.mkConst(nameSymbol, context.getCustomIntSort()),
+                    context.mkCustomInt(entry.getValue())
+            ));
+        }
 
         return exprs;
     }
@@ -80,7 +84,7 @@ public abstract class DeterminacyFormula {
         List<BoolExpr> notContainsFormulas = List.of(
                 query.doesContain(inst1, extHeadTup),
                 context.mkNot(query.doesContain(inst2, extHeadTup)));
-        return Iterables.concat(generateTupleCheck(queries), notContainsFormulas);
+        return Iterables.concat(generateTupleCheck(queries), generateConstantCheck(queries), notContainsFormulas);
     }
 
     protected String makeFormulaSMT(QueryTrace queries) {
@@ -93,18 +97,21 @@ public abstract class DeterminacyFormula {
 
     public String generateSMT(QueryTrace queries) {
         StringBuilder sb = new StringBuilder();
-        MyZ3Context myContext = context;
-        myContext.startTrackingConsts();
+        context.startTrackingConsts();
         String smt = makeFormulaSMT(queries);
-        myContext.stopTrackingConsts();
+        context.stopTrackingConsts();
 
-        for (Expr constant : myContext.getConsts()) {
-            sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
+        for (Expr constant : context.getConsts()) {
+            if (!constant.getSExpr().startsWith("CS!")) {
+                sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
+            }
         }
 
         sb.append(smt);
 
+        // only used to generate declarations and assertions for sorts
+        String header = context.prepareSortDeclaration();
         String body = sb.toString();
-        return this.preparedExprSMT + body;
+        return header + this.preparedExprSMT + body;
     }
 }

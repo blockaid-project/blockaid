@@ -461,8 +461,7 @@ public class PrivacyConnection implements Connection {
       System.out.println("[" + (current_trace.size() + 1) + "] checkPolicy: "
               + parser_result.getParsedSql() + "\t" + Arrays.toString(param_values));
 
-      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, param_values, param_names,
-              current_trace.getReverseConstMap());
+      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, param_values, param_names);
 
       current_trace.startQuery(privacy_query, privacy_query.parameters);
       final long startTime = System.currentTimeMillis();
@@ -2282,7 +2281,7 @@ public class PrivacyConnection implements Connection {
      */
     private Optional<Boolean> processSetConst(String query) {
       // I made up this syntax.
-      Pattern pattern = Pattern.compile("^SET @(_[A-Za-z0-9_]+) = (\\d+)$");
+      Pattern pattern = Pattern.compile("^SET\\s+@(_[A-Za-z0-9_]+)\\s*=\\s*(\\d+)$");
       Matcher matcher = pattern.matcher(query);
       if (!matcher.find()) {
         return Optional.empty();
@@ -2291,8 +2290,6 @@ public class PrivacyConnection implements Connection {
       String name = matcher.group(1);
       String value = matcher.group(2);
       System.out.println("=== processSetConst: " + name + " = " + value);
-      // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
-      resetSequence();
       current_trace.setConstValue(name, Integer.valueOf(value));
 
       // TODO(zhangwen): Can I get away with not actually executing this command?
