@@ -121,8 +121,9 @@ public class QueryChecker {
     }
 
     public void resetSequence() {
-        schema.getContext().customSortsPop();
-        schema.getContext().customSortsPush();
+        MyZ3Context context = schema.getContext();
+        context.customSortsPop();
+        context.customSortsPush();
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {

@@ -1,5 +1,7 @@
 package cache;
 
+import com.google.common.collect.ImmutableList;
+
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -8,11 +10,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class TraceCache {
     private static class CacheKey {
         private final String sql;
-        private final List<String> paramNames;
+        private final ImmutableList<String> paramNames;
 
-        public CacheKey(String sql, List<String> paramNames) {
+        public CacheKey(String sql, Iterable<String> paramNames) {
             this.sql = sql;
-            this.paramNames = paramNames;
+            this.paramNames = ImmutableList.copyOf(paramNames);
         }
 
         @Override
@@ -45,7 +47,8 @@ public class TraceCache {
         Lock readLock = lock.readLock();
         readLock.lock();
         try {
-            CacheKey cacheKey = new CacheKey(queryTrace.getCurrentQuery().getParsedSql(), new ArrayList<>(queryTrace.getCurrentQuery().getQuery().paramNames));
+            QueryTraceEntry currQuery = queryTrace.getCurrentQuery();
+            CacheKey cacheKey = new CacheKey(currQuery.getParsedSql(), currQuery.getQuery().paramNames);
             List<Entry> entryList = cache.getOrDefault(cacheKey, Collections.emptyList());
             ListIterator<Entry> iterator = entryList.listIterator(entryList.size());
             while (iterator.hasPrevious()) {
@@ -64,7 +67,7 @@ public class TraceCache {
         Lock writeLock = lock.writeLock();
         writeLock.lock();
         try {
-            CacheKey cacheKey = new CacheKey(currentQuery, new ArrayList<>(paramNames));
+            CacheKey cacheKey = new CacheKey(currentQuery, paramNames);
             cache.putIfAbsent(cacheKey, new ArrayList<>());
             cache.get(cacheKey).add(new Entry(cachedQueryTrace, compliance));
         } finally {

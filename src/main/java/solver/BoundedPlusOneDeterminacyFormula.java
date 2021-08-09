@@ -28,21 +28,20 @@ public class BoundedPlusOneDeterminacyFormula extends DeterminacyFormula {
                 for (Query v : views) {
                     // (equal under each part) || (empty on one+ part per instance)
                     List<BoolExpr> equalityParts = new ArrayList<>();
-                    List<BoolExpr> nonempty1Parts = new ArrayList<>();
-                    List<BoolExpr> nonempty2Parts = new ArrayList<>();
-                    Iterable<Query> components = v.getComponents();
-                    for (Query q : components) {
+                    List<BoolExpr> empty1Parts = new ArrayList<>();
+                    List<BoolExpr> empty2Parts = new ArrayList<>();
+                    for (Query q : v.getComponents()) {
                         equalityParts.add(q.apply(inst1).equalsExpr(q.apply(inst2)));
-                        nonempty1Parts.add(context.mkNot(q.apply(inst1).isEmpty()));
-                        nonempty2Parts.add(context.mkNot(q.apply(inst2).isEmpty()));
+                        empty1Parts.add(q.apply(inst1).isEmpty());
+                        empty2Parts.add(q.apply(inst2).isEmpty());
                     }
                     BoolExpr equality = context.mkAnd(equalityParts.toArray(new BoolExpr[0]));
-                    BoolExpr nonempty1 = context.mkAnd(nonempty1Parts.toArray(new BoolExpr[0]));
-                    BoolExpr nonempty2 = context.mkAnd(nonempty2Parts.toArray(new BoolExpr[0]));
+                    BoolExpr empty1 = context.mkOr(empty1Parts.toArray(new BoolExpr[0]));
+                    BoolExpr empty2 = context.mkOr(empty2Parts.toArray(new BoolExpr[0]));
                     clauses.add(
                             context.mkOr(
                                     equality,
-                                    context.mkAnd(context.mkNot(nonempty1), context.mkNot(nonempty2))
+                                    context.mkAnd(empty1, empty2)
                             )
                     );
                 }
