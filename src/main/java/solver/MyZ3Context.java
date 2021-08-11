@@ -5,6 +5,7 @@ import com.microsoft.z3.*;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * Custom Z3 Context to track constants and use uninterpreted sorts for everything.
@@ -114,6 +115,7 @@ public class MyZ3Context extends Context {
             return c;
         }
 
+        // Prepares Solver for use with custom sorts (adds uniqueness constraints)
         private Solver prepareSolver(Solver solver) {
             if (solver.getNumAssertions() > 0) {
                 return solver;
@@ -150,7 +152,17 @@ public class MyZ3Context extends Context {
             sb.append("(declare-sort ").append(realSort.getSExpr()).append(" 0)\n");
             sb.append("(declare-sort ").append(stringSort.getSExpr()).append(" 0)\n");
 
-            Collection<Expr> values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.dateValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
+            prepareSortValues(sb, v -> v.dateValues);
+            prepareSortValues(sb, v -> v.tsValues);
+            prepareSortValues(sb, v -> v.intValues);
+            prepareSortValues(sb, v -> v.realValues);
+            prepareSortValues(sb, v -> v.stringValues);
+            return sb.toString();
+        }
+
+
+        private <T> void prepareSortValues(StringBuilder sb, Function<Values, Map<T, Expr>> valueMapPicker) {
+            Collection<Expr> values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(valueMapPicker.apply(v).values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
             StringBuilder distinct = new StringBuilder("(assert (distinct");
             for (Expr expr : values) {
                 sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
@@ -160,53 +172,7 @@ public class MyZ3Context extends Context {
             if (values.size() > 1) {
                 sb.append(distinct);
             }
-
-            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.tsValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
-            distinct = new StringBuilder("(assert (distinct");
-            for (Expr expr : values) {
-                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
-                distinct.append(' ').append(expr.getSExpr());
-            }
-            distinct.append("))\n");
-            if (values.size() > 1) {
-                sb.append(distinct);
-            }
-
-            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.intValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
-            distinct = new StringBuilder("(assert (distinct");
-            for (Expr expr : values) {
-                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
-                distinct.append(' ').append(expr.getSExpr());
-            }
-            distinct.append("))\n");
-            if (values.size() > 1) {
-                sb.append(distinct);
-            }
-
-            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.realValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
-            distinct = new StringBuilder("(assert (distinct");
-            for (Expr expr : values) {
-                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
-                distinct.append(' ').append(expr.getSExpr());
-            }
-            distinct.append("))\n");
-            if (values.size() > 1) {
-                sb.append(distinct);
-            }
-
-            values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(v.stringValues.values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
-            distinct = new StringBuilder("(assert (distinct");
-            for (Expr expr : values) {
-                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
-                distinct.append(' ').append(expr.getSExpr());
-            }
-            distinct.append("))\n");
-            if (values.size() > 1) {
-                sb.append(distinct);
-            }
-            return sb.toString();
         }
-
     }
 
 

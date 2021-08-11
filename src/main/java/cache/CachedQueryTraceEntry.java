@@ -98,6 +98,7 @@ public class CachedQueryTraceEntry {
         return queryText.equals(query.getParsedSql());
     }
 
+    // Updates mappedIndices with encountered indices.
     public boolean checkParameters(QueryTraceEntry query, Map<Integer, Object> mappedIndices) {
         Iterator<Object> cacheParamIter = parameters.iterator();
         Iterator<Object> queryParamIter = query.getParameters().iterator();
