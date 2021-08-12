@@ -6,6 +6,7 @@ import sql.PrivacyQuery;
 
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class QueryTrace {
@@ -19,6 +20,7 @@ public class QueryTrace {
     private final HashMap<String, Integer> constMap = new HashMap<>();
 
     public void setConstValue(String name, Integer value) {
+        checkArgument(constMap.getOrDefault(name, value).equals(value));
         constMap.put(name, value);
     }
 
@@ -33,6 +35,13 @@ public class QueryTrace {
     public void startQuery(PrivacyQuery query, List<Object> parameters) {
         if (currentQuery != null) {
             endQuery(Collections.emptyList());
+        }
+        for (int i = 0; i < query.paramNames.size(); ++i) {
+            String name = query.paramNames.get(i);
+            if (!name.equals("?")) {
+                checkArgument(parameters.get(i) instanceof Integer);
+                setConstValue(name, (Integer) parameters.get(i));
+            }
         }
         currentQuery = new QueryTraceEntry(query, parameters);
         queries.put(query.parsedSql.getParsedSql(), currentQuery);
