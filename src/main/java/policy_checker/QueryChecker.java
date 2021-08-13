@@ -338,6 +338,14 @@ public class QueryChecker {
         return policyResult;
     }
 
+    /**
+     * Caches a query decision. Equalities between fields (query parameters,
+     * past query returned tuple cell values, and constants via SET) are only
+     * considered if a query parameter is one of the fields. Values are not
+     * considered for constants via SET -- it is assumed that the exact value
+     * for these constants _never_ matters, and only equality against them is
+     * relevant.
+     */
     private void cacheDecision(QueryTrace queries, boolean policyResult) {
         UnsatCore core = null;
         if (policyResult) {
