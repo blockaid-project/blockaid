@@ -106,6 +106,7 @@ public class Schema {
             case Types.BIGINT:
             case Types.TINYINT:
                 return context.getCustomIntSort();
+            case Types.REAL:
             case Types.DOUBLE:
                 return context.getCustomRealSort();
             case Types.BOOLEAN:
@@ -113,6 +114,7 @@ public class Schema {
             case Types.VARCHAR:
             case Types.LONGVARCHAR:
             case Types.CLOB:
+            case Types.LONGVARBINARY:
                 return context.getCustomStringSort();
             case Types.TIMESTAMP:
                 return context.getTimestampSort();

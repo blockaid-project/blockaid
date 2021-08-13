@@ -355,13 +355,13 @@ public class ParsedPSJ {
             } else if (theta.getKind() == SqlKind.NOT_EQUALS) {
                 return context.mkNot(context.mkEq(left, right));
             } else if (theta.getKind() == SqlKind.LESS_THAN) {
-                return context.mkLt((ArithExpr) left, (ArithExpr) right);
-            } else if (theta.getKind() == SqlKind.LESS_THAN_OR_EQUAL) {
-                return context.mkLe((ArithExpr) left, (ArithExpr) right);
+                return context.mkCustomIntLt(left, right);
+//            } else if (theta.getKind() == SqlKind.LESS_THAN_OR_EQUAL) {
+//                return context.mkLe((ArithExpr) left, (ArithExpr) right);
             } else if (theta.getKind() == SqlKind.GREATER_THAN) {
-                return context.mkGt((ArithExpr) left, (ArithExpr) right);
-            } else if (theta.getKind() == SqlKind.GREATER_THAN_OR_EQUAL) {
-                return context.mkGe((ArithExpr) left, (ArithExpr) right);
+                return context.mkCustomIntLt(right, left);
+//            } else if (theta.getKind() == SqlKind.GREATER_THAN_OR_EQUAL) {
+//                return context.mkGe((ArithExpr) left, (ArithExpr) right);
             }
         } else if (theta instanceof SqlDynamicParam) {
             Object param = params.get(params.size() - 1);

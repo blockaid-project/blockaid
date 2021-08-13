@@ -40,11 +40,17 @@ public class JdbcSchema extends PrivacySchema {
                     if (!isCaseSensitive) {
                         columnName = columnName.toUpperCase();
                     }
+                    String typeName = resultSet.getString(4).toUpperCase();
                     Integer dataType = null;
-                    for (String key : dataTypes.keySet()) {
-                        if (resultSet.getString(4).toUpperCase().matches(key)) {
-                            dataType = dataTypes.get(key);
-                            break;
+                    if (typeName.equals("JSON")) {
+                        // HACK(zhangwen): JDBC doesn't seem to return the JSON type, so we handle it specially.
+                        dataType = dataTypes.get("TEXT");
+                    } else {
+                        for (String key : dataTypes.keySet()) {
+                            if (typeName.matches(key)) {
+                                dataType = dataTypes.get(key);
+                                break;
+                            }
                         }
                     }
 

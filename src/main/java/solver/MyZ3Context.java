@@ -26,6 +26,8 @@ public class MyZ3Context extends Context {
         private final Sort stringSort;
         private final List<Values> valuesStack;
 
+        private final FuncDecl intLt;
+
         private class Values {
             private final Map<Date, Expr> dateValues;
             private final Map<Timestamp, Expr> tsValues;
@@ -43,13 +45,19 @@ public class MyZ3Context extends Context {
         }
 
         private CustomSorts() {
-            dateSort = MyZ3Context.this.mkUninterpretedSort("CS!DATE");
-            tsSort = MyZ3Context.this.mkUninterpretedSort("CS!TS");
-            intSort = MyZ3Context.this.mkUninterpretedSort("CS!INT");
-            realSort = MyZ3Context.this.mkUninterpretedSort("CS!REAL");
-            stringSort = MyZ3Context.this.mkUninterpretedSort("CS!STRING");
+            MyZ3Context ctx = MyZ3Context.this;
+
+            intSort = ctx.mkUninterpretedSort("CS!INT");
+//            dateSort = ctx.mkUninterpretedSort("CS!DATE");
+//            tsSort = ctx.mkUninterpretedSort("CS!TS");
+            dateSort = intSort;
+            tsSort = intSort;
+            realSort = ctx.mkUninterpretedSort("CS!REAL");
+            stringSort = ctx.mkUninterpretedSort("CS!STRING");
             valuesStack = new ArrayList<>();
             valuesStack.add(new Values());
+
+            intLt = ctx.mkFreshFuncDecl("lt", new Sort[]{intSort, intSort}, ctx.getBoolSort());
         }
 
         private void push() {
@@ -146,11 +154,15 @@ public class MyZ3Context extends Context {
         private String prepareSortDeclaration() {
             // Reusing prepareSolver is messy - some constants and sorts may not be used/declared.
             StringBuilder sb = new StringBuilder();
-            sb.append("(declare-sort ").append(dateSort.getSExpr()).append(" 0)\n");
-            sb.append("(declare-sort ").append(tsSort.getSExpr()).append(" 0)\n");
-            sb.append("(declare-sort ").append(intSort.getSExpr()).append(" 0)\n");
+//            sb.append("(declare-sort ").append(dateSort.getSExpr()).append(" 0)\n");
+//            sb.append("(declare-sort ").append(tsSort.getSExpr()).append(" 0)\n");
             sb.append("(declare-sort ").append(realSort.getSExpr()).append(" 0)\n");
             sb.append("(declare-sort ").append(stringSort.getSExpr()).append(" 0)\n");
+
+            String customIntSortName = intSort.getSExpr();
+            sb.append("(declare-sort ").append(customIntSortName).append(" 0)\n");
+            sb.append(String.format("(declare-fun %s (%s %s) Bool)",
+                    intLt.getSExpr(), customIntSortName, customIntSortName));
 
             prepareSortValues(sb, v -> v.dateValues);
             prepareSortValues(sb, v -> v.tsValues);
@@ -174,7 +186,6 @@ public class MyZ3Context extends Context {
             }
         }
     }
-
 
     public MyZ3Context() {
         super();
@@ -296,6 +307,8 @@ public class MyZ3Context extends Context {
     public Expr mkCustomInt(long value) {
         return customSorts.getInt(value);
     }
+
+    public Expr mkCustomIntLt(Expr left, Expr right) { return customSorts.intLt.apply(left, right); }
 
     // Overrides to deprecate Z3's standard sorts where we have custom uninterpreted sorts.
     @Override

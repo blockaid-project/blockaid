@@ -41,8 +41,7 @@ public class DiasporaTest {
 //        java.net.URL url = EndToEndTest.class.getResource("/DiasporaTest/schema.sql");
         java.net.URL url = EndToEndTest.class.getResource("/DiasporaTest/dump.sql");
         java.nio.file.Path resPath = java.nio.file.Paths.get(url.toURI());
-        String sql = new String(java.nio.file.Files.readAllBytes(resPath), StandardCharsets.UTF_8);
-        return sql;
+        return new String(java.nio.file.Files.readAllBytes(resPath), StandardCharsets.UTF_8);
     }
 
     private void setupTables(String dbUrl, String sql) throws ClassNotFoundException, SQLException {
@@ -78,7 +77,7 @@ public class DiasporaTest {
 //        String h2Url = "jdbc:h2:" + h2File;
         String dbUrl = "jdbc:mysql://localhost:3306/diaspora_db?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC";
         String h2Url = "jdbc:mysql://localhost:3306/diaspora_db_server?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC";
-        proxyUrl = "jdbc:privacy:thin:" + resPath.toString() + "," + deps_resPath.toString() + "," + dbUrl + "," + h2Url + "," + pk_resPath.toString() + "," + fk_resPath.toString();
+        proxyUrl = "jdbc:privacy:thin:" + resPath + "," + deps_resPath + "," + dbUrl + "," + h2Url + "," + pk_resPath + "," + fk_resPath;
 
         Flyway flyway = new Flyway();
         flyway.setDataSource(dbUrl, dbUsername, dbPassword);

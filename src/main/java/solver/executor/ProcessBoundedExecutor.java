@@ -35,6 +35,7 @@ public class ProcessBoundedExecutor extends SMTExecutor {
             String smt = boundedDeterminacyFormula.generateSMT(queries);
 
             CountDownLatch latch = new CountDownLatch(1);
+            long startTime;
             synchronized (this) {
                 if (shuttingDown) {
                     return Status.UNKNOWN;
