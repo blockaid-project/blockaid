@@ -61,6 +61,10 @@ public class AutolabTest {
         String[] queries = new String[]{
                 "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'AutoPopulated' LIMIT 1",
                 "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 52 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 52 LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 52 AND `course_user_data`.`course_id` = 1 LIMIT 1",
+                "SELECT  `courses`.`disabled` FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1"
         };
 
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {

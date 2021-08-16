@@ -112,6 +112,6 @@ public abstract class DeterminacyFormula {
         // only used to generate declarations and assertions for sorts
         String header = context.prepareSortDeclaration();
         String body = sb.toString();
-        return header + this.preparedExprSMT + body;
+        return header + this.preparedExprSMT + body + "(check-sat)";
     }
 }

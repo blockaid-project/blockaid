@@ -161,8 +161,6 @@ public class MyZ3Context extends Context {
 
             String customIntSortName = intSort.getSExpr();
             sb.append("(declare-sort ").append(customIntSortName).append(" 0)\n");
-            sb.append(String.format("(declare-fun %s (%s %s) Bool)",
-                    intLt.getSExpr(), customIntSortName, customIntSortName));
 
             prepareSortValues(sb, v -> v.dateValues);
             prepareSortValues(sb, v -> v.tsValues);
@@ -172,16 +170,22 @@ public class MyZ3Context extends Context {
             return sb.toString();
         }
 
-
         private <T> void prepareSortValues(StringBuilder sb, Function<Values, Map<T, Expr>> valueMapPicker) {
-            Collection<Expr> values = valuesStack.stream().reduce(new HashSet<>(), (s, v) -> { s.addAll(valueMapPicker.apply(v).values()); return s; }, (s1, s2) -> { s1.addAll(s2); return s1; });
             StringBuilder distinct = new StringBuilder("(assert (distinct");
-            for (Expr expr : values) {
-                sb.append("(declare-fun ").append(expr.getSExpr()).append(" () ").append(expr.getSort().getSExpr()).append(")\n");
-                distinct.append(' ').append(expr.getSExpr());
+            int numValues = 0;
+
+            for (Values vs : valuesStack) {
+                for (Map.Entry<T, Expr> entry : valueMapPicker.apply(vs).entrySet()) {
+                    Expr expr = entry.getValue();
+                    sb.append(String.format("(declare-fun %s () %s)  ; %s\n",
+                            expr.getSExpr(), expr.getSort().getSExpr(), entry.getKey().toString()));
+                    distinct.append(' ').append(expr.getSExpr());
+                    ++numValues;
+                }
             }
+
             distinct.append("))\n");
-            if (values.size() > 1) {
+            if (numValues > 1) {
                 sb.append(distinct);
             }
         }

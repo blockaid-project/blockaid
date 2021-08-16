@@ -3,7 +3,7 @@ package solver.executor;
 import java.util.concurrent.CountDownLatch;
 
 public class Z3Executor extends ProcessSMTExecutor {
-    private static String[] command = new String[]{
+    private static final String[] command = new String[]{
             "z3",
             "-smt2",
             "/dev/stdin",

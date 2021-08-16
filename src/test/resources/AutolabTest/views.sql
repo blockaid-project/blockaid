@@ -9,7 +9,7 @@ SELECT course_user_data.* FROM course_user_data WHERE course_user_data.user_id =
 -- information (`id` and `name` are a one-to-one correspondence) so we leave it in.
 SELECT courses.id, courses.name FROM courses;
 -- An enrolled student can see whether the course is disabled or not...
-SELECT courses.disabled FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID;
+SELECT courses.id, courses.disabled FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID;
 -- and can access the course if it's not disabled.
 SELECT courses.* FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND courses.disabled = 0;
 -- An instructor can view anything about the course.

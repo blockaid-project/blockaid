@@ -22,11 +22,9 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     }
 
     @Override
-    protected Status doRunNormal() throws InterruptedException {
+    protected Status doRunNormal() {
         InputStream stderr = null;
         try {
-            String smtString = this.smtString + "(check-sat)";
-
             startProcess();
             InputStream stdout = process.getInputStream();
             OutputStream stdin = process.getOutputStream();
@@ -70,11 +68,9 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     }
 
     @Override
-    protected Status doRunUnsatCore() throws InterruptedException {
+    protected Status doRunUnsatCore() {
         InputStream stderr = null;
         try {
-            String smtString = "(set-option :produce-unsat-cores true)" + this.smtString + "(check-sat)(get-unsat-core)";
-
             startProcess();
             InputStream stdout = process.getInputStream();
             OutputStream stdin = process.getOutputStream();
@@ -105,8 +101,11 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
 
             String[] parts = output.toString().split("\n", 2);
             Status result = getResult(parts[0].trim());
-            String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
-            setUnsatCore(Arrays.stream(coreParts).map(String::trim).toArray(String[]::new));
+            if (result == Status.UNSATISFIABLE) {
+                String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
+                setUnsatCore(Arrays.stream(coreParts).map(String::trim).toArray(String[]::new));
+            }
+            // If the formula was not determined to be unsat, no reason to set the unsat core.
             return result;
         } catch (InterruptedException e) {
             return Status.UNKNOWN;

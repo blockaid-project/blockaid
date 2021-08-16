@@ -73,18 +73,11 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
             }
 
             if (queryTraceEntry.hasTuples()) {
-                int numAttrs = query.headTypes().length;
-
                 List<Tuple> tupleConstants = new ArrayList<>();
                 List<String> attributeNames = queryTraceEntry.getQuery().getProjectColumns();
                 int attrNumber = 0;
                 for (List<Object> tuple : queryTraceEntry.getTuples()) {
-                    Expr[] tupleExprs = new Expr[numAttrs];
-                    Sort[] headTypes = query.headTypes();
-                    for (int i = 0; i < numAttrs; ++i) {
-                        tupleExprs[i] = context.mkFreshConst("z", headTypes[i]);
-                    }
-                    Tuple tupleConstant = new Tuple(schema, tupleExprs);
+                    Tuple tupleConstant = query.makeFreshHead();
                     tupleConstants.add(tupleConstant);
                     for (int i = 0; i < tuple.size(); ++i) {
                         Object curr = tuple.get(i);
@@ -165,6 +158,11 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
             out.append("(assert ").append(expr.toString()).append(")\n");
         }
         return out.toString();
+    }
+
+    @Override
+    public String generateSMT(QueryTrace queries) {
+        return "(set-option :produce-unsat-cores true)\n" + super.generateSMT(queries) + "(get-unsat-core)";
     }
 
     @Override
