@@ -11,14 +11,14 @@ import static com.google.common.base.Preconditions.checkState;
 public class CachedQueryTraceEntry {
     private final String queryText;
     private final boolean isCurrentQuery;
-    // exact value comparisons, null if value is irrelevant
-    private final List<Object> parameters;
+    private final List<Object> parameters; // exact value comparisons, null if value is irrelevant
     private final List<List<Object>> tuples;
+
     // equalities - using indices shared across entire CachedQueryTrace, null if no constraint
     private final List<Integer> parameterEquality;
+
     private final List<List<Integer>> tupleEquality;
 
-    private int maxEqualityNumber;
     private boolean isEmpty;
 
     public CachedQueryTraceEntry(QueryTraceEntry traceEntry, boolean isCurrentQuery, List<Integer> parameterEquality, List<List<Integer>> tupleEquality) {
@@ -33,19 +33,6 @@ public class CachedQueryTraceEntry {
         this.parameterEquality = parameterEquality;
         this.tupleEquality = tupleEquality;
 
-        this.maxEqualityNumber = 0;
-        for (Integer index : parameterEquality) {
-            if (index != null) {
-                this.maxEqualityNumber = Math.max(this.maxEqualityNumber, index);
-            }
-        }
-        for (List<Integer> tuple : tupleEquality) {
-            for (Integer index : tuple) {
-                if (index != null) {
-                    this.maxEqualityNumber = Math.max(this.maxEqualityNumber, index);
-                }
-            }
-        }
         removeDuplicateRows();
         checkEmpty();
     }
@@ -86,10 +73,6 @@ public class CachedQueryTraceEntry {
         return queryText;
     }
 
-    public int getMaxEqualityNumber() {
-        return maxEqualityNumber;
-    }
-
     public boolean isCurrentQuery() {
         return isCurrentQuery;
     }
@@ -105,9 +88,9 @@ public class CachedQueryTraceEntry {
         Iterator<Integer> paramEqualityIter = parameterEquality.iterator();
 
         while (cacheParamIter.hasNext() && queryParamIter.hasNext() && paramEqualityIter.hasNext()) {
-            Integer equalityIndex = paramEqualityIter.next();
             Object cacheValue = cacheParamIter.next();
             Object queryValue = queryParamIter.next();
+            Integer equalityIndex = paramEqualityIter.next();
             if (cacheValue != null && !cacheValue.equals(queryValue)) {
                 return false;
             }

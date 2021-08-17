@@ -1,7 +1,6 @@
 package cache;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Multimap;
+import com.google.common.collect.LinkedListMultimap;
 import sql.PrivacyQuery;
 
 import java.util.*;
@@ -10,8 +9,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class QueryTrace {
-    // order of past queries is irrelevant, so using a map for cache lookup
-    private final Multimap<String, QueryTraceEntry> queries = ArrayListMultimap.create();
+    // Cache entry generation assumes an ordering on the query trace entries, and so we use `LinkedListMultimap`.
+    private final LinkedListMultimap<String, QueryTraceEntry> queries = LinkedListMultimap.create();
     private QueryTraceEntry currentQuery = null;
 
     // Maps constants to their values (e.g., _MY_UID -> 2).
@@ -53,7 +52,7 @@ public class QueryTrace {
         currentQuery = null;
     }
 
-    public Iterable<QueryTraceEntry> getAllEntries() {
+    public List<QueryTraceEntry> getAllEntries() {
         return queries.values();
     }
 

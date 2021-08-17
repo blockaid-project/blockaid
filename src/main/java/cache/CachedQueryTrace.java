@@ -5,30 +5,20 @@ import java.util.*;
 public class CachedQueryTrace {
     private List<CachedQueryTraceEntry> entries = new ArrayList<>();
     private Map<String, Integer> constEqualities = new HashMap<>();
-    private int numEqualities = 0;
 
     public CachedQueryTrace() {}
 
     public CachedQueryTrace(CachedQueryTrace other) {
         entries = new ArrayList<>(other.entries);
         constEqualities = new HashMap<>(constEqualities);
-        numEqualities = other.numEqualities;
     }
 
     public void addEntry(CachedQueryTraceEntry entry) {
-        numEqualities = Math.max(numEqualities, entry.getMaxEqualityNumber());
         entries.add(entry);
     }
 
     public void addVariable(String name, Integer index) {
-        if (index != null) {
-            numEqualities = Math.max(numEqualities, index);
-        }
         constEqualities.put(name, index);
-    }
-
-    public int getNumEqualities() {
-        return numEqualities;
     }
 
     public boolean checkQueryTrace(QueryTrace trace) {
@@ -42,9 +32,9 @@ public class CachedQueryTrace {
             // mappedIndices is populated through query parameters, including those of later queries, so
             // all queries' parameters/variables must be processed before any query's values
             Iterator<CachedQueryTraceEntry> cacheEntries = this.entries.iterator();
-            for (QueryTraceEntry entry : usedEntries) {
+            for (QueryTraceEntry traceEntry : usedEntries) {
                 CachedQueryTraceEntry cacheEntry = cacheEntries.next();
-                if (!cacheEntry.checkParameters(entry, mappedIndices)) {
+                if (!cacheEntry.checkParameters(traceEntry, mappedIndices)) {
                     return false;
                 }
             }

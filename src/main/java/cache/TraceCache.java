@@ -1,6 +1,9 @@
 package cache;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimap;
 
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -40,7 +43,7 @@ public class TraceCache {
             this.compliance = compliance;
         }
     }
-    private final Map<CacheKey, List<Entry>> cache = new HashMap<>();
+    private final ArrayListMultimap<CacheKey, Entry> cache = ArrayListMultimap.create();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public Boolean checkCache(QueryTrace queryTrace) {
@@ -49,7 +52,7 @@ public class TraceCache {
         try {
             QueryTraceEntry currQuery = queryTrace.getCurrentQuery();
             CacheKey cacheKey = new CacheKey(currQuery.getParsedSql(), currQuery.getQuery().paramNames);
-            List<Entry> entryList = cache.getOrDefault(cacheKey, Collections.emptyList());
+            List<Entry> entryList = cache.get(cacheKey);
             ListIterator<Entry> iterator = entryList.listIterator(entryList.size());
             while (iterator.hasPrevious()) {
                 Entry entry = iterator.previous();
@@ -68,8 +71,7 @@ public class TraceCache {
         writeLock.lock();
         try {
             CacheKey cacheKey = new CacheKey(currentQuery, paramNames);
-            cache.putIfAbsent(cacheKey, new ArrayList<>());
-            cache.get(cacheKey).add(new Entry(cachedQueryTrace, compliance));
+            cache.put(cacheKey, new Entry(cachedQueryTrace, compliance));
         } finally {
             writeLock.unlock();
         }
