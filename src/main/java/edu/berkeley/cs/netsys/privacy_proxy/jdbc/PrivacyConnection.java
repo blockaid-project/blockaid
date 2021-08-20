@@ -21,6 +21,8 @@ import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static util.TerminalColor.*;
+
 public class PrivacyConnection implements Connection {
   private final Connection direct_connection;
   private final PrivacyParser parser;
@@ -458,8 +460,12 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() {
-      System.out.println("[" + (current_trace.size() + 1) + "] checkPolicy: "
-              + parser_result.getParsedSql() + "\t" + Arrays.toString(param_values));
+      String message = "[" + current_trace.size() + "] checkPolicy: "
+              + parser_result.getParsedSql() + "\t" + Arrays.toString(param_values);
+      if (USE_COLORS) {
+        message = ANSI_BLUE_BACKGROUND + ANSI_BLACK + "\n" + message + ANSI_RESET;
+      }
+      System.out.println(message);
 
       privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, param_values, param_names);
 
@@ -2290,6 +2296,8 @@ public class PrivacyConnection implements Connection {
       String name = matcher.group(1);
       String value = matcher.group(2);
       System.out.println("=== processSetConst: " + name + " = " + value);
+      // FIXME(zhangwen): HACK-- resetting the sequence here; DOESN'T WORK if a connection sets multiple consts.
+      resetSequence();
       current_trace.setConstValue(name, Integer.valueOf(value));
 
       // TODO(zhangwen): Can I get away with not actually executing this command?

@@ -6,6 +6,10 @@ import java.util.*;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds, boolean splitProducts) {
+        this(schema, views, bounds, splitProducts, TextOption.USE_TEXT);
+    }
+
+    public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds, boolean splitProducts, TextOption text) {
         super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds), (Instance inst1, Instance inst2) -> {
             MyZ3Context context = schema.getContext();
             List<BoolExpr> clauses = new ArrayList<>();
@@ -19,8 +23,8 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                     List<BoolExpr> empty2Parts = new ArrayList<>();
                     for (Query q : v.getComponents()) {
                         equalityParts.add(q.apply(inst1).equalsExpr(q.apply(inst2)));
-                        empty1Parts.add(q.apply(inst1).isEmpty());
-                        empty2Parts.add(q.apply(inst2).isEmpty());
+                        empty1Parts.add(q.apply(inst1).isEmptyExpr());
+                        empty2Parts.add(q.apply(inst2).isEmptyExpr());
                     }
                     BoolExpr equality = context.mkAnd(equalityParts.toArray(new BoolExpr[0]));
                     BoolExpr empty1 = context.mkOr(empty1Parts.toArray(new BoolExpr[0]));
@@ -38,6 +42,6 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                 }
             }
             return clauses;
-        });
+        }, text);
     }
 }

@@ -96,7 +96,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                     }
                 }
 
-                exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContain(tupleConstants), r2.doesContain(tupleConstants)));
+                exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContainExpr(tupleConstants), r2.doesContainExpr(tupleConstants)));
             }
 
             ++queryNumber;
@@ -147,7 +147,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Iterable<BoolExpr> makeFormula(QueryTrace queries) {
+    public Iterable<BoolExpr> makeBodyFormula(QueryTrace queries) {
         throw new UnsupportedOperationException();
     }
 
@@ -166,7 +166,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    protected String makeFormulaSMT(QueryTrace queries) {
+    protected String makeBodyFormulaSMT(QueryTrace queries) {
         String assertions = generateAssertions(queries);
         return makeMainSMT(queries) + "\n" + assertions;
     }

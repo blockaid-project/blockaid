@@ -3,15 +3,10 @@ package cache;
 import java.util.*;
 
 public class CachedQueryTrace {
-    private List<CachedQueryTraceEntry> entries = new ArrayList<>();
-    private Map<String, Integer> constEqualities = new HashMap<>();
+    private final List<CachedQueryTraceEntry> entries = new ArrayList<>();
+    private final Map<String, Integer> constEqualities = new HashMap<>();
 
     public CachedQueryTrace() {}
-
-    public CachedQueryTrace(CachedQueryTrace other) {
-        entries = new ArrayList<>(other.entries);
-        constEqualities = new HashMap<>(constEqualities);
-    }
 
     public void addEntry(CachedQueryTraceEntry entry) {
         entries.add(entry);

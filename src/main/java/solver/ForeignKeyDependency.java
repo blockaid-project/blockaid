@@ -49,7 +49,7 @@ public class ForeignKeyDependency implements Dependency {
                 return new Sort[] { types[0][toIndex] };
             }
         };
-        return selectFromQuery.apply(instance).isContainedIn(selectToQuery.apply(instance));
+        return selectFromQuery.apply(instance).isContainedInExpr(selectToQuery.apply(instance));
     }
 
     @Override

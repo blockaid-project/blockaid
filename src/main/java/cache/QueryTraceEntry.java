@@ -59,7 +59,7 @@ public class QueryTraceEntry {
         return parameters;
     }
 
-    public Iterable<List<Object>> getTuples() {
+    public List<List<Object>> getTuples() {
         if (tuples == null) {
             return Collections.emptyList();
         }

@@ -2,7 +2,6 @@ package solver.executor;
 
 import cache.QueryTrace;
 import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import solver.*;
@@ -40,7 +39,7 @@ public class BoundedExecutor extends SMTExecutor {
                 return Status.UNKNOWN;
             }
             solver = context.mkSolver();
-            for (BoolExpr expr : boundedDeterminacyFormula.makeFormula(queries)) {
+            for (BoolExpr expr : boundedDeterminacyFormula.makeBodyFormula(queries)) {
                 solver.add(expr);
             }
         }

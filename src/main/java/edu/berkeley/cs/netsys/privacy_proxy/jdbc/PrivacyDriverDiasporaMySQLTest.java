@@ -63,17 +63,23 @@ public class PrivacyDriverDiasporaMySQLTest {
 
         System.out.println(proxyUrl);
 
+        int userId = 45000034;
+        String[] queries = new String[] {
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 45000034 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 33000003 AND `share_visibilities`.`user_id` = 45000034 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = 45000034 LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 33000003 AND `posts`.`author_id` = 26000035 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 33000003 AND `posts`.`public` = true ORDER BY `posts`.`id` ASC LIMIT 1",
+        };
+
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            for (int i = 0; i < 10000; i++) {
+            for (int i = 0; i < 1; i++) {
                 try (Statement stmt = conn.createStatement()) {
-                    stmt.execute("SET @_MY_UID = 45000001");
+                    stmt.execute("SET @_MY_UID = " + userId);
                 }
 
-                {
-                    final String query1 = "SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(query1)) {
-                        stmt.setLong(1, 45000001);
-                        stmt.setInt(2, 1);
+                for (String q : queries) {
+                    try (PreparedStatement stmt = conn.prepareStatement(q)) {
                         stmt.execute();
                         try (ResultSet rs = stmt.getResultSet()) {
                             while (rs.next()) {
@@ -81,72 +87,6 @@ public class PrivacyDriverDiasporaMySQLTest {
                         }
                     }
                 }
-
-                {
-                    final String query2 = "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = ? WHERE `posts`.`id` = ? AND `share_visibilities`.`user_id` = ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(query2)) {
-                        stmt.setString(1, "Post");
-                        stmt.setInt(2, 4);
-                        stmt.setInt(3, 45000001);
-                        stmt.execute();
-                        try (ResultSet rs = stmt.getResultSet()) {
-                            while (rs.next()) {
-                            }
-                        }
-                    }
-                }
-
-                {
-                    final String query3 = "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = ? LIMIT ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(query3)) {
-                        stmt.setInt(1, 45000001);
-                        stmt.setInt(2, 1);
-                        stmt.execute();
-                        try (ResultSet rs = stmt.getResultSet()) {
-                            while (rs.next()) {
-                            }
-                        }
-                    }
-                }
-
-                {
-                    final String query4 = "SELECT  `roles`.* FROM `roles` WHERE `roles`.`person_id` = ? LIMIT ?";
-                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
-                        stmt.setInt(1, 26000001);
-                        stmt.setInt(2, 1);
-                        stmt.execute();
-                        try (ResultSet rs = stmt.getResultSet()) {
-                            while (rs.next()) {
-                            }
-                        }
-                    }
-                }
-
-//                {
-//                    final String query4 = "SELECT  `roles`.* FROM `roles` WHERE `roles`.`person_id` = ? LIMIT ?";
-//                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
-//                        stmt.setInt(1, 26000002);
-//                        stmt.setInt(2, 1);
-//                        stmt.execute();
-//                        try (ResultSet rs = stmt.getResultSet()) {
-//                            while (rs.next()) {
-//                            }
-//                        }
-//                    }
-//                }
-
-//                {
-//                    final String query4 = "SELECT SUM(`conversation_visibilities`.`unread`) FROM `conversation_visibilities` WHERE `conversation_visibilities`.`person_id` = ?";
-//                    try (PreparedStatement stmt = conn.prepareStatement(query4)) {
-//                        stmt.setInt(1, 26000001);
-//                        stmt.execute();
-//                        try (ResultSet rs = stmt.getResultSet()) {
-//                            while (rs.next()) {
-//                            }
-//                        }
-//                    }
-//                }
-
                 conn.resetSequence();
             }
         }

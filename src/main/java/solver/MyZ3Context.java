@@ -178,7 +178,8 @@ public class MyZ3Context extends Context {
                 for (Map.Entry<T, Expr> entry : valueMapPicker.apply(vs).entrySet()) {
                     Expr expr = entry.getValue();
                     sb.append(String.format("(declare-fun %s () %s)  ; %s\n",
-                            expr.getSExpr(), expr.getSort().getSExpr(), entry.getKey().toString()));
+                            expr.getSExpr(), expr.getSort().getSExpr(),
+                            entry.getKey().toString().replace("\n", "")));
                     distinct.append(' ').append(expr.getSExpr());
                     ++numValues;
                 }

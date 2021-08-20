@@ -50,7 +50,7 @@ public abstract class PSJ extends Query {
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
             Tuple tup = symbolicTups[i];
-            bodyExprs[i] = instance.get(relationName).apply(tup);
+            bodyExprs[i] = instance.get(relationName).doesContainExpr(tup);
         }
 
         MyZ3Context context = schema.getContext();

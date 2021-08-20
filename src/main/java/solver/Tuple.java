@@ -90,6 +90,7 @@ public class Tuple {
         return new Tuple(this.getSchema(), convertedExprs);
     }
 
+    // FIXME(zhangwen): move to MyZ3Context?
     public static Sort getSortFromObject(MyZ3Context context, Object value) {
         if (value instanceof Integer || value instanceof Long || value instanceof Boolean) {
             return context.getCustomIntSort();

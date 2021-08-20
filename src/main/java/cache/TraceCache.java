@@ -1,9 +1,7 @@
 package cache;
 
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Multimap;
 
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -34,16 +32,8 @@ public class TraceCache {
             return Objects.hash(sql, paramNames);
         }
     }
-    private static class Entry {
-        private final CachedQueryTrace trace;
-        private final boolean compliance;
 
-        public Entry(CachedQueryTrace trace, boolean compliance) {
-            this.trace = trace;
-            this.compliance = compliance;
-        }
-    }
-    private final ArrayListMultimap<CacheKey, Entry> cache = ArrayListMultimap.create();
+    private final ArrayListMultimap<CacheKey, DecisionTemplate> compliantCache = ArrayListMultimap.create();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public Boolean checkCache(QueryTrace queryTrace) {
@@ -52,12 +42,12 @@ public class TraceCache {
         try {
             QueryTraceEntry currQuery = queryTrace.getCurrentQuery();
             CacheKey cacheKey = new CacheKey(currQuery.getParsedSql(), currQuery.getQuery().paramNames);
-            List<Entry> entryList = cache.get(cacheKey);
-            ListIterator<Entry> iterator = entryList.listIterator(entryList.size());
+            List<DecisionTemplate> templates = compliantCache.get(cacheKey);
+            ListIterator<DecisionTemplate> iterator = templates.listIterator(templates.size());
             while (iterator.hasPrevious()) {
-                Entry entry = iterator.previous();
-                if (entry.trace.checkQueryTrace(queryTrace)) {
-                    return entry.compliance;
+                DecisionTemplate template = iterator.previous();
+                if (template.doesMatch(queryTrace)) {
+                    return true;
                 }
             }
             return null;
@@ -66,12 +56,12 @@ public class TraceCache {
         }
     }
 
-    public void addToCache(String currentQuery, List<String> paramNames, CachedQueryTrace cachedQueryTrace, boolean compliance) {
+    public void addCompliantToCache(String currentQuery, List<String> paramNames, DecisionTemplate template) {
         Lock writeLock = lock.writeLock();
         writeLock.lock();
         try {
             CacheKey cacheKey = new CacheKey(currentQuery, paramNames);
-            cache.put(cacheKey, new Entry(cachedQueryTrace, compliance));
+            compliantCache.put(cacheKey, template);
         } finally {
             writeLock.unlock();
         }

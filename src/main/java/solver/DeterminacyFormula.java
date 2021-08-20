@@ -2,15 +2,17 @@ package solver;
 
 import cache.QueryTrace;
 import cache.QueryTraceEntry;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
 
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkState;
 
 public abstract class DeterminacyFormula {
     protected final MyZ3Context context;
@@ -18,10 +20,19 @@ public abstract class DeterminacyFormula {
     protected final Instance inst1;
     protected final Instance inst2;
 
-    private final String preparedExprSMT;
+    protected final ImmutableList<BoolExpr> preamble;
+    private final String preambleSMT;
+
+    protected enum TextOption {
+        USE_TEXT,
+        NO_TEXT
+    }
+
+    protected final TextOption textOption;
 
     protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance,
-                                 BiFunction<Instance, Instance, List<BoolExpr>> mkPreparedExpr) {
+                                 BiFunction<Instance, Instance, List<BoolExpr>> mkPreamble,
+                                 TextOption text) {
         this.schema = schema;
         this.context = schema.getContext();
         this.inst1 = makeInstance.apply(0);
@@ -29,19 +40,26 @@ public abstract class DeterminacyFormula {
 
         // Set prepared expr.
         final long startTime = System.currentTimeMillis();
-        Solver solver = schema.getContext().mkRawSolver();
-        solver.add(mkPreparedExpr.apply(this.inst1, this.inst2).toArray(new BoolExpr[0]));
-        solver.add(additionalAssertion(context));
-        String result = solver.toString();
-        // Remove the custom sorts from preamble -- we add them back when generating the rest of the formula,
-        // because here, sorts that are not used in the preamble but are used later on won't be declared.
-        result = result.replaceAll("\\(declare-sort CS![A-Z]+ 0\\)|\\(declare-fun CS![A-Z]+!\\d+ \\(\\) CS![A-Z]+\\)", "");
-        System.out.println("set prepared expr " + getClass().getName() + ":" + (System.currentTimeMillis() - startTime));
-        this.preparedExprSMT = result;
+
+        this.preamble = ImmutableList.copyOf(mkPreamble.apply(this.inst1, this.inst2));
+        this.textOption = text;
+        if (text == TextOption.USE_TEXT) {
+            Solver solver = schema.getContext().mkRawSolver();
+            solver.add(this.preamble.toArray(new BoolExpr[0]));
+            String result = solver.toString();
+            // Remove the custom sorts from preamble -- we add them back when generating the rest of the formula,
+            // because here, sorts that are not used in the preamble but are used later on won't be declared.
+            result = result.replaceAll("\\(declare-sort CS![A-Z]+ 0\\)|\\(declare-fun CS![A-Z]+!\\d+ \\(\\) CS![A-Z]+\\)", "");
+            this.preambleSMT = result;
+        } else {
+            this.preambleSMT = null;
+        }
+//        System.out.println("set prepared expr " + getClass().getName() + ":" + (System.currentTimeMillis() - startTime));
     }
 
-    protected BoolExpr additionalAssertion(MyZ3Context context) {
-        return context.mkTrue();
+    protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance,
+                                 BiFunction<Instance, Instance, List<BoolExpr>> mkPreamble) {
+        this(schema, makeInstance, mkPreamble, TextOption.USE_TEXT);
     }
 
     protected Iterable<BoolExpr> generateTupleCheck(QueryTrace queries) {
@@ -55,8 +73,8 @@ public abstract class DeterminacyFormula {
                             v -> Tuple.getExprFromObject(context, v)
                     ))).collect(Collectors.toList());
             if (!tuples.isEmpty()) {
-                exprs.add(r1.doesContain(tuples));
-                exprs.add(r2.doesContain(tuples));
+                exprs.add(r1.doesContainExpr(tuples));
+                exprs.add(r2.doesContainExpr(tuples));
             }
         }
         return exprs;
@@ -76,7 +94,7 @@ public abstract class DeterminacyFormula {
         return exprs;
     }
 
-    public Iterable<BoolExpr> makeFormula(QueryTrace queries) {
+    public Iterable<BoolExpr> makeBodyFormula(QueryTrace queries) {
         /* Both regular and fast unsat share this formula form -- by symmetry, we can write Q(D1) != Q(D2) using
         "not contained in". */
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
@@ -87,31 +105,34 @@ public abstract class DeterminacyFormula {
         return Iterables.concat(generateTupleCheck(queries), generateConstantCheck(queries), notContainsFormulas);
     }
 
-    protected String makeFormulaSMT(QueryTrace queries) {
-        StringBuilder sb = new StringBuilder();
-        for (BoolExpr formula : makeFormula(queries)) {
-            sb.append("(assert ").append(formula).append(")\n");
-        }
-        return sb.toString();
+    protected String makeBodyFormulaSMT(QueryTrace queries) {
+        return Streams.stream(makeBodyFormula(queries))
+                .map(formula -> "(assert " + formula + ")")
+                .collect(Collectors.joining("\n"));
+    }
+
+    public Iterable<BoolExpr> makeCompleteFormula(QueryTrace queries) {
+        return Iterables.concat(preamble, makeBodyFormula(queries));
     }
 
     public String generateSMT(QueryTrace queries) {
-        StringBuilder sb = new StringBuilder();
+        checkState(textOption == TextOption.USE_TEXT);
+
         context.startTrackingConsts();
-        String smt = makeFormulaSMT(queries);
+        String bodyFormula = makeBodyFormulaSMT(queries);
         context.stopTrackingConsts();
 
+        StringBuilder sb = new StringBuilder();
         for (Expr constant : context.getConsts()) {
             if (!constant.getSExpr().startsWith("CS!")) {
                 sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
             }
         }
-
-        sb.append(smt);
+        sb.append(bodyFormula);
+        String body = sb.toString();
 
         // only used to generate declarations and assertions for sorts
         String header = context.prepareSortDeclaration();
-        String body = sb.toString();
-        return header + this.preparedExprSMT + body + "(check-sat)";
+        return header + this.preambleSMT + body + "(check-sat)";
     }
 }

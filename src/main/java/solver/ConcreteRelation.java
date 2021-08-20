@@ -36,7 +36,7 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr apply(Tuple tup) {
+    public BoolExpr doesContainExpr(Tuple tup) {
         checkArgument(tup.getSchema() == schema);
         tup = tup.replaceNullsWithFreshConsts(signature);
         List<BoolExpr> syms = new ArrayList<>();
@@ -47,29 +47,29 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr isEmpty() {
+    public BoolExpr isEmptyExpr() {
         return context.mkNot(context.mkOr(exists));
     }
 
     @Override
-    public BoolExpr doesContain(List<Tuple> other) {
+    public BoolExpr doesContainExpr(List<Tuple> other) {
         if (other.isEmpty()) {
             return context.mkTrue();
         }
 
-        BoolExpr[] syms = other.stream().map(this::apply).toArray(BoolExpr[]::new);
+        BoolExpr[] syms = other.stream().map(this::doesContainExpr).toArray(BoolExpr[]::new);
         return context.mkAnd(syms);
     }
 
     @Override
-    public BoolExpr isContainedIn(Relation other) {
+    public BoolExpr isContainedInExpr(Relation other) {
         checkArgument(other instanceof ConcreteRelation);
 
         if (tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD
                 || ((ConcreteRelation) other).tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD) {
             Tuple syms = makeFreshHead();
-            BoolExpr lhs = this.apply(syms);
-            BoolExpr rhs = other.apply(syms);
+            BoolExpr lhs = this.doesContainExpr(syms);
+            BoolExpr rhs = other.doesContainExpr(syms);
             if (syms.isEmpty()) {
                 return context.mkImplies(lhs, rhs);
             }
@@ -78,7 +78,7 @@ public class ConcreteRelation implements Relation {
         } else {
             BoolExpr[] exprs = new BoolExpr[tuples.length];
             for (int i = 0; i < exprs.length; ++i) {
-                exprs[i] = context.mkOr(context.mkNot(exists[i]), other.apply(tuples[i]));
+                exprs[i] = context.mkOr(context.mkNot(exists[i]), other.doesContainExpr(tuples[i]));
             }
 
             if (tuples.length == 0) {
@@ -98,6 +98,6 @@ public class ConcreteRelation implements Relation {
         ConcreteRelation other_ = (ConcreteRelation) other;
         checkArgument(Arrays.equals(this.signature, other_.signature));
 
-        return context.mkAnd(this.isContainedIn(other), other.isContainedIn(this));
+        return context.mkAnd(this.isContainedInExpr(other), other.isContainedInExpr(this));
     }
 }

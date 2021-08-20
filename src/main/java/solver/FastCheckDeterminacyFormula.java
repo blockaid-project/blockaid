@@ -15,7 +15,7 @@ public class FastCheckDeterminacyFormula extends DeterminacyFormula{
                     clauses.addAll(inst1.getConstraints().values());
                     clauses.addAll(inst2.getConstraints().values());
                     for (Query v : views) {
-                        clauses.add(v.apply(inst1).isContainedIn(v.apply(inst2)));
+                        clauses.add(v.apply(inst1).isContainedInExpr(v.apply(inst2)));
                     }
                     return clauses;
                 });

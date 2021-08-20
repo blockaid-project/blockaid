@@ -32,6 +32,6 @@ public class ImportedDependency implements Dependency {
         Query solverQuery1 = q1.getSolverQuery(schema);
         Query solverQuery2 = q2.getSolverQuery(schema);
 
-        return solverQuery1.apply(instance).isContainedIn(solverQuery2.apply(instance));
+        return solverQuery1.apply(instance).isContainedInExpr(solverQuery2.apply(instance));
     }
 }

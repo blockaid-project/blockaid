@@ -22,22 +22,22 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public BoolExpr apply(Tuple tup) {
+    public BoolExpr doesContainExpr(Tuple tup) {
         Expr[] args = tup.replaceNullsWithFreshConsts(signature).toExprArray();
         return this.function.apply(args);
     }
 
     @Override
-    public BoolExpr isEmpty() {
+    public BoolExpr isEmptyExpr() {
         Tuple tup = makeFreshHead();
-        return context.mkForall(tup.toExprArray(), context.mkNot(apply(tup)), 1, null, null, null, null);
+        return context.mkForall(tup.toExprArray(), context.mkNot(doesContainExpr(tup)), 1, null, null, null, null);
     }
 
     @Override
-    public BoolExpr isContainedIn(Relation other) {
+    public BoolExpr isContainedInExpr(Relation other) {
         Tuple syms = makeFreshHead();
-        BoolExpr lhs = this.apply(syms);
-        BoolExpr rhs = other.apply(syms);
+        BoolExpr lhs = this.doesContainExpr(syms);
+        BoolExpr rhs = other.doesContainExpr(syms);
         if (syms.isEmpty()) {
             return context.mkImplies(lhs, rhs);
         }
@@ -50,12 +50,12 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public BoolExpr doesContain(List<Tuple> other) {
+    public BoolExpr doesContainExpr(List<Tuple> other) {
         if (other.isEmpty()) {
             return context.mkTrue();
         }
 
-        BoolExpr[] syms = other.stream().map(this::apply).toArray(BoolExpr[]::new);
+        BoolExpr[] syms = other.stream().map(this::doesContainExpr).toArray(BoolExpr[]::new);
         return context.mkAnd(syms);
     }
 
@@ -64,8 +64,8 @@ public class GeneralRelation implements Relation {
         checkArgument(other instanceof GeneralRelation);
 
         Tuple syms = makeFreshHead();
-        BoolExpr lhs = this.apply(syms);
-        BoolExpr rhs = other.apply(syms);
+        BoolExpr lhs = this.doesContainExpr(syms);
+        BoolExpr rhs = other.doesContainExpr(syms);
         if (syms.isEmpty()) {
             return context.mkEq(lhs, rhs);
         }

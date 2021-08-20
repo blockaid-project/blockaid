@@ -7,6 +7,7 @@ import com.microsoft.z3.Sort;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.function.IntFunction;
 
 public abstract class Query {
     public abstract Schema getSchema();
@@ -30,6 +31,19 @@ public abstract class Query {
         } else {
             return new GeneralRelation(instance.schema, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
         }
+    }
+
+    public Tuple makeHead(IntFunction<String> nameGenerator) {
+        Schema schema = getSchema();
+        MyZ3Context context = schema.getContext();
+
+        Sort[] sorts = this.headTypes();
+        int numColumns = sorts.length;
+        Expr[] head = new Expr[numColumns];
+        for (int i = 0; i < numColumns; ++i) {
+            head[i] = context.mkConst(nameGenerator.apply(i), sorts[i]);
+        }
+        return new Tuple(schema, head);
     }
 
     public Tuple makeFreshHead() {

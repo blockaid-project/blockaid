@@ -11,7 +11,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class UnsatCoreBoundEstimator extends BoundEstimator {
-    BoundEstimator initialBounds;
+    private final BoundEstimator initialBounds;
 
     public UnsatCoreBoundEstimator() {
         this.initialBounds = new FixedBoundEstimator(0);
@@ -50,7 +50,7 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
                             tuple -> new Tuple(schema, tuple.stream().map(
                                     v -> Tuple.getExprFromObject(context, v)
                             ))).collect(Collectors.toList());
-                    BoolExpr expr = r.doesContain(tuples);
+                    BoolExpr expr = r.doesContainExpr(tuples);
                     BoolExpr label = (BoolExpr) context.mkFreshConst("query", context.getBoolSort());
                     solver.assertAndTrack(expr, label);
                     queryLabels.put(label, query);
