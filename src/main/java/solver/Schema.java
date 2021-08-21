@@ -1,6 +1,8 @@
 package solver;
 
 import com.microsoft.z3.*;
+import org.apache.calcite.schema.SchemaPlus;
+import sql.SchemaPlusWithKey;
 
 import java.sql.Types;
 import java.util.*;
@@ -10,11 +12,14 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Schema {
     private final MyZ3Context context;
+    private final SchemaPlusWithKey rawSchema;
     private final Map<String, List<Column>> relations;
     private final List<Constraint> dependencies;
 
-    public Schema(MyZ3Context context, Map<String, List<Column>> relations, List<Constraint> dependencies) {
+    public Schema(MyZ3Context context, SchemaPlusWithKey rawSchema, Map<String, List<Column>> relations,
+                  List<Constraint> dependencies) {
         this.context = checkNotNull(context);
+        this.rawSchema = checkNotNull(rawSchema);
         this.relations = checkNotNull(relations);
         this.dependencies = checkNotNull(dependencies);
     }
@@ -123,5 +128,9 @@ public class Schema {
             default:
                 throw new UnsupportedOperationException("bad column type: " + type);
         }
+    }
+
+    public SchemaPlusWithKey getRawSchema() {
+        return rawSchema;
     }
 }

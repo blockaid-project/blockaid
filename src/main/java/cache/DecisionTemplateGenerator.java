@@ -17,6 +17,8 @@ import util.UnionFind;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkState;
+import static util.TerminalColor.ANSI_RED;
+import static util.TerminalColor.ANSI_RESET;
 
 public class DecisionTemplateGenerator {
     private final Schema schema;
@@ -36,8 +38,6 @@ public class DecisionTemplateGenerator {
     public DecisionTemplate generate() {
         MyZ3Context context = schema.getContext();
         Solver solver = context.mkRawSolver();
-
-        long startTime = System.currentTimeMillis();
         solver.add(formula.makeMainFormula().toArray(BoolExpr[]::new));
 
         Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
@@ -61,9 +61,8 @@ public class DecisionTemplateGenerator {
                 }
             }
         }
-        System.out.println("\t\t| Adding formula:\t" + (System.currentTimeMillis() - startTime));
 
-        startTime = System.currentTimeMillis();
+        long startTime = System.currentTimeMillis();
         Status res = solver.check();
         System.out.println("\t\t| Checking:\t" + (System.currentTimeMillis() - startTime));
         checkState(res == Status.UNSATISFIABLE,
@@ -159,7 +158,7 @@ public class DecisionTemplateGenerator {
                                     eb -> eb.setParamValue(qpo.getParamIdx(), datum)
                     );
                     break;
-                case RETURNED_ROW_FIELD:
+                case RETURNED_ROW_ATTR:
                     EqualityLabel.ReturnedRowFieldOperand rrfo = (EqualityLabel.ReturnedRowFieldOperand) o;
                     Map<Integer, DecisionTemplate.EntryBuilder> rowEBs = queryIdx2rowEBs.get(rrfo.getQueryIdx());
                     if (rowEBs == null) { // This query is irrelevant.

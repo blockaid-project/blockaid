@@ -8,10 +8,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
+import com.microsoft.z3.Solver;
+import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import solver.*;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -31,9 +34,10 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                                           QueryTrace trace, Map<String, Integer> bounds) {
         super(schema, views, bounds, true, TextOption.NO_TEXT);
         this.trace = trace;
-        this.relevantAttributes = policies.stream()
-                .flatMap(policy -> policy.getThetaColumns().stream())
-                .collect(ImmutableSet.toImmutableSet());
+        this.relevantAttributes = Stream.concat(
+                policies.stream().flatMap(policy -> policy.getThetaColumns().stream()),
+                schema.getDependencies().stream().flatMap(c -> c.getRelevantColumns().stream())
+        ).collect(ImmutableSet.toImmutableSet());
     }
 
     public Map<Label, BoolExpr> makeLabeledExprs() {
@@ -45,6 +49,7 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
         Map<Label, BoolExpr> label2Expr = new HashMap<>();
 
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
+        Set<Expr> pkValuedExprs = new HashSet<>();
         for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
             QueryTraceEntry e = allEntries.get(queryIdx);
             boolean isCurrentQuery = e == lastEntry;
@@ -81,28 +86,49 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
 
             Relation r1 = q.apply(inst1);
             Relation r2 = q.apply(inst2);
-            List<List<Object>> tuples = e.getTuples();
-            for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
-                List<Object> tuple = tuples.get(rowIdx);
+            List<String> attributeNames = e.getQuery().getProjectColumns();
+            List<List<Object>> rows = e.getTuples();
+
+            ImmutableSet<String> pkValuedColumns = schema.getRawSchema().getPkValuedColumns();
+
+            for (int rowIdx = 0; rowIdx < rows.size(); ++rowIdx) {
+                List<Object> tuple = rows.get(rowIdx);
                 String tupPrefix = "!" + qPrefix + "_tup" + rowIdx;
 
                 Tuple head = q.makeHead(colIdx -> tupPrefix + "_col" + colIdx);
-                for (int colIdx = 0; colIdx < tuple.size(); ++colIdx) {
-                    Object v = tuple.get(colIdx);
+                for (int attrIdx = 0; attrIdx < tuple.size(); ++attrIdx) {
+                    Object v = tuple.get(attrIdx);
                     if (v == null) {
                         continue;
                     }
-                    // FIXME(zhangwen): eliminate irrelevant.
-                    Expr fieldExpr = head.get(colIdx);
-                    checkState(!expr2Operand.containsKey(fieldExpr));
-                    expr2Operand.put(fieldExpr, new EqualityLabel.ReturnedRowFieldOperand(queryIdx, isCurrentQuery, rowIdx, colIdx));
-                    ecs.put(v, fieldExpr);
+                    String attrName = attributeNames.get(attrIdx);
+                    if (!relevantAttributes.contains(attrName)) {
+                        continue;
+                    }
+                    // FIXME(zhangwen): ignore values of PK-valued attributes.
+                    Expr attrExpr = head.get(attrIdx);
+                    checkState(!expr2Operand.containsKey(attrExpr));
+                    expr2Operand.put(attrExpr, new EqualityLabel.ReturnedRowFieldOperand(queryIdx, isCurrentQuery, rowIdx, attrIdx));
+                    ecs.put(v, attrExpr);
+
+                    if (pkValuedColumns.contains(attrName)) {
+                        pkValuedExprs.add(attrExpr);
+                    }
                 }
 
                 Label l = new ReturnedRowLabel(queryIdx, rowIdx);
                 label2Expr.put(l, context.mkAnd(r1.doesContainExpr(head), r2.doesContainExpr(head)));
             }
         }
+
+        long startTime = System.currentTimeMillis();
+        removeRedundantExprs(
+                ecs,
+                expr2Operand,
+                pkValuedExprs,
+                label2Expr.values() // At this point, `label2Expr` only contains `ReturnedRowLabel`s.
+        );
+        System.out.println("\t\t| removeRedundantExprs:\t" + (System.currentTimeMillis() - startTime));
 
         for (Map.Entry<String, Integer> e : trace.getConstMap().entrySet()) {
             // FIXME(zhangwen): currently assumes that the concrete value of constant is irrelevant.
@@ -114,12 +140,17 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
         }
 
         for (Object value : ecs.keySet()) {
+            List<Expr> variables = ecs.get(value);
+
             // Generate equalities of the form: variable = value.
             Expr vExpr = Tuple.getExprFromObject(context, value);
-            List<Expr> variables = ecs.get(value);
             {
                 EqualityLabel.ValueOperand rhs = new EqualityLabel.ValueOperand(value);
                 for (Expr p : variables) {
+                    if (pkValuedExprs.contains(p)) {
+                        // Optimization based on assumption: the primary key value doesn't matter.
+                        continue;
+                    }
                     label2Expr.put(
                             new EqualityLabel(expr2Operand.get(p), rhs),
                             context.mkEq(p, vExpr)
@@ -150,6 +181,46 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
         formulas.add(query.doesContain(inst1, extHeadTup));
         formulas.add(context.mkNot(query.doesContain(inst2, extHeadTup)));
         return formulas;
+    }
+
+    // Optimization: For two operands that are always equal, remove one of them (from `ecs` & `expr2Operand`);
+    // if one operand is a pk-valued expr, and add the other to `pkValuedExprs`.
+    private void removeRedundantExprs(ArrayListMultimap<Object, Expr> ecs,
+                                      Map<Expr, EqualityLabel.Operand> expr2Operand,
+                                      Set<Expr> pkValuedExprs,
+                                      Collection<BoolExpr> returnedRowExprs) {
+        Solver solver = context.mkRawSolver();
+        solver.add(returnedRowExprs.toArray(new BoolExpr[0]));
+
+        for (Object v : ecs.keySet()) {
+            HashSet<Expr> redundantExprs = new HashSet<>();
+            List<Expr> variables = ecs.get(v);
+            for (Expr p1 : variables) {
+                EqualityLabel.Operand o1 = expr2Operand.get(p1);
+                // Only look at labels of the form "query param = returned row attribute".
+                if (o1.getKind() != EqualityLabel.Operand.Kind.QUERY_PARAM) {
+                    continue;
+                }
+
+                for (Expr p2 : variables) {
+                    EqualityLabel.Operand o2 = expr2Operand.get(p2);
+                    if (o2.getKind() != EqualityLabel.Operand.Kind.RETURNED_ROW_ATTR) {
+                        continue;
+                    }
+
+                    if (solver.check(context.mkNot(context.mkEq(p1, p2))) == Status.UNSATISFIABLE) {
+                        // Keep the query param, toss the returned row attribute.
+                        redundantExprs.add(p2);
+                        if (pkValuedExprs.contains(p2)) {
+                            pkValuedExprs.add(p1);
+                        }
+                    }
+                }
+            }
+
+            variables.removeAll(redundantExprs);
+            expr2Operand.keySet().removeAll(redundantExprs);
+        }
     }
 
     @Override

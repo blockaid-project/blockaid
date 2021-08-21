@@ -105,7 +105,7 @@ public class QueryChecker {
             dependencies.add(new ImportedDependency(dep, rawSchema, parser));
         }
 
-        this.schema = new Schema(context, relations, dependencies);
+        this.schema = new Schema(context, rawSchema, relations, dependencies);
         this.policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
         this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);

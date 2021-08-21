@@ -1,5 +1,7 @@
 package solver;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
 
@@ -7,15 +9,20 @@ import java.util.*;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class UniqueConstraint implements Constraint {
     private final String relationName;
-    private final Set<String> columnNames;
+    private final ImmutableSet<String> columnNames;
+    private final ImmutableList<String> relevantColumns;
 
     public UniqueConstraint(String relationName, Collection<String> columnNames) {
-        this.relationName = relationName;
+        this.relationName = checkNotNull(relationName);
         checkArgument(!columnNames.isEmpty());
-        this.columnNames = new HashSet<>(columnNames);
+        this.columnNames = ImmutableSet.copyOf(columnNames);
+        this.relevantColumns = columnNames.stream()
+                .map(colName -> (relationName + "." + colName).toUpperCase())
+                .collect(ImmutableList.toImmutableList());
     }
 
     @Override
@@ -25,6 +32,11 @@ public class UniqueConstraint implements Constraint {
         } else {
             return applyGeneral(instance);
         }
+    }
+
+    @Override
+    public List<String> getRelevantColumns() {
+        return relevantColumns;
     }
 
     private BoolExpr applyGeneral(Instance instance) {

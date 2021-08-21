@@ -35,7 +35,7 @@ public class EqualityLabel implements Label {
         enum Kind {
             CONTEXT_CONSTANT,
             QUERY_PARAM,
-            RETURNED_ROW_FIELD,
+            RETURNED_ROW_ATTR,
             VALUE,
         }
 
@@ -120,7 +120,7 @@ public class EqualityLabel implements Label {
 
         @Override
         public Kind getKind() {
-            return Kind.RETURNED_ROW_FIELD;
+            return Kind.RETURNED_ROW_ATTR;
         }
 
         @Override

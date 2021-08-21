@@ -53,12 +53,28 @@ public class ForeignKeyDependency implements Dependency {
     }
 
     @Override
+    public List<String> getRelevantColumns() {
+        return List.of(
+                (fromRelation + "." + fromColumn).toUpperCase(),
+                (toRelation + "." + toColumn).toUpperCase()
+        );
+    }
+
+    public String getFromRelation() {
+        return fromRelation;
+    }
+
+    @Override
     public List<String> getFromRelations() {
         return Collections.singletonList(fromRelation);
     }
 
     public String getFromColumn() {
         return fromColumn;
+    }
+
+    public String getToRelation() {
+        return toRelation;
     }
 
     @Override

@@ -204,7 +204,11 @@ public class DecisionTemplate {
                 if (ecIdx != null) {
                     sb.append("?").append(ecIdx);
                 } else if (value != null) {
-                    sb.append(value);
+                    if (value instanceof String) {
+                        sb.append("\"").append(value).append("\"");
+                    } else {
+                        sb.append(value);
+                    }
                 } else {
                     sb.append("*");
                 }
