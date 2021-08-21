@@ -313,11 +313,12 @@ public class QueryChecker {
         if (ENABLE_CACHING) {
             if (policyResult) {
                 System.out.println("\t| Generate decision template:");
-                DecisionTemplate template = new DecisionTemplateGenerator(schema, policySet, policyQueries, queries)
-                        .generate();
-                System.out.println(template.toString(USE_COLORS));
-                cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
-                        currQuery.paramNames, template);
+                for (DecisionTemplate dt : new DecisionTemplateGenerator(schema, policySet, policyQueries, queries)
+                        .generate()) {
+                    System.out.println(dt.toString(USE_COLORS));
+                    cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
+                            currQuery.paramNames, dt);
+                }
             }
 //            cacheDecision(queries, policyResult);
         }

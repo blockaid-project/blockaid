@@ -94,7 +94,7 @@ public class DecisionTemplate {
                 ec2Value.push();
                 try {
                     if (!thisEntry.matchParams(qte, ec2Value)) {
-                        return false;
+                        continue;
                     }
 
                     for (List<Object> tup : qte.getTuples()) {
@@ -104,8 +104,6 @@ public class DecisionTemplate {
                         }
                         ec2Value.pop();
                     }
-
-                    return false;
                 } finally {
                     ec2Value.pop();
                 }
@@ -272,7 +270,6 @@ public class DecisionTemplate {
                 }
             }
             return true;
-
         }
     }
 

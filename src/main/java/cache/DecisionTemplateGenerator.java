@@ -35,7 +35,7 @@ public class DecisionTemplateGenerator {
         System.out.println("\t\t| Formula constructor:\t" + (System.currentTimeMillis() - startTime));
     }
 
-    public DecisionTemplate generate() {
+    public Collection<DecisionTemplate> generate() {
         MyZ3Context context = schema.getContext();
         Solver solver = context.mkRawSolver();
         solver.add(formula.makeMainFormula().toArray(BoolExpr[]::new));
@@ -48,7 +48,8 @@ public class DecisionTemplateGenerator {
             BoolExpr boolConst = context.mkBoolConst(l.toString());
             checkState(!boolConst2Label.containsKey(boolConst));
             boolConst2Label.put(boolConst, l);
-            solver.assertAndTrack(entry.getValue(), boolConst);
+//            solver.assertAndTrack(entry.getValue(), boolConst);
+            solver.add(context.mkImplies(boolConst, entry.getValue()));
 
             if (l instanceof EqualityLabel) {
                 EqualityLabel el = (EqualityLabel) l;
@@ -62,19 +63,30 @@ public class DecisionTemplateGenerator {
             }
         }
 
-        long startTime = System.currentTimeMillis();
-        Status res = solver.check();
-        System.out.println("\t\t| Checking:\t" + (System.currentTimeMillis() - startTime));
-        checkState(res == Status.UNSATISFIABLE,
-                "formula must be UNSAT for decision template extraction, got: " + res);
-        ImmutableList<Label> coreLabels = Arrays.stream(solver.getUnsatCore())
-                .map(boolConst2Label::get)
-                .collect(ImmutableList.toImmutableList());
+//        long startTime = System.currentTimeMillis();
+//        Status res = solver.check();
+//        System.out.println("\t\t| Checking:\t" + (System.currentTimeMillis() - startTime));
+//        checkState(res == Status.UNSATISFIABLE,
+//                "formula must be UNSAT for decision template extraction, got: " + res);
 
+        UnsatCoreEnumerator enumerator = new UnsatCoreEnumerator(context, solver, boolConst2Label.keySet());
+        ArrayList<DecisionTemplate> dts = new ArrayList<>();
+        Optional<Collection<BoolExpr>> core;
+        for (int i = 0; i < 2 && (core = enumerator.next()).isPresent(); ++i) {
+            ImmutableList<Label> coreLabels = core.get().stream()
+                    .map(boolConst2Label::get)
+                    .collect(ImmutableList.toImmutableList());
+            dts.add(buildDecisionTemplate(coreLabels, allNonValueOperands));
+        }
+        return dts;
+    }
+
+    private DecisionTemplate buildDecisionTemplate(List<Label> unsatCore,
+                                                   Set<EqualityLabel.Operand> allNonValueOperands) {
         // Find all equivalence classes consisting of non-value operands.
         // If an equivalence class is equal to a value, the value is attached as data in the union-find.
         UnionFind<EqualityLabel.Operand> uf = new UnionFind<>(allNonValueOperands);
-        for (Label l : coreLabels) {
+        for (Label l : unsatCore) {
             if (l.getKind() != Label.Kind.EQUALITY) {
                 continue;
             }
@@ -108,7 +120,7 @@ public class DecisionTemplateGenerator {
 
         List<QueryTraceEntry> allTraceEntries = trace.getAllEntries();
         Map<Integer, Map<Integer, DecisionTemplate.EntryBuilder>> queryIdx2rowEBs = new HashMap<>();
-        for (Label l : coreLabels) {
+        for (Label l : unsatCore) {
             if (l.getKind() != Label.Kind.RETURNED_ROW) {
                 continue;
             }
