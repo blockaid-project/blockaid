@@ -126,12 +126,11 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {
-        List<String> projectColumns = query.getProjectColumns();
+        Set<String> projectColumns = query.getAllNormalizedProjectColumns();
         List<String> thetaColumns = query.getThetaColumns();
-        projectColumns.addAll(thetaColumns);
 
         for (Set<String> s : cache.preapprovedSets) {
-            if (s.containsAll(projectColumns)) {
+            if (s.containsAll(projectColumns) && s.containsAll(thetaColumns)) {
                 return true;
             }
         }
@@ -139,7 +138,7 @@ public class QueryChecker {
     }
 
     private boolean precheckPolicyDenial(PrivacyQuery query, Policy policy) {
-        return !policy.checkApplicable(new HashSet<>(query.getProjectColumns()), new HashSet<>(query.getThetaColumns()));
+        return !policy.checkApplicable(new HashSet<>(query.getAllNormalizedProjectColumns()), new HashSet<>(query.getThetaColumns()));
     }
 
     private void runExecutors(List<SMTExecutor> executors, CountDownLatch latch) {
@@ -291,7 +290,7 @@ public class QueryChecker {
         PrivacyQuery currQuery = queries.getCurrentQuery().getQuery();
         System.out.println("transformed: "
                 + currQuery.parsedSql.getParsedSql()
-                + "\t" + currQuery.parameters);
+                + "\t" + currQuery.parameters + "\t" + currQuery.paramNames);
         if (PRECHECK_SETTING != PrecheckSetting.DISABLED) {
             FastCheckDecision precheckResult = doPrecheckPolicy(currQuery);
             if (precheckResult == FastCheckDecision.ALLOW) {
@@ -505,6 +504,7 @@ public class QueryChecker {
          * @return the preapproved set.
          */
         private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsCoarse(ArrayList<Policy> policySet) {
+            // FIXME(zhangwen): should we use normalized column names here?
             return policySet.stream().filter(Policy::hasNoTheta)
                     .map(policy -> ImmutableSet.copyOf(policy.getProjectColumns()))
                     .collect(ImmutableList.toImmutableList());

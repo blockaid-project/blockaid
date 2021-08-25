@@ -3,11 +3,20 @@ package sql.preprocess;
 import org.apache.calcite.sql.*;
 import sql.ParserResult;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 public class ExtractParams extends SqlTransformer {
+    // Any date-time parameter within this threshold (in seconds) of now is considered as now.
+    private static final long NOW_DATETIME_THRESHOLD_S = 60;
+
     /**
      * Extracts literals in SQL query into parameters.
+     *
+     * Also finds strings that looks like a datetime close to the current time and transforms them into `_NOW`.
+     *
      * @param pr the SQL query.
      * @param params list of existing parameters; to be mutated.
      * @param paramNames list of existing parameter names; to be mutated.
@@ -49,12 +58,37 @@ public class ExtractParams extends SqlTransformer {
 
         params.add(i, v);
         paramNames.add(i, "?");
-        i += 1;
-        return new SqlDynamicParam(i - 1, sqlLiteral.getParserPosition());
+        return new SqlDynamicParam(i, sqlLiteral.getParserPosition()).accept(this);
+    }
+
+    private boolean isCloseToDateTimeNow(Object v) {
+        if (!(v instanceof String)) {
+            return false;
+        }
+
+        String s = (String) v;
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime ldt;
+        // We expect the datetime to look like '2021-08-13 03:04:40.605143'.
+        // https://stackoverflow.com/questions/30135025/java-date-parsing-with-microsecond-or-nanosecond-accuracy
+        try {
+            ldt = LocalDateTime.parse(s.replace(" ", "T"));
+        } catch (DateTimeParseException e) {
+            // Not a date-time.  Ignore!
+            return false;
+        }
+
+        return Math.abs(ldt.until(now, ChronoUnit.SECONDS)) <= NOW_DATETIME_THRESHOLD_S;
     }
 
     @Override
     public SqlNode visit(SqlDynamicParam sqlDynamicParam) {
+        if (isCloseToDateTimeNow(params.get(i))) {
+            params.remove(i);
+            paramNames.remove(i);
+            return new SqlIdentifier("_NOW", sqlDynamicParam.getParserPosition());
+        }
+
         i += 1;
         if (sqlDynamicParam.getIndex() == i - 1) {
             return sqlDynamicParam;

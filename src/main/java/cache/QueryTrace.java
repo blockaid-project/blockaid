@@ -38,8 +38,8 @@ public class QueryTrace {
         for (int i = 0; i < query.paramNames.size(); ++i) {
             String name = query.paramNames.get(i);
             if (!name.equals("?")) {
-                checkArgument(parameters.get(i) instanceof Integer);
-                setConstValue(name, (Integer) parameters.get(i));
+                // Query can specify either parameter name or value, not both.
+                checkArgument(parameters.get(i) == null);
             }
         }
         currentQuery = new QueryTraceEntry(query, parameters);

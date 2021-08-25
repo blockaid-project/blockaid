@@ -1,2 +1,6 @@
 users:id;
 courses:id;
+course_user_data:id;
+announcements:id;
+assessments:id;
+assessment_user_data:id;

@@ -1,16 +1,21 @@
 package sql;
 
+import com.google.common.collect.ImmutableSet;
 import org.apache.calcite.sql.*;
 import solver.Query;
 import solver.Schema;
 import solver.UnionQuery;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 
 public class PrivacyQueryUnion extends PrivacyQuery {
     private final List<PrivacyQuery> queries;
+    private final ImmutableSet<String> allNormProjColumns;
+    private final ImmutableSet<String> allNormThetaColumns;
 
     /**
      * Takes "ownership" of arguments.
@@ -33,15 +38,28 @@ public class PrivacyQueryUnion extends PrivacyQuery {
 
             paramOffset += paramCount;
         }
+        allNormProjColumns = queries.stream()
+                .flatMap(q -> q.getAllNormalizedProjectColumns().stream())
+                .collect(ImmutableSet.toImmutableSet());
+        allNormThetaColumns = queries.stream()
+                .flatMap(q -> q.getAllNormalizedThetaColumns().stream())
+                .collect(ImmutableSet.toImmutableSet());
     }
 
     @Override
-    public List<String> getProjectColumns() {
-        List<String> result = new ArrayList<>();
-        for (PrivacyQuery query : queries) {
-            result.addAll(query.getProjectColumns());
-        }
-        return result;
+    public Set<String> getAllNormalizedProjectColumns() {
+        return allNormProjColumns;
+    }
+
+    @Override
+    public Set<String> getProjectColumnsByIdx(int colIdx) {
+        return queries.stream().flatMap(q -> q.getProjectColumnsByIdx(colIdx).stream()).collect(Collectors.toSet());
+    }
+
+    @Override
+    public Set<String> getNormalizedProjectColumnsByIdx(int colIdx) {
+        return queries.stream().flatMap(q -> q.getNormalizedProjectColumnsByIdx(colIdx).stream())
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -51,6 +69,11 @@ public class PrivacyQueryUnion extends PrivacyQuery {
             result.addAll(query.getThetaColumns());
         }
         return result;
+    }
+
+    @Override
+    public Set<String> getAllNormalizedThetaColumns() {
+        return allNormThetaColumns;
     }
 
     @Override

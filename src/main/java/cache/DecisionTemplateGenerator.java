@@ -7,7 +7,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
-import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import solver.MyZ3Context;
 import solver.Query;
@@ -17,8 +16,7 @@ import util.UnionFind;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkState;
-import static util.TerminalColor.ANSI_RED;
-import static util.TerminalColor.ANSI_RESET;
+import static util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
     private final Schema schema;
@@ -40,18 +38,23 @@ public class DecisionTemplateGenerator {
         Solver solver = context.mkRawSolver();
         solver.add(formula.makeMainFormula().toArray(BoolExpr[]::new));
 
+        Solver eqSolver = context.mkRawSolver(); // Solver for only equality labels.
+
         Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
         Map<BoolExpr, Label> boolConst2Label = new HashMap<>();
+        Set<BoolExpr> eqBoolConsts = new HashSet<>(); // Bool consts for equality labels.
         Set<EqualityLabel.Operand> allNonValueOperands = new HashSet<>();
         for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
             Label l = entry.getKey();
             BoolExpr boolConst = context.mkBoolConst(l.toString());
             checkState(!boolConst2Label.containsKey(boolConst));
             boolConst2Label.put(boolConst, l);
-//            solver.assertAndTrack(entry.getValue(), boolConst);
             solver.add(context.mkImplies(boolConst, entry.getValue()));
 
-            if (l instanceof EqualityLabel) {
+            if (l.getKind() == Label.Kind.EQUALITY) {
+                eqBoolConsts.add(boolConst);
+                eqSolver.add(context.mkImplies(boolConst, entry.getValue()));
+
                 EqualityLabel el = (EqualityLabel) l;
                 EqualityLabel.Operand lhs = el.getLhs(), rhs = el.getRhs();
                 if (lhs.getKind() != EqualityLabel.Operand.Kind.VALUE) {
@@ -63,20 +66,28 @@ public class DecisionTemplateGenerator {
             }
         }
 
-//        long startTime = System.currentTimeMillis();
-//        Status res = solver.check();
-//        System.out.println("\t\t| Checking:\t" + (System.currentTimeMillis() - startTime));
-//        checkState(res == Status.UNSATISFIABLE,
-//                "formula must be UNSAT for decision template extraction, got: " + res);
-
         UnsatCoreEnumerator enumerator = new UnsatCoreEnumerator(context, solver, boolConst2Label.keySet());
         ArrayList<DecisionTemplate> dts = new ArrayList<>();
-        Optional<Collection<BoolExpr>> core;
-        for (int i = 0; i < 2 && (core = enumerator.next()).isPresent(); ++i) {
-            ImmutableList<Label> coreLabels = core.get().stream()
+        Optional<Collection<BoolExpr>> coreExprs;
+        for (int i = 0; i < 1 && (coreExprs = enumerator.next()).isPresent(); ++i) {
+            ImmutableList<Label> coreLabels = coreExprs.get().stream()
                     .map(boolConst2Label::get)
                     .collect(ImmutableList.toImmutableList());
             dts.add(buildDecisionTemplate(coreLabels, allNonValueOperands));
+
+//            eqSolver.push();
+//            eqSolver.add(context.mkNot(context.mkAnd(
+//                    coreLabels.stream()
+//                            .filter(l -> l.getKind() == Label.Kind.EQUALITY)
+//                            .map(labeledExprs::get)
+//                            .toArray(BoolExpr[]::new)
+//            )));
+//            UnsatCoreEnumerator subEnumerator = new UnsatCoreEnumerator(context, eqSolver, eqBoolConsts);
+//            Optional<Collection<BoolExpr>> subCoreExprs;
+//            while ((subCoreExprs = subEnumerator.next()).isPresent()) {
+//                System.out.println(ANSI_RED + "\t" + subCoreExprs.get() + ANSI_RESET);
+//            }
+//            eqSolver.pop();
         }
         return dts;
     }

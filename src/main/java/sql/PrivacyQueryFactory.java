@@ -2,10 +2,12 @@ package sql;
 
 import sql.preprocess.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class PrivacyQueryFactory {
-
     private static final Preprocessor[] preprocessors = {
             StripOrderBy.INSTANCE,
             StripUnaryOpSubquery.INSTANCE,
@@ -17,7 +19,7 @@ public class PrivacyQueryFactory {
     public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
                                                   List<String> paramNames)
     {
-        if (result == null){
+        if (result == null) {
             return null;
         }
 
@@ -28,11 +30,11 @@ public class PrivacyQueryFactory {
             }
         }
 
+        // Extract literals into query parameters.
         ArrayList<Object> newParams = new ArrayList<>(Arrays.asList(parameters));
         ArrayList<String> newParamNames = new ArrayList<>(paramNames);
         result = ExtractParams.perform(result, newParams, newParamNames);
 
-        // FIXME(zhangwen): HACK-- for parameter values equal to a const in constMap, assign it the corresponding const name.
         String queryText = result.getParsedSql();
         StringBuilder sb = new StringBuilder(); // For building the new query string.
         for (int pi = 0, si = 0; pi < newParams.size(); ++pi) {

@@ -4,10 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
 import solver.MyZ3Context;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -32,7 +29,7 @@ class MapSolver {
         this.numLabels = numLabels;
         this.universe = IntStream.range(0, numLabels).boxed().collect(Collectors.toCollection(HashSet::new));
         this.variables = IntStream.range(0, numLabels)
-                .mapToObj(i -> context.mkBoolConst(Integer.toString(i)))
+                .mapToObj(i -> context.mkBoolConst("x" + i))
                 .collect(ImmutableList.toImmutableList());
     }
 
@@ -43,11 +40,13 @@ class MapSolver {
             if (status == Status.SATISFIABLE) {
                 break;
             }
+//            System.out.println(ANSI_RED + "MapSolver bound failed: " + bound + ANSI_RESET);
             checkState(status == Status.UNSATISFIABLE, "solver failed");
             bound += 1;
         }
 
         if (bound > numLabels) {
+//            System.out.println(ANSI_RED + "MapSolver quitting" + ANSI_RESET);
             return Optional.empty();
         }
 
@@ -58,11 +57,12 @@ class MapSolver {
                 seed.add(i);
             }
         }
+//        System.out.println(ANSI_RED + "MapSolver returning: " + seed + ANSI_RESET);
         return Optional.of(seed);
     }
 
     public void blockDown(Collection<Integer> indices) {
-        System.out.println(ANSI_RED + "blockDown:\t" + indices + ANSI_RESET);
+//        System.out.println(ANSI_RED + "blockDown:\t" + indices + ANSI_RESET);
         HashSet<Integer> comp = new HashSet<>(universe);
         comp.removeAll(indices); // Complement of indices.
         solver.add(context.mkOr(
@@ -71,7 +71,7 @@ class MapSolver {
     }
 
     public void blockUp(Collection<Integer> indices) {
-        System.out.println(ANSI_RED + "blockUp:\t" + indices + ANSI_RESET);
+//        System.out.println(ANSI_RED + "blockUp:\t" + indices + ANSI_RESET);
         solver.add(context.mkOr(
                 indices.stream().map(i -> context.mkNot(variables.get(i))).toArray(BoolExpr[]::new)
         ));

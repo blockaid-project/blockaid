@@ -66,10 +66,11 @@ public class PrivacyDriverDiasporaMySQLTest {
         int userId = 45000034;
         String[] queries = new String[] {
                 "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 45000034 ORDER BY `users`.`id` ASC LIMIT 1",
-                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 33000003 AND `share_visibilities`.`user_id` = 45000034 ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT  posts.* FROM `posts` INNER JOIN `share_visibilities` ON `share_visibilities`.`shareable_id` = `posts`.`id` AND `share_visibilities`.`shareable_type` = 'Post' WHERE `posts`.`id` = 33000073 AND `share_visibilities`.`user_id` = 45000034 ORDER BY `posts`.`id` ASC LIMIT 1",
                 "SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = 45000034 LIMIT 1",
-                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 33000003 AND `posts`.`author_id` = 26000035 ORDER BY `posts`.`id` ASC LIMIT 1",
-                "SELECT  `posts`.* FROM `posts` WHERE `posts`.`id` = 33000003 AND `posts`.`public` = true ORDER BY `posts`.`id` ASC LIMIT 1",
+                "SELECT `mentions`.`id` FROM `mentions` WHERE `mentions`.`mentions_container_id` = 33000073 AND `mentions`.`mentions_container_type` = 'Post' AND `mentions`.`person_id` = 26000035",
+                "SELECT  `people`.* FROM `people` WHERE `people`.`id` = 26000035 LIMIT 1",
+                "SELECT  1 AS one FROM `roles` WHERE `roles`.`person_id` = 26000035 AND `roles`.`name` = 'admin' LIMIT 1",
         };
 
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {

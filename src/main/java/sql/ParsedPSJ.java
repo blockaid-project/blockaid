@@ -29,8 +29,8 @@ public class ParsedPSJ {
     private final boolean trivialWhereClause;
     private List<Boolean> resultBitmap;
 
-    private class PredicateInfo {
-        private List<String> columns = new ArrayList<>();
+    private static class PredicateInfo {
+        private final List<String> columns = new ArrayList<>();
         private int parameterOffset = -1;
         private int parameterCount = 0;
     }
@@ -186,6 +186,16 @@ public class ParsedPSJ {
             info.parameterOffset = parameterOffset;
             parameterOffset += info.parameterCount;
         }
+    }
+
+    // Change column quantifier to relation name if it's an alias.
+    private String normalizeColumn(String column) {
+        String[] parts = column.split("\\.");
+        String quantifier = parts[0]; // A quantifier can either be a relation name or an alias.
+
+        int currIdx = relAliasToIdx.get(quantifier);
+        String relationName = relations.get(currIdx);
+        return relationName + "." + parts[1];
     }
 
     private String getRelationNameForAlias(String alias) {
@@ -403,8 +413,16 @@ public class ParsedPSJ {
         return projectColumns;
     }
 
+    public List<String> getNormalizedProjectColumns() {
+        return projectColumns.stream().map(this::normalizeColumn).collect(Collectors.toList());
+    }
+
     public List<String> getThetaColumns() {
         return thetaColumns;
+    }
+
+    public List<String> getNormalizedThetaColumns() {
+        return thetaColumns.stream().map(this::normalizeColumn).collect(Collectors.toList());
     }
 
     public List<String> getRelations() {

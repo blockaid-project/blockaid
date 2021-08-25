@@ -74,7 +74,6 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
 
             if (queryTraceEntry.hasTuples()) {
                 List<Tuple> tupleConstants = new ArrayList<>();
-                List<String> attributeNames = queryTraceEntry.getQuery().getProjectColumns();
                 int attrNumber = 0;
                 for (List<Object> tuple : queryTraceEntry.getTuples()) {
                     Tuple tupleConstant = query.makeFreshHead();
@@ -84,7 +83,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                         if (curr == null) {
                             continue;
                         }
-                        if (!eliminateIrrelevant || relevantAttributes.contains(attributeNames.get(i))) {
+                        if (!eliminateIrrelevant || queryTraceEntry.getQuery().getProjectColumnsByIdx(i).stream().anyMatch(relevantAttributes::contains)) {
                             if (!equalitySets.containsKey(curr)) {
                                 exprs.put("a_v!" + queryNumber + "!" + attrNumber, context.mkEq(tupleConstant.get(i), Tuple.getExprFromObject(context, curr)));
                                 equalitySets.put(curr, new HashSet<>());

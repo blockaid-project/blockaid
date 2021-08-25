@@ -18,10 +18,10 @@ public class ImportedDependency implements Dependency {
         q2 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[1]), schema, new Object[0], Collections.emptyList());
 
         relevantColumns = new ImmutableList.Builder<String>()
-                .addAll(q1.getProjectColumns())
-                .addAll(q1.getThetaColumns())
-                .addAll(q2.getProjectColumns())
-                .addAll(q2.getThetaColumns())
+                .addAll(q1.getAllNormalizedProjectColumns())
+                .addAll(q1.getAllNormalizedThetaColumns())
+                .addAll(q2.getAllNormalizedProjectColumns())
+                .addAll(q2.getAllNormalizedThetaColumns())
                 .build();
     }
 

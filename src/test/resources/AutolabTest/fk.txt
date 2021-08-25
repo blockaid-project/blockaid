@@ -1,0 +1,7 @@
+-- fromRel.fromCol:toRel.toCol;
+course_user_data.course_id:courses.id;
+course_user_data.user_id:users.id;
+assessments.course_id:courses.id;
+assessment_user_data.course_user_datum_id:course_user_data.id;
+assessment_user_data.assessment_id:assessments.id;
+

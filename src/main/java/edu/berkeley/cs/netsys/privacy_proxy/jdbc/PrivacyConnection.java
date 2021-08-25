@@ -146,12 +146,12 @@ public class PrivacyConnection implements Connection {
     }
     s = matcher.replaceAll("?");
 
-    Optional<ParserResult> parser_result = shouldApplyPolicy(s);
-    if (parser_result.isEmpty()) {  // We let this query go through directly.
+    Optional<ParserResult> parserResult = shouldApplyPolicy(s);
+    if (parserResult.isEmpty()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
     }
 
-    return new PrivacyPreparedStatement(s, parser_result.get(), paramNames);
+    return new PrivacyPreparedStatement(s, parserResult.get(), paramNames);
   }
 
   @Override
@@ -438,17 +438,16 @@ public class PrivacyConnection implements Connection {
   }
 
   public class PrivacyPreparedStatement implements PreparedStatement {
-    private PreparedStatement direct_statement;
-    private ParserResult parser_result;
-    private List<String> param_names;
-    private Object[] param_values;
-    private PrivacyQuery privacy_query = null;
+    private final PreparedStatement directStatement;
+    private final ParserResult parserResult;
+    private final List<String> paramNames;
+    private final Object[] paramValues;
 
-    PrivacyPreparedStatement(String sql, ParserResult pr, List<String> param_names) throws SQLException {
-      param_values = new Object[(sql + " ").split("\\?").length - 1];
-      this.parser_result = pr;
-      direct_statement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
-      this.param_names = param_names;
+    PrivacyPreparedStatement(String sql, ParserResult pr, List<String> paramNames) throws SQLException {
+      paramValues = new Object[(sql + " ").split("\\?").length - 1];
+      this.parserResult = pr;
+      directStatement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+      this.paramNames = paramNames;
     }
 
     @Override
@@ -456,18 +455,18 @@ public class PrivacyConnection implements Connection {
       if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
-      return new ResultSetWrapper(direct_statement.executeQuery());
+      return new ResultSetWrapper(directStatement.executeQuery());
     }
 
     public boolean checkPolicy() {
       String message = "[" + current_trace.size() + "] checkPolicy: "
-              + parser_result.getParsedSql() + "\t" + Arrays.toString(param_values);
+              + parserResult.getParsedSql() + "\t" + Arrays.toString(paramValues);
       if (USE_COLORS) {
         message = ANSI_BLUE_BACKGROUND + ANSI_BLACK + "\n" + message + ANSI_RESET;
       }
       System.out.println(message);
 
-      privacy_query = PrivacyQueryFactory.createPrivacyQuery(parser_result, schema, param_values, param_names);
+      PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parserResult, schema, paramValues, paramNames);
 
       current_trace.startQuery(privacy_query, privacy_query.parameters);
       final long startTime = System.currentTimeMillis();
@@ -515,35 +514,40 @@ public class PrivacyConnection implements Connection {
         while (resultSet.next()) {
           List<Object> row = new ArrayList<>();
           for (int i = 1; i <= columnTypes.size(); ++i) {
-            // TODO(zhangwen): NULLs fetched from the DB are currently represented by the default value for the underlying
-            //  type (e.g., 0 for int).  We can probably get away with this?
+            Object value;
             switch (columnTypes.get(i - 1)) {
               case Types.INTEGER:
               case Types.BIGINT:
               case Types.TINYINT:
               case Types.BIT: // TODO(zhangwen): turn into a Boolean?
-                row.add(resultSet.getInt(i));
+                value = resultSet.getInt(i);
                 break;
               case Types.VARCHAR:
               case Types.LONGVARCHAR:
               case Types.CLOB:
-                row.add(resultSet.getString(i));
+              case Types.LONGVARBINARY:
+                value = resultSet.getString(i);
                 break;
               case Types.DECIMAL:
               case Types.DOUBLE:
-                row.add(resultSet.getDouble(i));
+                value = resultSet.getDouble(i);
                 break;
               case Types.BOOLEAN:
-                row.add(resultSet.getBoolean(i));
+                value = resultSet.getBoolean(i);
                 break;
               case Types.DATE:
-                row.add(resultSet.getDate(i));
+                value = resultSet.getDate(i);
+                break;
               case Types.TIMESTAMP:
-                row.add(resultSet.getTimestamp(i));
+                value = resultSet.getTimestamp(i);
                 break;
               default:
                 throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
             }
+            if (resultSet.wasNull()) {
+              value = null;
+            }
+            row.add(value);
           }
           addRow(rows, row);
         }
@@ -1534,7 +1538,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public int executeUpdate() throws SQLException {
-      return direct_statement.executeUpdate();
+      return directStatement.executeUpdate();
     }
 
     @Override
@@ -1544,58 +1548,58 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setBoolean(int i, boolean b) throws SQLException {
-      direct_statement.setBoolean(i, b);
-      param_values[i - 1] = b;
+      directStatement.setBoolean(i, b);
+      paramValues[i - 1] = b;
     }
 
     @Override
     public void setByte(int i, byte b) throws SQLException {
-      direct_statement.setByte(i, b);
-      param_values[i - 1] = b;
+      directStatement.setByte(i, b);
+      paramValues[i - 1] = b;
     }
 
     @Override
     public void setShort(int i, short i1) throws SQLException {
-      direct_statement.setShort(i, i1);
-      param_values[i - 1] = i1;
+      directStatement.setShort(i, i1);
+      paramValues[i - 1] = i1;
     }
 
     @Override
     public void setInt(int i, int i1) throws SQLException {
-      direct_statement.setInt(i, i1);
-      param_values[i - 1] = i1;
+      directStatement.setInt(i, i1);
+      paramValues[i - 1] = i1;
     }
 
     @Override
     public void setLong(int i, long l) throws SQLException {
       // FIXME(zhangwen): HACK--mixing longs and ints is trouble, so we make them ints for now.
-      direct_statement.setInt(i, (int) l);
-      param_values[i - 1] = (int) l;
+      directStatement.setInt(i, (int) l);
+      paramValues[i - 1] = (int) l;
     }
 
     @Override
     public void setFloat(int i, float v) throws SQLException {
-      direct_statement.setFloat(i, v);
-      param_values[i - 1] = v;
+      directStatement.setFloat(i, v);
+      paramValues[i - 1] = v;
     }
 
     @Override
     public void setDouble(int i, double v) throws SQLException {
-      direct_statement.setDouble(i, v);
-      param_values[i - 1] = v;
+      directStatement.setDouble(i, v);
+      paramValues[i - 1] = v;
     }
 
     @Override
     public void setBigDecimal(int i, BigDecimal bigDecimal) throws SQLException {
-      direct_statement.setBigDecimal(i, bigDecimal);
-      param_values[i - 1] = bigDecimal;
+      directStatement.setBigDecimal(i, bigDecimal);
+      paramValues[i - 1] = bigDecimal;
     }
 
     @Override
     public void setString(int i, String s) throws SQLException {
-      direct_statement.setString(i, s);
+      directStatement.setString(i, s);
       // not really properly escaped todo fix
-      param_values[i - 1] = s;
+      paramValues[i - 1] = s;
     }
 
     @Override
@@ -1636,8 +1640,8 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void clearParameters() throws SQLException {
-      direct_statement.clearParameters();
-      Arrays.fill(param_values, null);
+      directStatement.clearParameters();
+      Arrays.fill(paramValues, null);
     }
 
     @Override
@@ -1656,7 +1660,7 @@ public class PrivacyConnection implements Connection {
       if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
-      return direct_statement.execute();
+      return directStatement.execute();
     }
 
     @Override
@@ -1691,7 +1695,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ResultSetMetaData getMetaData() throws SQLException {
-      return direct_statement.getMetaData();
+      return directStatement.getMetaData();
     }
 
     @Override
@@ -1721,7 +1725,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public ParameterMetaData getParameterMetaData() throws SQLException {
-      return direct_statement.getParameterMetaData();
+      return directStatement.getParameterMetaData();
     }
 
     @Override
@@ -1831,7 +1835,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public long executeLargeUpdate() throws SQLException {
-      return direct_statement.executeLargeUpdate();
+      return directStatement.executeLargeUpdate();
     }
 
     @Override
@@ -1846,47 +1850,47 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void close() throws SQLException {
-      direct_statement.close();
+      directStatement.close();
     }
 
     @Override
     public int getMaxFieldSize() throws SQLException {
-      return direct_statement.getMaxFieldSize();
+      return directStatement.getMaxFieldSize();
     }
 
     @Override
     public void setMaxFieldSize(int i) throws SQLException {
-      direct_statement.setMaxFieldSize(i);
+      directStatement.setMaxFieldSize(i);
     }
 
     @Override
     public int getMaxRows() throws SQLException {
-      return direct_statement.getMaxRows();
+      return directStatement.getMaxRows();
     }
 
     @Override
     public void setMaxRows(int i) throws SQLException {
-      direct_statement.setMaxRows(i);
+      directStatement.setMaxRows(i);
     }
 
     @Override
     public void setEscapeProcessing(boolean b) throws SQLException {
-      direct_statement.setEscapeProcessing(b);
+      directStatement.setEscapeProcessing(b);
     }
 
     @Override
     public int getQueryTimeout() throws SQLException {
-      return direct_statement.getQueryTimeout();
+      return directStatement.getQueryTimeout();
     }
 
     @Override
     public void setQueryTimeout(int i) throws SQLException {
-      direct_statement.setQueryTimeout(i);
+      directStatement.setQueryTimeout(i);
     }
 
     @Override
     public void cancel() throws SQLException {
-      direct_statement.cancel();
+      directStatement.cancel();
     }
 
     @Override
@@ -1913,7 +1917,7 @@ public class PrivacyConnection implements Connection {
     public ResultSet getResultSet() throws SQLException {
 //      System.out.println("PrivacyPreparedStatement.getResultSet");
       // TODO(zhangwen): Is this right?
-      ResultSet rs = direct_statement.getResultSet();
+      ResultSet rs = directStatement.getResultSet();
       if (rs == null) {
         return null;
       }

@@ -120,7 +120,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
                 ArrayList<SqlNode> newChildren = new ArrayList<>();
                 for (SqlNode child : nl.getList()) {
                     Optional<SqlNode> newChild = replaceFieldsWithNull(child, relation);
-                    if (!newChild.isPresent()) {
+                    if (newChild.isEmpty()) {
                         return Optional.empty();
                     }
                     newChildren.add(newChild.get());
@@ -139,12 +139,12 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
             Optional<SqlNode> newRight = replaceFieldsWithNull(call.operand(1), relation);
 
             if (opKind == SqlKind.AND) {
-                if (!newLeft.isPresent() || !newRight.isPresent()) {
+                if (newLeft.isEmpty() || newRight.isEmpty()) {
                     return Optional.empty();
                 }
             } else { // OR
-                if (!newLeft.isPresent()) { return newRight; }
-                if (!newRight.isPresent()) { return newLeft; }
+                if (newLeft.isEmpty()) { return newRight; }
+                if (newRight.isEmpty()) { return newLeft; }
             }
 
             return Optional.of(new SqlBasicCall(call.getOperator(), new SqlNode[]{newLeft.get(), newRight.get()},
@@ -155,7 +155,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
         SqlNode[] newOperands = new SqlNode[operands.length];
         for (int i = 0; i < operands.length; ++i) {
             Optional<SqlNode> curr = replaceFieldsWithNull(operands[i], relation);
-            if (!curr.isPresent()) { // If an operand is NULL, the entire expression is NULL.
+            if (curr.isEmpty()) { // If an operand is NULL, the entire expression is NULL.
                 return Optional.empty();
             }
             newOperands[i] = curr.get();

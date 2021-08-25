@@ -17,6 +17,8 @@ import java.util.*;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
+import static util.TerminalColor.ANSI_RED;
+import static util.TerminalColor.ANSI_RESET;
 
 class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
     private final QueryTrace trace;
@@ -34,8 +36,9 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                                           QueryTrace trace, Map<String, Integer> bounds) {
         super(schema, views, bounds, true, TextOption.NO_TEXT);
         this.trace = trace;
+        // TODO(zhangwen): don't compute this all the time.
         this.relevantAttributes = Stream.concat(
-                policies.stream().flatMap(policy -> policy.getThetaColumns().stream()),
+                policies.stream().flatMap(policy -> policy.getNormalizedThetaColumns().stream()),
                 schema.getDependencies().stream().flatMap(c -> c.getRelevantColumns().stream())
         ).collect(ImmutableSet.toImmutableSet());
     }
@@ -86,7 +89,6 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
 
             Relation r1 = q.apply(inst1);
             Relation r2 = q.apply(inst2);
-            List<String> attributeNames = e.getQuery().getProjectColumns();
             List<List<Object>> rows = e.getTuples();
 
             ImmutableSet<String> pkValuedColumns = schema.getRawSchema().getPkValuedColumns();
@@ -101,17 +103,17 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                     if (v == null) {
                         continue;
                     }
-                    String attrName = attributeNames.get(attrIdx);
-                    if (!relevantAttributes.contains(attrName)) {
+                    // Ignore irrelevant columns.
+                    Set<String> attrNames = e.getQuery().getProjectColumnsByIdx(attrIdx);
+                    if (attrNames.stream().noneMatch(relevantAttributes::contains)) {
                         continue;
                     }
-                    // FIXME(zhangwen): ignore values of PK-valued attributes.
                     Expr attrExpr = head.get(attrIdx);
                     checkState(!expr2Operand.containsKey(attrExpr));
                     expr2Operand.put(attrExpr, new EqualityLabel.ReturnedRowFieldOperand(queryIdx, isCurrentQuery, rowIdx, attrIdx));
                     ecs.put(v, attrExpr);
 
-                    if (pkValuedColumns.contains(attrName)) {
+                    if (attrNames.stream().anyMatch(pkValuedColumns::contains)) {
                         pkValuedExprs.add(attrExpr);
                     }
                 }
@@ -141,10 +143,12 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
 
         for (Object value : ecs.keySet()) {
             List<Expr> variables = ecs.get(value);
+            System.out.println(ANSI_RED + value + ":\t" + variables.size() + "\t" + variables + ANSI_RESET);
 
             // Generate equalities of the form: variable = value.
             Expr vExpr = Tuple.getExprFromObject(context, value);
-            {
+            if (vExpr != null) {
+                // TODO(zhangwen): we currently ignore NULL values, i.e., assuming NULLs are irrelevant for compliance.
                 EqualityLabel.ValueOperand rhs = new EqualityLabel.ValueOperand(value);
                 for (Expr p : variables) {
                     if (pkValuedExprs.contains(p)) {

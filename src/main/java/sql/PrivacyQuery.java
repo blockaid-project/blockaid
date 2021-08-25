@@ -6,9 +6,9 @@ import solver.Schema;
 import java.util.*;
 
 public abstract class PrivacyQuery {
-    public ParserResult parsedSql;
-    public List<Object> parameters;
-    public List<String> paramNames;
+    public final ParserResult parsedSql;
+    public final List<Object> parameters;
+    public final List<String> paramNames;
 
     /**
      * For making wrapper.  Doesn't copy the privacy query.
@@ -57,8 +57,11 @@ public abstract class PrivacyQuery {
         return result;
     }
 
-    abstract public List<String> getProjectColumns();
+    abstract public Set<String> getAllNormalizedProjectColumns();
+    abstract public Set<String> getProjectColumnsByIdx(int colIdx);
+    abstract public Set<String> getNormalizedProjectColumnsByIdx(int colIdx);
     abstract public List<String> getThetaColumns();
+    abstract public Set<String> getAllNormalizedThetaColumns();
     abstract public List<String> getRelations();
     abstract public Query getSolverQuery(Schema schema);
     abstract public Query getSolverQuery(Schema schema, String paramPrefix, int offset);

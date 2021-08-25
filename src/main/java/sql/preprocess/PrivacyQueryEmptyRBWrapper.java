@@ -20,13 +20,28 @@ class PrivacyQueryEmptyRBWrapper extends PrivacyQuery {
     }
 
     @Override
-    public List<String> getProjectColumns() {
-        return pq.getProjectColumns();
+    public Set<String> getAllNormalizedProjectColumns() {
+        return pq.getAllNormalizedProjectColumns();
+    }
+
+    @Override
+    public Set<String> getProjectColumnsByIdx(int colIdx) {
+        return pq.getProjectColumnsByIdx(colIdx);
+    }
+
+    @Override
+    public Set<String> getNormalizedProjectColumnsByIdx(int colIdx) {
+        return pq.getNormalizedProjectColumnsByIdx(colIdx);
     }
 
     @Override
     public List<String> getThetaColumns() {
         return pq.getThetaColumns();
+    }
+
+    @Override
+    public Set<String> getAllNormalizedThetaColumns() {
+        return pq.getAllNormalizedThetaColumns();
     }
 
     @Override

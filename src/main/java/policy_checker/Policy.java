@@ -52,6 +52,10 @@ public class Policy {
         return new HashSet<>(parsedPSJ.getThetaColumns());
     }
 
+    public Set<String> getNormalizedThetaColumns() {
+        return new HashSet<>(parsedPSJ.getNormalizedThetaColumns());
+    }
+
     public BoolExpr getPredicate(Schema schema) {
         return parsedPSJ.getPredicate(schema);
     }
