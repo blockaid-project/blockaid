@@ -1,7 +1,6 @@
 package solver;
 
 import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
 
@@ -12,9 +11,10 @@ import java.util.function.IntFunction;
 public abstract class Query {
     public abstract Schema getSchema();
     public abstract Sort[] headTypes();
-    public abstract BoolExpr doesContain(Instance instance, Tuple tuple);
-    public abstract Tuple[] generateTuples(Instance instance);
-    public abstract BoolExpr[] generateExists(Instance instance);
+    // To generate expression for "Q(inst) contains tup", use `query.apply(inst).doesContainExpr(tup)`.
+    protected abstract BoolExpr doesContain(Instance instance, Tuple tuple);
+    protected abstract Tuple[] generateTuples(Instance instance);
+    protected abstract BoolExpr[] generateExists(Instance instance);
 
     /**
      * Returns a set of queries which, when joined together by cartesian product,

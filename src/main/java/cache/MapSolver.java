@@ -1,12 +1,12 @@
 package cache;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableBiMap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
 import solver.MyZ3Context;
 
 import java.util.*;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.ANSI_RED;
@@ -14,66 +14,71 @@ import static util.TerminalColor.ANSI_RESET;
 
 // For enumerating minimal unsat cores using the MARCO algorithm.
 // Adapted from https://github.com/Z3Prover/z3/blob/master/examples/python/mus/marco.py.
-class MapSolver {
+class MapSolver<L> {
     private final MyZ3Context context;
-    private final int numLabels;
     private final Solver solver;
-    private final HashSet<Integer> universe;
-    private final ImmutableList<BoolExpr> variables;
+
+    private final ImmutableSet<L> allLabels;
+    private final ImmutableMap<BoolExpr, L> var2Label;
+    private final ImmutableMap<L, BoolExpr> label2Var;
 
     private int bound = 0; // Upper bound on the number of true variables.
 
-    public MapSolver(MyZ3Context context, int numLabels) {
+    public MapSolver(MyZ3Context context, Collection<L> labels) {
         this.context = context;
         this.solver = context.mkRawSolver();
-        this.numLabels = numLabels;
-        this.universe = IntStream.range(0, numLabels).boxed().collect(Collectors.toCollection(HashSet::new));
-        this.variables = IntStream.range(0, numLabels)
-                .mapToObj(i -> context.mkBoolConst("x" + i))
-                .collect(ImmutableList.toImmutableList());
+
+        this.allLabels = ImmutableSet.copyOf(labels);
+        ImmutableBiMap.Builder<BoolExpr, L> var2LabelBuilder = new ImmutableBiMap.Builder<>();
+        int i = 0;
+        for (L label : labels) {
+            var2LabelBuilder.put(context.mkBoolConst("x" + i), label);
+            i += 1;
+        }
+        ImmutableBiMap<BoolExpr, L> var2LabelBi = var2LabelBuilder.build();
+        this.var2Label = var2LabelBi;
+        this.label2Var = var2LabelBi.inverse();
     }
 
     // Enumerate in increasing order in size of true variables.
-    public Optional<Set<Integer>> getNextSeed() {
-        while (bound <= numLabels) {
-            Status status = solver.check(context.mkAtMost(variables.toArray(new BoolExpr[0]), bound));
+    public Optional<Set<L>> getNextSeed() {
+        while (bound <= allLabels.size()) {
+            Status status = solver.check(context.mkAtMost(var2Label.keySet().toArray(new BoolExpr[0]), bound));
             if (status == Status.SATISFIABLE) {
                 break;
             }
-//            System.out.println(ANSI_RED + "MapSolver bound failed: " + bound + ANSI_RESET);
             checkState(status == Status.UNSATISFIABLE, "solver failed");
             bound += 1;
         }
 
-        if (bound > numLabels) {
-//            System.out.println(ANSI_RED + "MapSolver quitting" + ANSI_RESET);
+        if (bound > allLabels.size()) {
             return Optional.empty();
         }
 
-        HashSet<Integer> seed = new HashSet<>();
+        HashSet<L> seed = new HashSet<>();
         Model m = solver.getModel();
-        for (int i = 0; i < numLabels; ++i) {
-            if (!m.eval(variables.get(i), false).isFalse()) {
-                seed.add(i);
+        for (Map.Entry<BoolExpr, L> entry : var2Label.entrySet()) {
+            BoolExpr variable = entry.getKey();
+            if (m.eval(variable, false).isTrue()) {
+                seed.add(entry.getValue());
             }
         }
-//        System.out.println(ANSI_RED + "MapSolver returning: " + seed + ANSI_RESET);
         return Optional.of(seed);
     }
 
-    public void blockDown(Collection<Integer> indices) {
-//        System.out.println(ANSI_RED + "blockDown:\t" + indices + ANSI_RESET);
-        HashSet<Integer> comp = new HashSet<>(universe);
-        comp.removeAll(indices); // Complement of indices.
+    public void blockDown(Set<L> labels) {
+//        System.out.println(ANSI_RED + "blockDown:\t" + labels.size() + ANSI_RESET);
+        HashSet<L> complement = new HashSet<>(allLabels);
+        complement.removeAll(labels);
         solver.add(context.mkOr(
-                comp.stream().map(variables::get).toArray(BoolExpr[]::new)
+                complement.stream().map(label2Var::get).toArray(BoolExpr[]::new)
         ));
     }
 
-    public void blockUp(Collection<Integer> indices) {
-//        System.out.println(ANSI_RED + "blockUp:\t" + indices + ANSI_RESET);
+    public void blockUp(Set<L> labels) {
+//        System.out.println(ANSI_RED + "blockUp:\t" + labels.size() + ANSI_RESET);
         solver.add(context.mkOr(
-                indices.stream().map(i -> context.mkNot(variables.get(i))).toArray(BoolExpr[]::new)
+                labels.stream().map(l -> context.mkNot(label2Var.get(l))).toArray(BoolExpr[]::new)
         ));
     }
 }

@@ -1,5 +1,7 @@
 package cache.labels;
 
+import java.util.Objects;
+
 public class ReturnedRowLabel implements Label {
     private final int queryIdx;
     private final int rowIdx;
@@ -25,5 +27,18 @@ public class ReturnedRowLabel implements Label {
     @Override
     public String toString() {
         return "ReturnedRowLabel!" + queryIdx + "!" + rowIdx;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ReturnedRowLabel that = (ReturnedRowLabel) o;
+        return queryIdx == that.queryIdx && rowIdx == that.rowIdx;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(queryIdx, rowIdx);
     }
 }

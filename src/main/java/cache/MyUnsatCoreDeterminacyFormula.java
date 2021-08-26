@@ -4,6 +4,7 @@ import cache.labels.EqualityLabel;
 import cache.labels.Label;
 import cache.labels.ReturnedRowLabel;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.microsoft.z3.BoolExpr;
@@ -23,6 +24,9 @@ import static util.TerminalColor.ANSI_RESET;
 class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
     private final QueryTrace trace;
     private final ImmutableSet<String> relevantAttributes;
+
+    // All equality assertions.  Populated by `makeLabeledExprs`.
+    private ImmutableList<BoolExpr> allEquality;
 
     public static MyUnsatCoreDeterminacyFormula create(Schema schema, Collection<Policy> policies,
                                                        Collection<Query> views, QueryTrace trace) {
@@ -110,7 +114,8 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                     }
                     Expr attrExpr = head.get(attrIdx);
                     checkState(!expr2Operand.containsKey(attrExpr));
-                    expr2Operand.put(attrExpr, new EqualityLabel.ReturnedRowFieldOperand(queryIdx, isCurrentQuery, rowIdx, attrIdx));
+                    checkState(!isCurrentQuery);
+                    expr2Operand.put(attrExpr, new EqualityLabel.ReturnedRowFieldOperand(queryIdx, rowIdx, attrIdx));
                     ecs.put(v, attrExpr);
 
                     if (attrNames.stream().anyMatch(pkValuedColumns::contains)) {
@@ -141,6 +146,11 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
             ecs.put(e.getValue(), constExpr);
         }
 
+        ImmutableList.Builder<BoolExpr> allEqualityBuilder = null;
+        if (allEquality == null) {
+            allEqualityBuilder = new ImmutableList.Builder<>();
+        }
+
         for (Object value : ecs.keySet()) {
             List<Expr> variables = ecs.get(value);
             System.out.println(ANSI_RED + value + ":\t" + variables.size() + "\t" + variables + ANSI_RESET);
@@ -160,6 +170,10 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                             context.mkEq(p, vExpr)
                     );
                 }
+
+                if (allEqualityBuilder != null && !variables.isEmpty()) {
+                    allEqualityBuilder.add(context.mkEq(variables.get(0), vExpr));
+                }
             }
 
             // Generate equalities of the form: variable1 = variable2.
@@ -172,6 +186,16 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                     label2Expr.put(new EqualityLabel(lhs, rhs), context.mkEq(p1, p2));
                 }
             }
+
+            if (allEqualityBuilder != null) {
+                for (int i = 1; i < variables.size(); ++i) {
+                    allEqualityBuilder.add(context.mkEq(variables.get(0), variables.get(i)));
+                }
+            }
+        }
+
+        if (allEqualityBuilder != null) {
+            allEquality = allEqualityBuilder.build();
         }
 
         return label2Expr;
@@ -182,9 +206,16 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
         Tuple extHeadTup = query.makeFreshHead();
 
         ArrayList<BoolExpr> formulas = new ArrayList<>(preamble);
-        formulas.add(query.doesContain(inst1, extHeadTup));
-        formulas.add(context.mkNot(query.doesContain(inst2, extHeadTup)));
+        formulas.add(query.apply(inst1).doesContainExpr(extHeadTup));
+        formulas.add(context.mkNot(query.apply(inst2).doesContainExpr(extHeadTup)));
         return formulas;
+    }
+
+    public ImmutableList<BoolExpr> getAllEquality() {
+        if (allEquality == null) {
+            makeLabeledExprs();
+        }
+        return allEquality;
     }
 
     // Optimization: For two operands that are always equal, remove one of them (from `ecs` & `expr2Operand`);

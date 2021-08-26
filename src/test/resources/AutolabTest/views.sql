@@ -19,12 +19,12 @@ SELECT announcements.* FROM announcements WHERE announcements.`system` = 1;
 SELECT announcements.* FROM announcements, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = announcements.course_id AND course_user_data.user_id = _MY_UID AND courses.disabled = 0 AND announcements.start_date < _NOW AND announcements.end_date > _NOW;
 SELECT announcements.* FROM announcements, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = announcements.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
 
--- visible_at?
-SELECT assessments.* FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID;
+SELECT assessments.id, assessments.course_id, assessments.name FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID and courses.disabled = 0;
+SELECT assessments.* FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0;
 
--- assessment_user_data for invisible assessment?
+-- We allow viewing assessment user data regardless of whether the assessment is released or not
+-- because it doesn't include sensitive information about the course.
 SELECT assessment_user_data.* FROM assessment_user_data, course_user_data WHERE assessment_user_data.course_user_datum_id = course_user_data.id AND course_user_data.user_id = _MY_UID;
-
 
 -- invisible assessment?
 SELECT attachments.* FROM attachments, courses, course_user_data WHERE attachments.released = 1 AND courses.id = course_user_data.course_id AND courses.id = attachments.course_id AND course_user_data.user_id = _MY_UID;

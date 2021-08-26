@@ -100,8 +100,8 @@ public abstract class DeterminacyFormula {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Tuple extHeadTup = query.makeFreshHead();
         List<BoolExpr> notContainsFormulas = List.of(
-                query.doesContain(inst1, extHeadTup),
-                context.mkNot(query.doesContain(inst2, extHeadTup)));
+                query.apply(inst1).doesContainExpr(extHeadTup),
+                context.mkNot(query.apply(inst2).doesContainExpr(extHeadTup)));
         return Iterables.concat(generateTupleCheck(queries), generateConstantCheck(queries), notContainsFormulas);
     }
 

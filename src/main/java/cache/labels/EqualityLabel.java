@@ -31,6 +31,19 @@ public class EqualityLabel implements Label {
         return Kind.EQUALITY;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EqualityLabel that = (EqualityLabel) o;
+        return lhs.equals(that.lhs) && rhs.equals(that.rhs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(lhs, rhs);
+    }
+
     public interface Operand {
         enum Kind {
             CONTEXT_CONSTANT,
@@ -91,23 +104,17 @@ public class EqualityLabel implements Label {
 
     public static class ReturnedRowFieldOperand implements Operand {
         private final int queryIdx;
-        private final boolean isCurrentQuery;
         private final int returnedRowIdx;
         private final int colIdx;
 
-        public ReturnedRowFieldOperand(int queryIdx, boolean isCurrentQuery, int returnedRowIdx, int colIdx) {
+        public ReturnedRowFieldOperand(int queryIdx, int returnedRowIdx, int colIdx) {
             this.queryIdx = queryIdx;
-            this.isCurrentQuery = isCurrentQuery;
             this.returnedRowIdx = returnedRowIdx;
             this.colIdx = colIdx;
         }
 
         public int getQueryIdx() {
             return queryIdx;
-        }
-
-        public boolean isCurrentQuery() {
-            return isCurrentQuery;
         }
 
         public int getReturnedRowIdx() {
@@ -125,7 +132,7 @@ public class EqualityLabel implements Label {
 
         @Override
         public String toString() {
-            return "ReturnedRowFieldOperand_" + (isCurrentQuery ? "curr" : queryIdx) + "_" + returnedRowIdx + "_" + colIdx;
+            return "ReturnedRowFieldOperand_" + queryIdx + "_" + returnedRowIdx + "_" + colIdx;
         }
 
         @Override
@@ -133,12 +140,12 @@ public class EqualityLabel implements Label {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             ReturnedRowFieldOperand that = (ReturnedRowFieldOperand) o;
-            return queryIdx == that.queryIdx && isCurrentQuery == that.isCurrentQuery && returnedRowIdx == that.returnedRowIdx && colIdx == that.colIdx;
+            return queryIdx == that.queryIdx && returnedRowIdx == that.returnedRowIdx && colIdx == that.colIdx;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(queryIdx, isCurrentQuery, returnedRowIdx, colIdx);
+            return Objects.hash(queryIdx, returnedRowIdx, colIdx);
         }
     }
 

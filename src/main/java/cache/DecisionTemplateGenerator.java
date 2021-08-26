@@ -14,6 +14,8 @@ import solver.Schema;
 import util.UnionFind;
 
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.*;
@@ -38,23 +40,16 @@ public class DecisionTemplateGenerator {
         Solver solver = context.mkRawSolver();
         solver.add(formula.makeMainFormula().toArray(BoolExpr[]::new));
 
-        Solver eqSolver = context.mkRawSolver(); // Solver for only equality labels.
-
         Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
         Map<BoolExpr, Label> boolConst2Label = new HashMap<>();
-        Set<BoolExpr> eqBoolConsts = new HashSet<>(); // Bool consts for equality labels.
         Set<EqualityLabel.Operand> allNonValueOperands = new HashSet<>();
         for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
             Label l = entry.getKey();
             BoolExpr boolConst = context.mkBoolConst(l.toString());
             checkState(!boolConst2Label.containsKey(boolConst));
             boolConst2Label.put(boolConst, l);
-            solver.add(context.mkImplies(boolConst, entry.getValue()));
 
             if (l.getKind() == Label.Kind.EQUALITY) {
-                eqBoolConsts.add(boolConst);
-                eqSolver.add(context.mkImplies(boolConst, entry.getValue()));
-
                 EqualityLabel el = (EqualityLabel) l;
                 EqualityLabel.Operand lhs = el.getLhs(), rhs = el.getRhs();
                 if (lhs.getKind() != EqualityLabel.Operand.Kind.VALUE) {
@@ -66,29 +61,75 @@ public class DecisionTemplateGenerator {
             }
         }
 
-        UnsatCoreEnumerator enumerator = new UnsatCoreEnumerator(context, solver, boolConst2Label.keySet());
-        ArrayList<DecisionTemplate> dts = new ArrayList<>();
-        Optional<Collection<BoolExpr>> coreExprs;
-        for (int i = 0; i < 1 && (coreExprs = enumerator.next()).isPresent(); ++i) {
-            ImmutableList<Label> coreLabels = coreExprs.get().stream()
-                    .map(boolConst2Label::get)
-                    .collect(ImmutableList.toImmutableList());
-            dts.add(buildDecisionTemplate(coreLabels, allNonValueOperands));
-
-//            eqSolver.push();
-//            eqSolver.add(context.mkNot(context.mkAnd(
-//                    coreLabels.stream()
-//                            .filter(l -> l.getKind() == Label.Kind.EQUALITY)
-//                            .map(labeledExprs::get)
-//                            .toArray(BoolExpr[]::new)
-//            )));
-//            UnsatCoreEnumerator subEnumerator = new UnsatCoreEnumerator(context, eqSolver, eqBoolConsts);
-//            Optional<Collection<BoolExpr>> subCoreExprs;
-//            while ((subCoreExprs = subEnumerator.next()).isPresent()) {
-//                System.out.println(ANSI_RED + "\t" + subCoreExprs.get() + ANSI_RESET);
-//            }
-//            eqSolver.pop();
+        // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
+        Collection<Collection<ReturnedRowLabel>> rrCores;
+        {
+            solver.push();
+            solver.add(formula.getAllEquality().toArray(new BoolExpr[0]));
+            HashMap<ReturnedRowLabel, BoolExpr> rrLabeledExprs = new HashMap<>();
+            for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
+                Label l = entry.getKey();
+                if (l.getKind() == Label.Kind.RETURNED_ROW) {
+                    rrLabeledExprs.put((ReturnedRowLabel) l, entry.getValue());
+                }
+            }
+            try (UnsatCoreEnumerator<ReturnedRowLabel> uce =
+                         new UnsatCoreEnumerator<>(context, solver, rrLabeledExprs)) {
+                rrCores = uce.enumerateAll();
+            }
+            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
+            solver.pop();
         }
+
+        // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
+        ArrayList<DecisionTemplate> dts = new ArrayList<>();
+        for (Collection<ReturnedRowLabel> rrCore : rrCores) {
+            Set<Integer> qIndices = rrCore.stream().map(ReturnedRowLabel::getQueryIdx).collect(Collectors.toSet());
+
+            // Disregard equality labels that refer to parameters from irrelevant queries / attributes of irrelevant
+            // returned rows.
+            HashMap<EqualityLabel, BoolExpr> keptLabeledExprs = new HashMap<>();
+            for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
+                Label l = entry.getKey();
+                if (l.getKind() != Label.Kind.EQUALITY) {
+                    continue;
+                }
+                EqualityLabel el = (EqualityLabel) l;
+                boolean shouldDiscard = Stream.of(el.getLhs(), el.getRhs()).anyMatch(o -> {
+                    // Returns true if this operand causes the label to be DISCARDED.
+                    switch (o.getKind()) {
+                        case QUERY_PARAM:
+                            EqualityLabel.QueryParamOperand qpo = (EqualityLabel.QueryParamOperand) o;
+                            if (qpo.isCurrentQuery()) {
+                                return false;
+                            }
+                            return !qIndices.contains(qpo.getQueryIdx());
+                        case RETURNED_ROW_ATTR:
+                            EqualityLabel.ReturnedRowFieldOperand rro = (EqualityLabel.ReturnedRowFieldOperand) o;
+                            return !rrCore.contains(new ReturnedRowLabel(rro.getQueryIdx(), rro.getReturnedRowIdx()));
+                    }
+                    return false; // Other operands (value, context constant) don't contribute to the decision.
+                });
+                if (!shouldDiscard) {
+                    keptLabeledExprs.put(el, entry.getValue());
+                }
+            }
+            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + keptLabeledExprs.keySet() + ANSI_RESET);
+
+            solver.push();
+            solver.add(rrCore.stream().map(labeledExprs::get).toArray(BoolExpr[]::new));
+            try (UnsatCoreEnumerator<EqualityLabel> uce =
+                         new UnsatCoreEnumerator<>(context, solver, keptLabeledExprs)) {
+                Optional<Set<EqualityLabel>> ret;
+                for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
+                    ArrayList<Label> coreLabels = new ArrayList<>(ret.get());
+                    coreLabels.addAll(rrCore);
+                    dts.add(buildDecisionTemplate(coreLabels, allNonValueOperands));
+                }
+            }
+            solver.pop();
+        }
+
         return dts;
     }
 

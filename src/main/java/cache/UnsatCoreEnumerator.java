@@ -1,65 +1,76 @@
 package cache;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Model;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import solver.MyZ3Context;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
-public class UnsatCoreEnumerator {
+public class UnsatCoreEnumerator<L> implements AutoCloseable {
     private final Solver solver;
-    private final MapSolver ms;
-    private final ImmutableList<BoolExpr> boolLabels;
-//    private final ImmutableMap<BoolExpr, Integer> boolLabelToIdx;
+    private final MapSolver<L> ms;
+    private final ImmutableMap<L, BoolExpr> label2BoolConst;
 
-    public UnsatCoreEnumerator(MyZ3Context context, Solver solver, Iterable<BoolExpr> boolLabels) {
+    // Uses L::toString() as boolean constant names.
+    public UnsatCoreEnumerator(MyZ3Context context, Solver solver, Map<L, BoolExpr> labeledExprs) {
+        this.ms = new MapSolver<>(context, labeledExprs.keySet());
+
         this.solver = solver;
-        this.boolLabels = ImmutableList.copyOf(boolLabels);
-        this.ms = new MapSolver(context, this.boolLabels.size());
+        solver.push();
 
-//        ImmutableMap.Builder<BoolExpr, Integer> builder = new ImmutableMap.Builder<>();
-//        for (int i = 0; i < this.boolLabels.size(); ++i) {
-//            builder.put(this.boolLabels.get(i), i);
-//        }
-//        this.boolLabelToIdx = builder.build();
+        ImmutableMap.Builder<L, BoolExpr> builder = new ImmutableMap.Builder<>();
+        for (Map.Entry<L, BoolExpr> entry : labeledExprs.entrySet()) {
+            L label = entry.getKey();
+            BoolExpr boolConst = context.mkBoolConst(label.toString());
+            builder.put(label, boolConst);
+            solver.add(context.mkImplies(boolConst, entry.getValue()));
+        }
+        this.label2BoolConst = builder.build();
+
+        // The entire formula had better be unsatisfiable; otherwise there is no unsat core!
+        checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE);
     }
 
-    public Optional<Collection<BoolExpr>> next() {
-        Optional<Set<Integer>> o;
+    public Collection<Collection<L>> enumerateAll() {
+        ArrayList<Collection<L>> res = new ArrayList<>();
+        for (Optional<Set<L>> core = next(); core.isPresent(); core = next()) {
+            res.add(core.get());
+        }
+        return res;
+    }
+
+    public Optional<Set<L>> next() {
+        Optional<Set<L>> o;
         while ((o = ms.getNextSeed()).isPresent()) {
-            Set<Integer> seed = o.get();
-            Optional<Set<Integer>> satIndices = isSubsetSat(seed);
-            if (satIndices.isEmpty()) { // UNSAT.
+            Set<L> seed = o.get();
+            Optional<Set<L>> satLabels = isSubsetSat(seed);
+            if (satLabels.isEmpty()) { // UNSAT.
                 ms.blockUp(seed);
-                return Optional.of(
-                        seed.stream().map(boolLabels::get).collect(Collectors.toList())
-                );
+                return Optional.of(seed);
             }
 
             // SAT case: grow.
-            Set<Integer> currSeed = new HashSet<>(satIndices.get());
-            for (int i = 0; i < boolLabels.size(); ++i) {
-                if (currSeed.contains(i)) {
+            Set<L> currSeed = new HashSet<>(satLabels.get());
+            for (L label : label2BoolConst.keySet()) {
+                if (currSeed.contains(label)) {
                     continue;
                 }
-                currSeed.add(i);
-                satIndices = isSubsetSat(currSeed);
-                if (satIndices.isEmpty()) {
-                    currSeed.remove(i);
+                currSeed.add(label);
+                satLabels = isSubsetSat(currSeed);
+                if (satLabels.isEmpty()) {
+                    currSeed.remove(label);
                 } else {
-                    currSeed = satIndices.get();
+                    currSeed = satLabels.get();
                 }
             }
             ms.blockDown(currSeed);
@@ -67,20 +78,29 @@ public class UnsatCoreEnumerator {
         return Optional.empty();
     }
 
-    // If SAT, returns label indices for which the formula is SAT.  If UNSAT, returns None.
-    private Optional<Set<Integer>> isSubsetSat(Collection<Integer> indices) {
-        BoolExpr[] clauses = indices.stream().map(boolLabels::get).toArray(BoolExpr[]::new);
-        Status status = solver.check(clauses);
+    // If SAT, returns labels for which the formula is SAT.  If UNSAT, returns None.
+    private Optional<Set<L>> isSubsetSat(Set<L> labels) {
+        BoolExpr[] boolConsts = labels.stream().map(label2BoolConst::get).toArray(BoolExpr[]::new);
+        long startTime = System.currentTimeMillis();
+        Status status = solver.check(boolConsts);
+        long durMs = System.currentTimeMillis() - startTime;
+//        System.out.println("\t\t| isSubsetSat check:\t" + status + "\t" + durMs);
+
         if (status == Status.SATISFIABLE) {
             Model m = solver.getModel();
-            Set<Integer> satIndices = IntStream.range(0, boolLabels.size())
-                    .filter(i -> !m.eval(boolLabels.get(i), false).isFalse())
-                    .boxed()
+            Set<L> satLabels = label2BoolConst.entrySet().stream()
+                    .filter(e -> !m.eval(e.getValue(), false).isFalse())
+                    .map(Map.Entry::getKey)
                     .collect(Collectors.toSet());
-            checkState(satIndices.containsAll(indices));
-            return Optional.of(satIndices);
+            checkState(satLabels.containsAll(labels));
+            return Optional.of(satLabels);
         }
-        checkState(status == Status.UNSATISFIABLE, "solver failed");
+        checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
         return Optional.empty();
+    }
+
+    @Override
+    public void close() {
+        solver.pop();
     }
 }
