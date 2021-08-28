@@ -7,8 +7,13 @@ import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import sql.PrivacyQuery;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkState;
 
 public class UnsatCoreBoundEstimator extends BoundEstimator {
     private final BoundEstimator initialBounds;
@@ -23,12 +28,11 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
 
     @Override
     public Map<String, Integer> calculateBounds(Schema schema, QueryTrace queries) {
+        MyZ3Context context = schema.getContext();
         Map<String, Integer> bounds = new HashMap<>(initialBounds.calculateBounds(schema, queries));
-        int iters = 0;
-        boolean unsat;
-        do {
-            MyZ3Context context = schema.getContext();
-            Solver solver = context.mkSolver();
+        int iters;
+        for (iters = 0; ; ++iters) {
+            Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
             Instance instance = schema.makeConcreteInstance("inst", bounds);
 
             Map<Constraint, BoolExpr> constraints = instance.getConstraints();
@@ -58,36 +62,64 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
             }
 
             // todo timeouts on this...
-            unsat = (solver.check() == Status.UNSATISFIABLE);
-            if (unsat) {
-                BoolExpr[] core = solver.getUnsatCore();
-                Set<String> toIncrement = new HashSet<>();
-                for (BoolExpr expr : core) {
-                    if (dependencyLabels.containsKey(expr)) {
-                        Constraint dependency = dependencyLabels.get(expr);
-                        if (dependency instanceof Dependency) {
-                            Dependency d = (Dependency) dependency;
-                            toIncrement.addAll(d.getToRelations());
-                        }
-                    }
-                }
-
-                if (toIncrement.isEmpty()) {
-                    for (BoolExpr expr : core) {
-                        if (queryLabels.containsKey(expr)) {
-                            PrivacyQuery query = queryLabels.get(expr);
-                            toIncrement.addAll(query.getRelations());
-                        }
-                    }
-                }
-
-                assert !toIncrement.isEmpty();
-                for (String r : toIncrement) {
-                    bounds.put(r, bounds.get(r) + 1);
+            long startMs = System.currentTimeMillis();
+            Status res = solver.check();
+            long durMs = System.currentTimeMillis() - startMs;
+            if (durMs > 1000 && res == Status.SATISFIABLE) {
+                try {
+                    solver.push();
+                    solver.add(dependencyLabels.keySet().toArray(new BoolExpr[0]));
+                    solver.add(queryLabels.keySet().toArray(new BoolExpr[0]));
+                    Files.writeString(Paths.get("/tmp/estimator.smt2"), solver.toString());
+                    solver.pop();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
             }
-            ++iters;
-        } while (unsat);
+            System.out.println("\t\t| bound estimator check:\t" + durMs + "\t" + bounds);
+            if (res == Status.SATISFIABLE) {
+                break;
+            }
+            checkState(res == Status.UNSATISFIABLE, "solver returned: " + res);
+            BoolExpr[] core = solver.getUnsatCore();
+
+            if (durMs > 1000) {
+                try {
+                    solver.push();
+                    solver.add(dependencyLabels.keySet().toArray(new BoolExpr[0]));
+                    solver.add(queryLabels.keySet().toArray(new BoolExpr[0]));
+                    Files.writeString(Paths.get("/tmp/estimator.smt2"), solver.toString());
+                    solver.pop();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            Set<String> toIncrement = new HashSet<>();
+            for (BoolExpr expr : core) {
+                if (dependencyLabels.containsKey(expr)) {
+                    Constraint dependency = dependencyLabels.get(expr);
+                    if (dependency instanceof Dependency) {
+                        Dependency d = (Dependency) dependency;
+                        toIncrement.addAll(d.getToRelations());
+                    }
+                }
+            }
+
+            if (toIncrement.isEmpty()) {
+                for (BoolExpr expr : core) {
+                    if (queryLabels.containsKey(expr)) {
+                        PrivacyQuery query = queryLabels.get(expr);
+                        toIncrement.addAll(query.getRelations());
+                    }
+                }
+            }
+
+            assert !toIncrement.isEmpty();
+            for (String r : toIncrement) {
+                bounds.put(r, bounds.get(r) + 1);
+            }
+        }
         System.out.println("\t\t| iterations: " + iters + ", bounds: " + bounds);
         return bounds;
     }

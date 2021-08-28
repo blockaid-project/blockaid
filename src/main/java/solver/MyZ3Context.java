@@ -29,19 +29,13 @@ public class MyZ3Context extends Context {
         private final FuncDecl intLt;
 
         private class Values {
-            private final Map<Date, Expr> dateValues;
-            private final Map<Timestamp, Expr> tsValues;
-            private final Map<Long, Expr> intValues;
-            private final Map<Double, Expr> realValues;
-            private final Map<String, Expr> stringValues;
+            private final Map<Date, Expr> dateValues = new HashMap<>();
+            private final Map<Timestamp, Expr> tsValues = new HashMap<>();
+            private final Map<Long, Expr> intValues = new HashMap<>();
+            private final Map<Double, Expr> realValues = new HashMap<>();
+            private final Map<String, Expr> stringValues = new HashMap<>();
 
-            private Values() {
-                dateValues = new HashMap<>();
-                tsValues = new HashMap<>();
-                intValues = new HashMap<>();
-                realValues = new HashMap<>();
-                stringValues = new HashMap<>();
-            }
+            private final Map<Expr, Object> expr2Obj = new HashMap<>();
         }
 
         private CustomSorts() {
@@ -75,7 +69,9 @@ public class MyZ3Context extends Context {
                 }
             }
             Expr c = mkFreshConst(dateSort.getSExpr(), dateSort);
-            valuesStack.get(valuesStack.size() - 1).dateValues.put(date, c);
+            Values vs = valuesStack.get(valuesStack.size() - 1);
+            vs.dateValues.put(date, c);
+            vs.expr2Obj.put(c, date);
             return c;
         }
 
@@ -86,7 +82,9 @@ public class MyZ3Context extends Context {
                 }
             }
             Expr c = mkFreshConst(tsSort.getSExpr(), tsSort);
-            valuesStack.get(valuesStack.size() - 1).tsValues.put(ts, c);
+            Values vs = valuesStack.get(valuesStack.size() - 1);
+            vs.tsValues.put(ts, c);
+            vs.expr2Obj.put(c, ts);
             return c;
         }
 
@@ -97,7 +95,9 @@ public class MyZ3Context extends Context {
                 }
             }
             Expr c = mkFreshConst(intSort.getSExpr(), intSort);
-            valuesStack.get(valuesStack.size() - 1).intValues.put(value, c);
+            Values vs = valuesStack.get(valuesStack.size() - 1);
+            vs.intValues.put(value, c);
+            vs.expr2Obj.put(c, value);
             return c;
         }
 
@@ -108,7 +108,9 @@ public class MyZ3Context extends Context {
                 }
             }
             Expr c = mkFreshConst(realSort.getSExpr(), realSort);
-            valuesStack.get(valuesStack.size() - 1).realValues.put(value, c);
+            Values vs = valuesStack.get(valuesStack.size() - 1);
+            vs.realValues.put(value, c);
+            vs.expr2Obj.put(c, value);
             return c;
         }
 
@@ -119,8 +121,20 @@ public class MyZ3Context extends Context {
                 }
             }
             Expr c = mkFreshConst(stringSort.getSExpr(), stringSort);
-            valuesStack.get(valuesStack.size() - 1).stringValues.put(value, c);
+            Values vs = valuesStack.get(valuesStack.size() - 1);
+            vs.stringValues.put(value, c);
+            vs.expr2Obj.put(c, value);
             return c;
+        }
+
+        private Optional<Object> getValueForExpr(Expr e) {
+            for (int i = valuesStack.size(); i-- > 0; ) {
+                Values vs = valuesStack.get(i);
+                if (vs.expr2Obj.containsKey(e)) {
+                    return Optional.of(vs.expr2Obj.get(e));
+                }
+            }
+            return Optional.empty();
         }
 
         // Prepares Solver for use with custom sorts (adds uniqueness constraints)
@@ -198,6 +212,10 @@ public class MyZ3Context extends Context {
         untrackedConsts = new HashSet<>();
         trackedConsts = new HashSet<>();
         customSorts = new CustomSorts();
+    }
+
+    public Optional<Object> getValueForExpr(Expr e) {
+        return customSorts.getValueForExpr(e);
     }
 
     @Override

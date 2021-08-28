@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter;
 
 public class AutolabTest {
     private static final String dbDatabaseName = "autolab_development";
-    private static final String dbUrl = "jdbc:mysql://localhost:3306/" + dbDatabaseName +
+    private static final String dbUrl = "jdbc:mysql://127.0.0.1:3306/" + dbDatabaseName +
             "?useSSL=false&useUnicode=true&character_set_server=utf8mb4&collation_server=utf8mb4_bin";
     private static final String dbUsername = "autolab";
     private static final String dbPassword = "12345678";
@@ -139,6 +139,16 @@ public class AutolabTest {
                 "SELECT  `assessment_user_data`.* FROM `assessment_user_data` WHERE `assessment_user_data`.`assessment_id` = 19 AND `assessment_user_data`.`course_user_datum_id` = 52 LIMIT 1",
                 "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`id` = 52 LIMIT 1",
                 "SELECT  `assessments`.`id`, `assessments`.`course_id` FROM `assessments` WHERE `assessments`.`id` = 19 LIMIT 1",
+                "SELECT DISTINCT category_name FROM `assessments` WHERE `assessments`.`course_id` = 1",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'CategoryAutograde' AND (start_at < '2021-08-13 03:04:41.058711') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'CategoryAutograde' AND (start_at < '2021-08-13 03:04:41.058711') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Homework' AND (start_at < '2021-08-13 03:04:41.067924') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Homework' AND (start_at < '2021-08-13 03:04:41.067924') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Lab' AND (start_at < '2021-08-13 03:04:41.085304') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Lab' AND (start_at < '2021-08-13 03:04:41.085304') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '2021-08-13 03:04:41.102801') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '2021-08-13 03:04:41.102801') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `attachments` WHERE `attachments`.`course_id` = 1 AND `attachments`.`released` = 1 LIMIT 1",
         };
 
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {

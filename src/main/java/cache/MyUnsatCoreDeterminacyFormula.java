@@ -3,10 +3,7 @@ package cache;
 import cache.labels.EqualityLabel;
 import cache.labels.Label;
 import cache.labels.ReturnedRowLabel;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
+import com.google.common.collect.*;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Solver;
@@ -30,15 +27,24 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
 
     public static MyUnsatCoreDeterminacyFormula create(Schema schema, Collection<Policy> policies,
                                                        Collection<Query> views, QueryTrace trace) {
-        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
+        long startTime = System.currentTimeMillis();
+        CountingBoundEstimator cbe = new CountingBoundEstimator();
+        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, trace);
         Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 1);
-        return new MyUnsatCoreDeterminacyFormula(schema, policies, views, trace, slackBounds);
+        System.out.println("\t\t| Compute bounds:\t" + (System.currentTimeMillis() - startTime));
+
+        startTime = System.currentTimeMillis();
+        MyUnsatCoreDeterminacyFormula f =
+                new MyUnsatCoreDeterminacyFormula(schema, policies, views, trace, slackBounds, cbe.getPkValues());
+        System.out.println("\t\t| Formula constructor:\t" + (System.currentTimeMillis() - startTime));
+        return f;
     }
 
     private MyUnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views,
-                                          QueryTrace trace, Map<String, Integer> bounds) {
-        super(schema, views, bounds, true, TextOption.NO_TEXT);
+                                          QueryTrace trace, Map<String, Integer> bounds,
+                                          SetMultimap<String, Object> table2pkValues) {
+        super(schema, views, bounds, true, TextOption.NO_TEXT, table2pkValues);
         this.trace = trace;
         // TODO(zhangwen): don't compute this all the time.
         this.relevantAttributes = Stream.concat(
@@ -224,7 +230,7 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                                       Map<Expr, EqualityLabel.Operand> expr2Operand,
                                       Set<Expr> pkValuedExprs,
                                       Collection<BoolExpr> returnedRowExprs) {
-        Solver solver = context.mkRawSolver();
+        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
         solver.add(returnedRowExprs.toArray(new BoolExpr[0]));
 
         for (Object v : ecs.keySet()) {
@@ -236,14 +242,24 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                 if (o1.getKind() != EqualityLabel.Operand.Kind.QUERY_PARAM) {
                     continue;
                 }
+                EqualityLabel.QueryParamOperand qpo1 = (EqualityLabel.QueryParamOperand) o1;
+                if (qpo1.isCurrentQuery()) {
+                    continue;
+                }
 
                 for (Expr p2 : variables) {
                     EqualityLabel.Operand o2 = expr2Operand.get(p2);
                     if (o2.getKind() != EqualityLabel.Operand.Kind.RETURNED_ROW_ATTR) {
                         continue;
                     }
+                    if (((EqualityLabel.ReturnedRowFieldOperand) o2).getQueryIdx() != qpo1.getQueryIdx()) {
+                        continue;
+                    }
 
-                    if (solver.check(context.mkNot(context.mkEq(p1, p2))) == Status.UNSATISFIABLE) {
+                    long startMs = System.currentTimeMillis();
+                    Status res = solver.check(context.mkNot(context.mkEq(p1, p2)));
+                    System.out.println("\t\t| removeRedundant check:\t" + (System.currentTimeMillis() - startMs));
+                    if (res == Status.UNSATISFIABLE) {
                         // Keep the query param, toss the returned row attribute.
                         redundantExprs.add(p2);
                         if (pkValuedExprs.contains(p2)) {

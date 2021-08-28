@@ -1,6 +1,6 @@
 package cache;
 
-import com.google.common.collect.HashMultimap;
+import com.google.common.collect.ArrayListMultimap;
 import sql.PrivacyQuery;
 
 import java.util.*;
@@ -9,9 +9,12 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class QueryTrace {
-    private final HashMultimap<String, QueryTraceEntry> queries = HashMultimap.create();
+    private final ArrayListMultimap<String, QueryTraceEntry> queries = ArrayListMultimap.create();
     private final ArrayList<QueryTraceEntry> queryList = new ArrayList<>(); // Used to maintain order between queries.
     private QueryTraceEntry currentQuery = null;
+
+    // For de-duplication.
+    private final HashSet<QueryTraceEntry> entrySet = new HashSet<>();
 
     // Maps constants to their values (e.g., _MY_UID -> 2).
     // TODO(zhangwen): The existing code seems to assume constants are integers (in ParsedPSJ.getPredicate),
@@ -43,13 +46,21 @@ public class QueryTrace {
             }
         }
         currentQuery = new QueryTraceEntry(query, parameters);
-        queries.put(query.parsedSql.getParsedSql(), currentQuery);
+        queries.put(currentQuery.getParsedSql(), currentQuery);
         queryList.add(currentQuery);
     }
 
     public void endQuery(List<List<Object>> tuples) {
         checkState(currentQuery != null);
         currentQuery.setTuples(tuples);
+
+        if (!entrySet.add(currentQuery)) {
+            // The current query is a duplicate.  Remove!
+            List<QueryTraceEntry> bucket = queries.get(currentQuery.getParsedSql());
+            bucket.remove(bucket.size() - 1);
+            queryList.remove(queryList.size() - 1);
+        }
+
         currentQuery = null;
     }
 

@@ -29,15 +29,12 @@ public class DecisionTemplateGenerator {
                                      QueryTrace trace) {
         this.schema = schema;
         this.trace = trace;
-
-        long startTime = System.currentTimeMillis();
         this.formula = MyUnsatCoreDeterminacyFormula.create(schema, policies, views, trace);
-        System.out.println("\t\t| Formula constructor:\t" + (System.currentTimeMillis() - startTime));
     }
 
     public Collection<DecisionTemplate> generate() {
         MyZ3Context context = schema.getContext();
-        Solver solver = context.mkRawSolver();
+        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
         solver.add(formula.makeMainFormula().toArray(BoolExpr[]::new));
 
         Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
@@ -77,7 +74,7 @@ public class DecisionTemplateGenerator {
                          new UnsatCoreEnumerator<>(context, solver, rrLabeledExprs)) {
                 rrCores = uce.enumerateAll();
             }
-            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
+//            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
             solver.pop();
         }
 
@@ -114,7 +111,7 @@ public class DecisionTemplateGenerator {
                     keptLabeledExprs.put(el, entry.getValue());
                 }
             }
-            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + keptLabeledExprs.keySet() + ANSI_RESET);
+//            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + keptLabeledExprs.keySet() + ANSI_RESET);
 
             solver.push();
             solver.add(rrCore.stream().map(labeledExprs::get).toArray(BoolExpr[]::new));

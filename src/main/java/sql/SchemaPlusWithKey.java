@@ -9,12 +9,13 @@ import solver.ForeignKeyDependency;
 import java.util.HashSet;
 import java.util.Map;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class SchemaPlusWithKey {
     // FIXME(zhangwen): put all constraints in the schema?
     public final SchemaPlus schema;
-    public final ImmutableMap<String, ImmutableList<String>> primaryKeys;
+    private final ImmutableMap<String, ImmutableList<String>> primaryKeys;
     private final ImmutableSet<ForeignKeyDependency> foreignKeys;
 
     // Every column that stores values of a primary key type (e.g., a PK column, or a foreign key to a PK column).
@@ -45,6 +46,12 @@ public class SchemaPlusWithKey {
             }
         }
         this.pkValuedColumns = ImmutableSet.copyOf(pkValuedColumns);
+    }
+
+    public ImmutableList<String> getPrimaryKeyColumns(String relationName) {
+        ImmutableList<String> res = primaryKeys.get(relationName);
+        checkArgument(res != null, "relation " + relationName + " not found");
+        return res;
     }
 
     public ImmutableSet<String> getPkValuedColumns() {

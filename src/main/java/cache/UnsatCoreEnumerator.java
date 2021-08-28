@@ -7,9 +7,6 @@ import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import solver.MyZ3Context;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -81,10 +78,7 @@ public class UnsatCoreEnumerator<L> implements AutoCloseable {
     // If SAT, returns labels for which the formula is SAT.  If UNSAT, returns None.
     private Optional<Set<L>> isSubsetSat(Set<L> labels) {
         BoolExpr[] boolConsts = labels.stream().map(label2BoolConst::get).toArray(BoolExpr[]::new);
-        long startTime = System.currentTimeMillis();
         Status status = solver.check(boolConsts);
-        long durMs = System.currentTimeMillis() - startTime;
-//        System.out.println("\t\t| isSubsetSat check:\t" + status + "\t" + durMs);
 
         if (status == Status.SATISFIABLE) {
             Model m = solver.getModel();

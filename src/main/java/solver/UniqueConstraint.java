@@ -2,14 +2,14 @@ package solver;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
 
 import java.util.*;
 import java.util.stream.Stream;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.*;
 
 public class UniqueConstraint implements Constraint {
     private final String relationName;
@@ -77,6 +77,10 @@ public class UniqueConstraint implements Constraint {
         checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);
 
         Tuple[] tuples = relation.getTuples();
+        if (tuples.length == 0) {
+            return context.mkTrue();
+        }
+
         BoolExpr[] exists = relation.getExists();
         Expr[][] syms = new Expr[columnNames.size()][]; // Maps (pk column index, tuple index) -> value at that column.
         int index = 0;
@@ -90,6 +94,12 @@ public class UniqueConstraint implements Constraint {
             }
         }
         checkArgument(index == columnNames.size(), "some column(s) not found: %s.%s", relationName, columnNames);
+
+        // Fast path: single-column integer primary key.
+        // Unclear whether tthis is actually faster, though.
+//        if (columnNames.size() == 1 && syms[0][0].getSort().equals(context.getCustomIntSort())) {
+//            return context.mkDistinct(syms[0]);
+//        }
 
         List<BoolExpr> exprs = new ArrayList<>();
         for (int i = 0; i < tuples.length; ++i) {

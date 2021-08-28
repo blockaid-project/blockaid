@@ -46,7 +46,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 2000; // ms
+    public static long SOLVE_TIMEOUT = 20000; // ms
 
     private final Schema schema;
     private final List<Policy> policySet;

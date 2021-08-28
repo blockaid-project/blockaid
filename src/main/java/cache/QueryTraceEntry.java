@@ -15,7 +15,7 @@ public class QueryTraceEntry {
     private ImmutableList<List<Object>> tuples; // Nullable.
 
     public QueryTraceEntry(PrivacyQuery query, List<Object> parameters) {
-        this(query, parameters, null);
+        this(checkNotNull(query), checkNotNull(parameters), null);
     }
 
     public QueryTraceEntry(QueryTraceEntry entry) {
@@ -76,5 +76,18 @@ public class QueryTraceEntry {
     public boolean hasTuples() {
         // TODO(zhangwen): It's kind of weird to treat these two cases in the same way.
         return tuples != null && !tuples.isEmpty();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        QueryTraceEntry that = (QueryTraceEntry) o;
+        return query.equals(that.query) && parameters.equals(that.parameters) && Objects.equals(tuples, that.tuples);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(query, parameters, tuples);
     }
 }

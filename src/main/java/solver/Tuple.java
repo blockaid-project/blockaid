@@ -59,6 +59,12 @@ public class Tuple {
 
         BoolExpr[] exprs = new BoolExpr[size()];
         for (int i = 0; i < size(); ++i) {
+            Expr lhs = get(i), rhs = other.get(i);
+            Optional<Object> lhsV = context.getValueForExpr(lhs), rhsV = context.getValueForExpr(rhs);
+            if (lhsV.isPresent() && rhsV.isPresent() && !lhsV.get().equals(rhsV.get())) {
+                // LHS and RHS represent distinct concrete values, which can't be equal!
+                return context.mkFalse();
+            }
             exprs[i] = context.mkEq(get(i), other.get(i));
         }
         return context.mkAnd(exprs);

@@ -23,7 +23,7 @@ public abstract class PSJ extends Query {
     }
 
     protected BoolExpr predicateGenerator(Tuple... tuples) {
-        return schema.getContext().mkBool(true);
+        return schema.getContext().mkTrue();
     }
 
     protected abstract Tuple headSelector(Tuple... tuples);

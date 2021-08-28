@@ -1,5 +1,7 @@
 package solver;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.*;
 import org.apache.calcite.schema.SchemaPlus;
 import sql.SchemaPlusWithKey;
@@ -8,6 +10,7 @@ import java.sql.Types;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class Schema {
@@ -54,7 +57,8 @@ public class Schema {
         return instance;
     }
 
-    public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
+    public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds,
+                                         SetMultimap<String, Object> table2pkValues) {
         Instance instance = new Instance(this, true);
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
@@ -65,7 +69,43 @@ public class Schema {
             Tuple[] tuples = new Tuple[numTuples];
             BoolExpr[] exists = new BoolExpr[numTuples];
             String prefix = instancePrefix + "_" + relationName;
-            for (int i = 0; i < numTuples; ++i) {
+
+            Set<Object> pkValues = table2pkValues == null ? Collections.emptySet() : table2pkValues.get(relationName);
+            ImmutableList<String> pkColumnNames = rawSchema.getPrimaryKeyColumns(relationName);
+            String pkColumnName;
+            if (pkColumnNames == null || pkColumnNames.size() != 1) {
+                // The primary-key optimization is only supported if the table has exactly one primary-key column.
+                pkColumnName = null;
+            } else {
+                pkColumnName = pkColumnNames.get(0);
+
+                String finalPkColumnName = pkColumnName;
+                long count = columns.stream().filter(col -> col.name.equals(finalPkColumnName)).count();
+                checkArgument(count == 1,
+                        "table " + relationName + " contains " + count
+                                + " copies of PK column " + pkColumnName);
+            }
+
+            checkArgument(pkValues.size() <= numTuples,
+                    String.format("table %s has %d primary keys specified, more than bound %d",
+                            relationName, pkValues.size(), numTuples));
+
+            int i = 0;
+            for (Object pkValue : pkValues) {
+                List<Expr> values = new ArrayList<>();
+                for (Column col : columns) {
+                    if (col.name.equals(pkColumnName)) {
+                        values.add(Tuple.getExprFromObject(context, pkValue));
+                    } else {
+                        values.add(context.mkConst(prefix + "_" + i + "_" + col.name, col.type));
+                    }
+                }
+                tuples[i] = new Tuple(this, values.stream());
+                exists[i] = context.mkTrue(); // A tuple with a known PK value must exist.
+                i += 1;
+            }
+
+            for (; i < numTuples; ++i) {
                 List<Expr> values = new ArrayList<>();
                 for (Column col : columns) {
                     values.add(context.mkConst(prefix + "_" + i + "_" + col.name, col.type));
@@ -82,6 +122,10 @@ public class Schema {
         }
         instance.setConstraints(constraints);
         return instance;
+    }
+
+    public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
+        return makeConcreteInstance(instancePrefix, bounds, null);
     }
 
     public List<String> getRelationNames() {

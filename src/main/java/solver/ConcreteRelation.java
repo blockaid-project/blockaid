@@ -41,7 +41,10 @@ public class ConcreteRelation implements Relation {
         tup = tup.replaceNullsWithFreshConsts(signature);
         List<BoolExpr> syms = new ArrayList<>();
         for (int i = 0; i < tuples.length; ++i) {
-            syms.add(context.mkAnd(exists[i], tuples[i].equalsExpr(tup)));
+            BoolExpr tupEq = tuples[i].equalsExpr(tup);
+            if (!tupEq.isFalse()) {
+                syms.add(context.mkAnd(exists[i], tupEq));
+            }
         }
         return context.mkOr(syms.toArray(new BoolExpr[0]));
     }
@@ -64,6 +67,9 @@ public class ConcreteRelation implements Relation {
     @Override
     public BoolExpr isContainedInExpr(Relation other) {
         checkArgument(other instanceof ConcreteRelation);
+        if (tuples.length > 10) {
+            System.out.println("*** isContainedInExpr: " + tuples.length);
+        }
 
         if (tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD
                 || ((ConcreteRelation) other).tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD) {
