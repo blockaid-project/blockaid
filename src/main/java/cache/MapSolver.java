@@ -17,6 +17,7 @@ import static util.TerminalColor.ANSI_RESET;
 class MapSolver<L> {
     private final MyZ3Context context;
     private final Solver solver;
+    private final boolean increasingOrder; // Enumerate seeds in increasing order by size?
 
     private final ImmutableSet<L> allLabels;
     private final ImmutableMap<BoolExpr, L> var2Label;
@@ -24,9 +25,10 @@ class MapSolver<L> {
 
     private int bound = 0; // Upper bound on the number of true variables.
 
-    public MapSolver(MyZ3Context context, Collection<L> labels) {
+    public MapSolver(MyZ3Context context, Collection<L> labels, boolean increasingOrder) {
         this.context = context;
         this.solver = context.mkRawSolver();
+        this.increasingOrder = increasingOrder;
 
         this.allLabels = ImmutableSet.copyOf(labels);
         ImmutableBiMap.Builder<BoolExpr, L> var2LabelBuilder = new ImmutableBiMap.Builder<>();
@@ -40,18 +42,23 @@ class MapSolver<L> {
         this.label2Var = var2LabelBi.inverse();
     }
 
-    // Enumerate in increasing order in size of true variables.
     public Optional<Set<L>> getNextSeed() {
-        while (bound <= allLabels.size()) {
-            Status status = solver.check(context.mkAtMost(var2Label.keySet().toArray(new BoolExpr[0]), bound));
-            if (status == Status.SATISFIABLE) {
-                break;
+        boolean found = false;
+        if (increasingOrder) {
+            while (bound <= allLabels.size()) {
+                Status status = solver.check(context.mkAtMost(var2Label.keySet().toArray(new BoolExpr[0]), bound));
+                if (status == Status.SATISFIABLE) {
+                    found = true;
+                    break;
+                }
+                checkState(status == Status.UNSATISFIABLE, "solver failed");
+                bound += 1;
             }
-            checkState(status == Status.UNSATISFIABLE, "solver failed");
-            bound += 1;
+        } else {
+            found = (solver.check() == Status.SATISFIABLE);
         }
 
-        if (bound > allLabels.size()) {
+        if (!found) {
             return Optional.empty();
         }
 
@@ -59,7 +66,8 @@ class MapSolver<L> {
         Model m = solver.getModel();
         for (Map.Entry<BoolExpr, L> entry : var2Label.entrySet()) {
             BoolExpr variable = entry.getKey();
-            if (m.eval(variable, false).isTrue()) {
+            if ((increasingOrder && m.eval(variable, false).isTrue())
+                    || (!increasingOrder && !m.eval(variable, false).isFalse())) {
                 seed.add(entry.getValue());
             }
         }

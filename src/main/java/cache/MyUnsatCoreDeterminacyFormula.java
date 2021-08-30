@@ -36,7 +36,7 @@ class MyUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
 
         startTime = System.currentTimeMillis();
         MyUnsatCoreDeterminacyFormula f =
-                new MyUnsatCoreDeterminacyFormula(schema, policies, views, trace, slackBounds, cbe.getPkValues());
+                new MyUnsatCoreDeterminacyFormula(schema, policies, views, trace, slackBounds, null);
         System.out.println("\t\t| Formula constructor:\t" + (System.currentTimeMillis() - startTime));
         return f;
     }

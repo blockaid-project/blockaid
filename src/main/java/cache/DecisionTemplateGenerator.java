@@ -59,6 +59,7 @@ public class DecisionTemplateGenerator {
         }
 
         // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
+        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + "Step 1 start" + ANSI_RESET);
         Collection<Collection<ReturnedRowLabel>> rrCores;
         {
             solver.push();
@@ -71,12 +72,13 @@ public class DecisionTemplateGenerator {
                 }
             }
             try (UnsatCoreEnumerator<ReturnedRowLabel> uce =
-                         new UnsatCoreEnumerator<>(context, solver, rrLabeledExprs)) {
+                         new UnsatCoreEnumerator<>(context, solver, rrLabeledExprs, false)) {
                 rrCores = uce.enumerateAll();
             }
 //            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
             solver.pop();
         }
+        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + "Step 1 end" + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         ArrayList<DecisionTemplate> dts = new ArrayList<>();
@@ -116,7 +118,7 @@ public class DecisionTemplateGenerator {
             solver.push();
             solver.add(rrCore.stream().map(labeledExprs::get).toArray(BoolExpr[]::new));
             try (UnsatCoreEnumerator<EqualityLabel> uce =
-                         new UnsatCoreEnumerator<>(context, solver, keptLabeledExprs)) {
+                         new UnsatCoreEnumerator<>(context, solver, keptLabeledExprs, true)) {
                 Optional<Set<EqualityLabel>> ret;
                 for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
                     ArrayList<Label> coreLabels = new ArrayList<>(ret.get());

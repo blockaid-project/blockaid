@@ -48,10 +48,9 @@ public class SchemaPlusWithKey {
         this.pkValuedColumns = ImmutableSet.copyOf(pkValuedColumns);
     }
 
+    // Returns null if the relation has no primary key.
     public ImmutableList<String> getPrimaryKeyColumns(String relationName) {
-        ImmutableList<String> res = primaryKeys.get(relationName);
-        checkArgument(res != null, "relation " + relationName + " not found");
-        return res;
+        return primaryKeys.get(relationName);
     }
 
     public ImmutableSet<String> getPkValuedColumns() {
