@@ -101,13 +101,13 @@ public class ParsedPSJ {
                 }
                 if (identifier.names.size() == 1) {
                     for (String relation : relations) {
-                        for (String column : schema.getPrimaryKeyColumns(relation)) {
+                        for (String column : schema.getPrimaryKeyColumns(relation).get()) {
                             projectColumns.add((relation + "." + column).toUpperCase());
                         }
                     }
                 } else {
                     String relation = identifier.names.get(0).toUpperCase();
-                    for (String column : schema.getPrimaryKeyColumns(relation)) {
+                    for (String column : schema.getPrimaryKeyColumns(relation).get()) {
                         projectColumns.add((relation + "." + column).toUpperCase());
                     }
                 }

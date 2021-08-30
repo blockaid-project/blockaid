@@ -1,6 +1,7 @@
 package solver;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.*;
 import org.apache.calcite.schema.SchemaPlus;
@@ -57,8 +58,16 @@ public class Schema {
         return instance;
     }
 
+    /**
+     * Creates a concrete database instance of this schema.
+     * @param instancePrefix identifies this instance.
+     * @param bounds maps table name to upper bound on size (number of rows).
+     * @param table2KnownRows maps table name to distinct known partial rows of the table; each row is represented as
+     *                        a map from column name to value.
+     * @return a concrete instance.
+     */
     public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds,
-                                         SetMultimap<String, Object> table2pkValues) {
+                                         ListMultimap<String, Map<String, Object>> table2KnownRows) {
         Instance instance = new Instance(this, true);
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
@@ -70,37 +79,27 @@ public class Schema {
             BoolExpr[] exists = new BoolExpr[numTuples];
             String prefix = instancePrefix + "_" + relationName;
 
-            Set<Object> pkValues = table2pkValues == null ? Collections.emptySet() : table2pkValues.get(relationName);
-            ImmutableList<String> pkColumnNames = rawSchema.getPrimaryKeyColumns(relationName);
-            String pkColumnName;
-            if (pkColumnNames == null || pkColumnNames.size() != 1) {
-                // The primary-key optimization is only supported if the table has exactly one primary-key column.
-                pkColumnName = null;
-            } else {
-                pkColumnName = pkColumnNames.get(0);
-
-                String finalPkColumnName = pkColumnName;
-                long count = columns.stream().filter(col -> col.name.equals(finalPkColumnName)).count();
-                checkArgument(count == 1,
-                        "table " + relationName + " contains " + count
-                                + " copies of PK column " + pkColumnName);
-            }
-
-            checkArgument(pkValues.size() <= numTuples,
-                    String.format("table %s has %d primary keys specified, more than bound %d",
-                            relationName, pkValues.size(), numTuples));
+            List<Map<String, Object>> knownRows =
+                    table2KnownRows == null ? Collections.emptyList() : table2KnownRows.get(relationName);
+            checkArgument(knownRows.size() <= numTuples,
+                    String.format("table %s has %d known rows specified, more than bound %d",
+                            relationName, knownRows.size(), numTuples));
 
             int i = 0;
-            for (Object pkValue : pkValues) {
+            System.out.println("***\t" + relationName);
+            for (Map<String, Object> knownRow : knownRows) {
                 List<Expr> values = new ArrayList<>();
                 for (Column col : columns) {
-                    if (col.name.equals(pkColumnName)) {
-                        values.add(Tuple.getExprFromObject(context, pkValue));
+                    Object knownValue = knownRow.get(col.name);
+                    if (knownValue != null) {
+                        // TODO(zhangwen): This ignores a known NULL value, which is safe to do; fix?
+                        values.add(Tuple.getExprFromObject(context, knownValue));
                     } else {
                         values.add(context.mkConst(prefix + "_" + i + "_" + col.name, col.type));
                     }
                 }
                 tuples[i] = new Tuple(this, values.stream());
+                System.out.println("***\t" + tuples[i]);
                 exists[i] = context.mkTrue(); // A tuple with a known PK value must exist.
                 i += 1;
             }

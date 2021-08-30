@@ -5,10 +5,7 @@ import cache.QueryTraceEntry;
 import com.google.common.collect.*;
 import sql.PrivacyQuery;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -77,8 +74,13 @@ public class CountingBoundEstimator extends BoundEstimator {
 
         ImmutableSetMultimap.Builder<String, Object> builder = new ImmutableSetMultimap.Builder<>();
         for (String relationName : schema.getRelationNames()) {
-            ImmutableList<String> pkColumnNames = schema.getRawSchema().getPrimaryKeyColumns(relationName);
-            if (pkColumnNames == null || pkColumnNames.size() != 1) {
+            Optional<ImmutableList<String>> oPkColumnNames = schema.getRawSchema().getPrimaryKeyColumns(relationName);
+            if (oPkColumnNames.isEmpty()) {
+                continue;
+            }
+
+            ImmutableList<String> pkColumnNames = oPkColumnNames.get();
+            if (pkColumnNames.size() != 1) {
                 // Only supported if the table has exactly one primary-key column.
                 continue;
             }
