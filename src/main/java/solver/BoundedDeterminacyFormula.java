@@ -1,5 +1,6 @@
 package solver;
 
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.BoolExpr;
 
@@ -11,8 +12,9 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
     }
 
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds,
-                                     boolean splitProducts, TextOption text, SetMultimap<String, Object> table2pkValues) {
-        super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds, table2pkValues), (Instance inst1, Instance inst2) -> {
+                                     boolean splitProducts, TextOption text,
+                                     ListMultimap<String, Map<String, Object>> table2KnownRows) {
+        super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds, table2KnownRows), (Instance inst1, Instance inst2) -> {
             MyZ3Context context = schema.getContext();
             List<BoolExpr> clauses = new ArrayList<>();
             clauses.addAll(inst1.getConstraints().values());

@@ -8,8 +8,8 @@ import solver.ForeignKeyDependency;
 
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class SchemaPlusWithKey {
@@ -48,9 +48,9 @@ public class SchemaPlusWithKey {
         this.pkValuedColumns = ImmutableSet.copyOf(pkValuedColumns);
     }
 
-    // Returns null if the relation has no primary key.
-    public ImmutableList<String> getPrimaryKeyColumns(String relationName) {
-        return primaryKeys.get(relationName);
+    // Returns empty if the relation has no primary key.
+    public Optional<ImmutableList<String>> getPrimaryKeyColumns(String relationName) {
+        return Optional.ofNullable(primaryKeys.get(relationName));
     }
 
     public ImmutableSet<String> getPkValuedColumns() {
