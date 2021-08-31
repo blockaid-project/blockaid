@@ -8,7 +8,7 @@ import java.util.*;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
-public class QueryTrace implements UnmodifiableLinearQueryTrace {
+public class QueryTrace extends UnmodifiableLinearQueryTrace {
     private final ArrayListMultimap<String, QueryTraceEntry> queries;
     private final ArrayList<QueryTraceEntry> queryList; // Used to maintain order between queries.
     private QueryTraceEntry currentQuery;

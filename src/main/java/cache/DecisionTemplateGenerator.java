@@ -7,7 +7,6 @@ import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
 import cache.trace.QueryTupleIdxPair;
 import cache.trace.SubQueryTrace;
-import cache.unsat_core.AbstractUnsatCoreEnumerator;
 import cache.unsat_core.Order;
 import cache.unsat_core.ReturnedRowUnsatCoreEnumerator;
 import cache.unsat_core.UnsatCoreEnumerator;
@@ -72,9 +71,12 @@ public class DecisionTemplateGenerator {
     public Collection<DecisionTemplate> generate() {
         // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
 //        Collection<Collection<ReturnedRowLabel>> rrCores = findRRCores();
-        Collection<Collection<ReturnedRowLabel>> rrCores = ReturnedRowUnsatCoreEnumerator.create(
-                schema, views, trace
-        ).enumerateAll();
+//        Collection<Collection<ReturnedRowLabel>> rrCores = ReturnedRowUnsatCoreEnumerator.create(
+//                schema, views, trace
+//        ).enumerateAll();
+        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(ReturnedRowUnsatCoreEnumerator.create(
+                schema, policies, views, trace
+        ).next().get());
         System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.

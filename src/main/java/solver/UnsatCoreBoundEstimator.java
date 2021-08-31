@@ -4,6 +4,7 @@ import cache.trace.QueryTraceEntry;
 import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
+import com.microsoft.z3.Params;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import sql.PrivacyQuery;
@@ -29,8 +30,10 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
         Map<String, Integer> bounds = new HashMap<>(initialBounds.calculateBounds(schema, queries));
         int iters;
         for (iters = 0; ; ++iters) {
-            Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
-            Instance instance = schema.makeConcreteInstance("inst", bounds);
+            Solver solver = context.mkSolver();
+            Params p = context.mkParams(); p.add("timeout", 1000); solver.setParameters(p);
+            Instance instance = schema.makeConcreteInstance("inst", bounds,
+                    queries.computeKnownRows(schema));
 
             Map<Constraint, Iterable<BoolExpr>> constraints = instance.getConstraints();
             Map<BoolExpr, Constraint> dependencyLabels = new HashMap<>();
@@ -65,6 +68,16 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
 //            System.out.println("\t\t| bound estimator check:\t" + durMs + "\t" + bounds);
             if (res == Status.SATISFIABLE) {
                 break;
+            }
+            if (res != Status.UNSATISFIABLE) {
+                System.out.println(bounds);
+                try {
+                    for (BoolExpr l : dependencyLabels.keySet()) solver.add(l);
+                    for (BoolExpr l : queryLabels.keySet()) solver.add(l);
+                    Files.write(Paths.get("/tmp/bound_estimator.smt2"), solver.toString().getBytes());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
             checkState(res == Status.UNSATISFIABLE, "solver returned: " + res);
             BoolExpr[] core = solver.getUnsatCore();

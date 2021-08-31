@@ -10,7 +10,7 @@ import java.util.Map;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public class SubQueryTrace implements UnmodifiableLinearQueryTrace {
+public class SubQueryTrace extends UnmodifiableLinearQueryTrace {
     private final List<QueryTraceEntry> queryList;
     private final Map<String, Integer> constMap;
     private final QueryTraceEntry currentQuery;

@@ -1,34 +1,59 @@
 package cache.unsat_core;
 
+import cache.BoundedUnsatCoreDeterminacyFormula;
 import cache.MyUnsatCoreDeterminacyFormula;
+import cache.labels.Label;
 import cache.labels.ReturnedRowLabel;
 import cache.trace.*;
 import com.google.common.collect.*;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
+import policy_checker.Policy;
 import solver.*;
-import solver.executor.VampireCASCProofExecutor;
-import sql.PrivacyQuery;
-import sql.PrivacyQuerySelect;
-import sql.SchemaPlusWithKey;
+import solver.executor.CVC4Executor;
+import solver.executor.ProcessSMTExecutor;
+import solver.executor.SMTExecutor;
+import solver.executor.VampireProofExecutor;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.*;
 
-public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<ReturnedRowLabel>
-        implements AutoCloseable {
+public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<ReturnedRowLabel> {
     private final Schema schema;
     private final Collection<Query> views;
     private final QueryTrace trace;
-
+    private final String smtPreamble;
     private Set<ReturnedRowLabel> prevCore = null;
 
-    public static ReturnedRowUnsatCoreEnumerator create(Schema schema, Collection<Query> views, QueryTrace trace) {
+    public static AbstractUnsatCoreEnumerator<ReturnedRowLabel> create(Schema schema, Collection<Policy> policies,
+                                                        Collection<Query> views, QueryTrace trace) {
+        int maxBound = Collections.max(new CountingBoundEstimator().calculateBounds(schema, trace).values());
+        // FIXME(zhangwen): this is a hack for small traces.
+        if (maxBound <= 10) {
+            MyZ3Context context = schema.getContext();
+            Solver solver = context.mkSolver();
+            BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies,
+                    views, trace, BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY);
+            solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+            for (Map.Entry<Label, BoolExpr> e : formula.makeLabeledExprs().entrySet()) {
+                solver.add(context.mkImplies(context.mkBoolConst(e.getKey().toString()), e.getValue()));
+            }
+            return new UnsatCoreEnumerator<>(context, solver,
+                    formula.makeLabeledExprs().entrySet().stream()
+                            .collect(Collectors.toMap(e -> (ReturnedRowLabel) e.getKey(), Map.Entry::getValue)),
+                    Order.ARBITRARY);
+        }
+
         // TODO(zhangwen): This code is duplicated.
         ArrayList<ReturnedRowLabel> rrls = new ArrayList<>();
         int queryIdx = 0;
@@ -41,56 +66,136 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
         return new ReturnedRowUnsatCoreEnumerator(schema, views, trace, rrls);
     }
 
-    private ReturnedRowUnsatCoreEnumerator(Schema schema, Collection<Query> views, QueryTrace trace,
-                                           Collection<ReturnedRowLabel> labels) {
+    private ReturnedRowUnsatCoreEnumerator(Schema schema, Collection<Query> views,
+                                           QueryTrace trace, Collection<ReturnedRowLabel> labels) {
         super(schema.getContext(), labels, Order.DECREASING);
-        schema.getContext().startCachingConsts();
         this.schema = schema;
         this.views = views;
         this.trace = trace;
+
+        MyZ3Context context = schema.getContext();
+        {
+            Solver solver = context.mkSolver();
+            MyUnsatCoreDeterminacyFormula myFormula = new MyUnsatCoreDeterminacyFormula(schema, views, trace);
+            solver.add(Iterables.toArray(myFormula.makeBackgroundFormulas(), BoolExpr.class));
+            Map<ReturnedRowLabel, BoolExpr> labeledExprs = myFormula.makeLabeledExprs();
+            for (Map.Entry<ReturnedRowLabel, BoolExpr> entry : labeledExprs.entrySet()) {
+                if (labels.contains(entry.getKey())) {
+                    solver.add(context.mkImplies(
+                            context.mkBoolConst(entry.getKey().toString()),
+                            entry.getValue()
+                    ));
+                }
+            }
+            this.smtPreamble = solver.toString();
+        }
     }
 
-    private Status solveWithVampire(Set<ReturnedRowLabel> labels) {
-        MyZ3Context context = schema.getContext();
-        Solver solver = context.mkSolver();
-        MyUnsatCoreDeterminacyFormula myFormula = new MyUnsatCoreDeterminacyFormula(schema, views, trace);
-        solver.add(Iterables.toArray(myFormula.makeBackgroundFormulas(), BoolExpr.class));
+    private Status solveNormal(Set<ReturnedRowLabel> labels) {
+        ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
+        CountDownLatch latch = new CountDownLatch(1);
 
-        Map<ReturnedRowLabel, BoolExpr> labeledExprs = myFormula.makeLabeledExprs();
-        for (Map.Entry<ReturnedRowLabel, BoolExpr> entry : labeledExprs.entrySet()) {
-            if (labels.contains(entry.getKey())) {
-                solver.add(context.mkImplies(
-                        context.mkBoolConst(entry.getKey().toString()),
-                        entry.getValue()
-                ));
-            }
-        }
-        solver.push();
+        StringBuilder smtBuilder = new StringBuilder(smtPreamble);
         for (ReturnedRowLabel l : labels) {
-            solver.add(context.mkBoolConst(l.toString()));
+            smtBuilder.append("(assert ").append(l).append(")\n");
         }
-        String smt = solver.toString();
-        solver.pop();
+        String smtVampire = smtBuilder.toString();
+//        executors.add(new VampireProofExecutor("vampire_lrs", smtVampire, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_10"));
+        executors.add(new VampireProofExecutor("vampire_dis", smtVampire, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_10"));
+        executors.add(new VampireProofExecutor("vampire_lrs1011", smtVampire, latch, "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_10"));
 
-        VampireCASCProofExecutor executor = new VampireCASCProofExecutor("vampire", smt, null);
-        String output = executor.doRunRaw();
-//        System.out.println(output);
-        if (output.contains("Termination reason: Satisfiable\n")) {
-            return Status.SATISFIABLE;
+//        smtBuilder = new StringBuilder("(set-option :produce-unsat-cores true)\n");
+//        smtBuilder.append(smtPreamble);
+//        for (ReturnedRowLabel l : labels) {
+//            smtBuilder.append("(assert (! ").append(l).append(" :named !").append(l).append("))\n");
+//        }
+//        smtBuilder.append("(check-sat)");
+//        smtBuilder.append("(get-unsat-core)");
+//        try {
+//            Files.write(Paths.get("/tmp/get_unsat_core_cvc4.smt2"), smtBuilder.toString().getBytes());
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//        executors.add(new CVC4Executor("cvc4", smtBuilder.toString(), latch, true, true, false));
+
+        for (SMTExecutor executor : executors) {
+            executor.start();
         }
 
-        if (output.contains("Termination reason: Refutation\n")) {
-            // TODO(zhangwen): this is ugly.
-            Set<ReturnedRowLabel> core = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)").matcher(output).results()
+        long startMs = System.currentTimeMillis();
+        try {
+            latch.await(2000, TimeUnit.MILLISECONDS);
+            for (SMTExecutor executor : executors) {
+                executor.signalShutdown();
+            }
+            for (SMTExecutor executor : executors) {
+                executor.join();
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        long durMs = System.currentTimeMillis() - startMs;
+
+        Set<ReturnedRowLabel> smallestCore = null;
+        for (ProcessSMTExecutor e : executors) {
+            switch (e.getResult()) {
+                case SATISFIABLE:
+                    return Status.SATISFIABLE;
+                case UNKNOWN:
+                    continue;
+            }
+
+            System.out.println(e.getName());
+            Set<ReturnedRowLabel> core = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)").matcher(e.getOutput())
+                    .results()
                     .map(r -> new ReturnedRowLabel(Integer.parseInt(r.group(1)), Integer.parseInt(r.group(2))))
                     .collect(Collectors.toSet());
+            core.retainAll(labels);
             System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + core + ANSI_RESET);
-
-            this.prevCore = core;
-            return Status.UNSATISFIABLE;
+            if (smallestCore == null || smallestCore.size() > core.size()) {
+                smallestCore = core;
+            }
         }
 
-        return Status.UNKNOWN;
+        if (durMs > 500) {
+            try {
+                Files.write(Paths.get("/tmp/get_unsat_core_vampire.smt2"), smtVampire.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        if (smallestCore == null) {
+            return Status.UNKNOWN;
+        }
+
+        this.prevCore = smallestCore;
+        return Status.UNSATISFIABLE;
+
+//        VampireCASCProofExecutor executor = new VampireCASCProofExecutor("vampire", smt, null);
+//        String output = executor.doRunRaw();
+//        if (output.contains("Termination reason: Satisfiable\n")) {
+//            return Status.SATISFIABLE;
+//        }
+//
+//        if (output.contains("Termination reason: Refutation\n")) {
+//            // TODO(zhangwen): this is ugly.
+//            Set<ReturnedRowLabel> core = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)").matcher(output).results()
+//                    .map(r -> new ReturnedRowLabel(Integer.parseInt(r.group(1)), Integer.parseInt(r.group(2))))
+//                    .collect(Collectors.toSet());
+//            System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + core + ANSI_RESET);
+//
+//            this.prevCore = core;
+//            return Status.UNSATISFIABLE;
+//        }
+//
+//        try {
+//            Files.write(Paths.get("/tmp/get_unsat_core.smt2"), smt.getBytes());
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//
+//        return Status.UNKNOWN;
     }
 
     @Override
@@ -101,11 +206,16 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
     @Override
     protected Optional<Set<ReturnedRowLabel>> isSubsetSat(Set<ReturnedRowLabel> labels) {
         this.prevCore = null;
-        Status res = solveWithVampire(labels);
-        if (res == Status.SATISFIABLE) {
-            return Optional.of(labels);
-        } else if (res == Status.UNSATISFIABLE) {
-            return Optional.empty();
+        if (labels.size() > 3) {
+            long startMs = System.currentTimeMillis();
+            Status res = solveNormal(labels);
+            System.out.println("\t\t| Normal:\t" + (System.currentTimeMillis() - startMs));
+            switch (res) {
+                case SATISFIABLE:
+                    return Optional.of(labels);
+                case UNSATISFIABLE:
+                    return Optional.empty();
+            }
         }
 
         SubQueryTrace sqt = trace.getSubTrace(
@@ -119,132 +229,18 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
         Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 2);
 
         BoundedDeterminacyFormula formula = new BoundedDeterminacyFormula(schema, views, slackBounds, true,
-                DeterminacyFormula.TextOption.NO_TEXT, computeKnownRows(schema, sqt));
+                DeterminacyFormula.TextOption.NO_TEXT, sqt.computeKnownRows(schema));
         Solver solver = schema.getContext().mkSolver();
         solver.add(Iterables.toArray(formula.makeCompleteFormula(sqt), BoolExpr.class));
         Status status = solver.check();
-        checkState(status == Status.SATISFIABLE);
-        return Optional.of(labels);
-//        checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
-//        System.out.println(ANSI_RED + labels.size() + "\t" + labels + ANSI_RESET);
-//        this.prevLabels = ImmutableSet.copyOf(labels);
-//        return Optional.empty();
+        if (status == Status.SATISFIABLE) {
+            return Optional.of(labels);
+        }
+        checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
+        System.out.println(ANSI_RED + labels.size() + "\t" + labels + ANSI_RESET);
+        return Optional.empty();
     }
 
     @Override
-    public void close() throws Exception {
-        schema.getContext().stopCachingConsts();
-    }
-
-    private static class TableColumnPair {
-        public final String table;
-        public final Object value;
-
-        public TableColumnPair(String table, Object value) {
-            this.table = table;
-            this.value = value;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TableColumnPair that = (TableColumnPair) o;
-            return table.equals(that.table) && value.equals(that.value);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(table, value);
-        }
-    }
-
-    private static ListMultimap<String, Map<String, Object>> computeKnownRows(
-            Schema schema, UnmodifiableLinearQueryTrace trace) {
-        SchemaPlusWithKey rawSchema = schema.getRawSchema();
-        Map<String, String> tableName2PkName = new HashMap<>();
-        for (String tableName : schema.getRelationNames()) {
-            Optional<ImmutableList<String>> oPkColumns = rawSchema.getPrimaryKeyColumns(tableName);
-            if (oPkColumns.isEmpty()) {
-                continue;
-            }
-
-            // Currently, only supports tables with exactly one primary key column.
-            ImmutableList<String> pkColumns = oPkColumns.get();
-            if (pkColumns.size() != 1) {
-                continue;
-            }
-            tableName2PkName.put(tableName, Iterables.getOnlyElement(pkColumns));
-        }
-
-        Map<TableColumnPair, Map<String, Object>> tablePk2Rows = new HashMap<>();
-        for (QueryTraceEntry qte : trace.getAllEntries()) {
-            if (!qte.hasTuples()) {
-                continue;
-            }
-            List<List<Object>> tuples = qte.getTuples();
-            // TODO(zhangwen): add a method to query that returns the number of columns.
-            int numColumns = tuples.get(0).size();
-
-            PrivacyQuery pq = qte.getQuery();
-            if (!(pq instanceof PrivacyQuerySelect)) {
-                continue;
-            }
-            PrivacyQuerySelect pqs = (PrivacyQuerySelect) pq;
-
-            // Maps table name to the column index of its primary key, if returned by the query.
-            List<String[]> columns = new ArrayList<>();
-            Map<String, Integer> tableName2PkIdx = new HashMap<>();
-            for (int colIdx = 0; colIdx < numColumns; ++colIdx) {
-                Set<String> columnNames = pqs.getProjectColumnsByIdx(colIdx);
-                checkState(columnNames.size() == 1,
-                        "a SELECT query should have exactly one column name per index, got: " + columnNames);
-                String columnName = Iterables.getOnlyElement(columnNames);
-
-                String[] parts = columnName.split("\\.", 2);
-                String tableName = parts[0];
-                // FIXME(zhangwen): assumes that no table is aliased to another table's name.
-                if (parts[1].equals(tableName2PkName.get(tableName))) {
-                    checkState(!tableName2PkIdx.containsKey(tableName));
-                    tableName2PkIdx.put(tableName, colIdx);
-                }
-
-                columns.add(parts);
-            }
-
-            for (List<Object> tup : tuples) {
-                Map<String, TableColumnPair> tableName2PkValue = new HashMap<>();
-                for (Map.Entry<String, Integer> e : tableName2PkIdx.entrySet()) {
-                    String tableName = e.getKey();
-                    tableName2PkValue.put(tableName, new TableColumnPair(tableName, tup.get(e.getValue())));
-                }
-
-                for (int colIdx = 0; colIdx < tup.size(); ++colIdx) {
-                    String[] parts = columns.get(colIdx);
-                    Object pkValue = tableName2PkValue.get(parts[0]);
-                    if (pkValue == null) {
-                        continue;
-                    }
-                    TableColumnPair tcp = tableName2PkValue.get(parts[0]);
-                    if (tcp == null) {
-                        continue;
-                    }
-                    Map<String, Object> knownRow = tablePk2Rows.computeIfAbsent(tcp, k -> new HashMap<>());
-                    if (knownRow.containsKey(parts[1])) {
-                        checkState(Objects.equals(knownRow.get(parts[1]), tup.get(colIdx)));
-                    } else {
-                        knownRow.put(parts[1], tup.get(colIdx));
-                    }
-                }
-            }
-        }
-
-        ListMultimap<String, Map<String, Object>> knownRows = ArrayListMultimap.create();
-        for (Map.Entry<TableColumnPair, Map<String, Object>> e : tablePk2Rows.entrySet()) {
-            knownRows.put(e.getKey().table, e.getValue());
-        }
-        return knownRows;
-    }
-
-
+    public void close() {}
 }

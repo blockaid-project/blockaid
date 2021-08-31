@@ -11,9 +11,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class ProcessSMTExecutor extends SMTExecutor {
     private final String smtString;
     private final String[] command;
-
     private Process process = null;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
+    protected String output = null;
 
     protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
         super(name, latch, satConclusive, unsatConclusive, unknownConclusive, runCore);
@@ -21,6 +21,7 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
         this.command = command;
     }
 
+    // Sets this.output.
     public String doRunRaw() {
         InputStream stderr = null;
         try {
@@ -47,8 +48,10 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
             }
 
             process.waitFor();
-            return output.toString();
+            this.output = output.toString();
+            return this.output;
         } catch (InterruptedException e) {
+            this.output = null;
             return null;
         } catch (Exception e) {
             if (!(e instanceof IOException)) {
@@ -62,6 +65,7 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
                     System.err.println(scanner.nextLine());
                 }
             }
+            this.output = null;
             return null;
         }
     }
@@ -107,8 +111,12 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
         this.interrupt();
     }
 
+    public String getOutput() {
+        return output;
+    }
+
     private Status getResult(String output) {
-        switch (output.trim()) {
+        switch (output.split("\n", 2)[0].trim()) {
             case "sat":
                 return Status.SATISFIABLE;
             case "unsat":

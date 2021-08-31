@@ -25,8 +25,8 @@ import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.ANSI_RED;
 import static util.TerminalColor.ANSI_RESET;
 
-class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
-    enum LabelOption {
+public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
+    public enum LabelOption {
         RETURNED_ROWS_ONLY,
         ALL,
     }
@@ -155,7 +155,7 @@ class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
                     }
                     Map<String, Object> knownRow = tablePk2Rows.computeIfAbsent(tcp, k -> new HashMap<>());
                     if (knownRow.containsKey(parts[1])) {
-                        checkState(knownRow.get(parts[1]).equals(tup.get(colIdx)));
+                        checkState(Objects.equals(knownRow.get(parts[1]), tup.get(colIdx)));
                     } else {
                         knownRow.put(parts[1], tup.get(colIdx));
                     }

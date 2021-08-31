@@ -5,7 +5,7 @@ import solver.MyZ3Context;
 
 import java.util.*;
 
-public abstract class AbstractUnsatCoreEnumerator<L> {
+public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
     private final Collection<L> labels;
     private final MapSolver<L> ms;
     private final Order order;

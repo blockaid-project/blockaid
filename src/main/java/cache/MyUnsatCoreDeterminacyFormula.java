@@ -21,7 +21,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.ANSI_RED;
 import static util.TerminalColor.ANSI_RESET;
 
-public class MyUnsatCoreDeterminacyFormula extends FastCheckDeterminacyFormula {
+public class MyUnsatCoreDeterminacyFormula extends BasicDeterminacyFormula {
     protected final UnmodifiableLinearQueryTrace trace;
 
     public MyUnsatCoreDeterminacyFormula(Schema schema, Collection<Query> views, UnmodifiableLinearQueryTrace trace) {
