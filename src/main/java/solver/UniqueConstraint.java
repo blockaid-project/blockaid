@@ -26,7 +26,7 @@ public class UniqueConstraint implements Constraint {
     }
 
     @Override
-    public BoolExpr apply(Instance instance) {
+    public Iterable<BoolExpr> apply(Instance instance) {
         if (instance.isConcrete) {
             return applyConcrete(instance);
         } else {
@@ -39,7 +39,7 @@ public class UniqueConstraint implements Constraint {
         return relevantColumns;
     }
 
-    private BoolExpr applyGeneral(Instance instance) {
+    private Iterable<BoolExpr> applyGeneral(Instance instance) {
         MyZ3Context context = instance.getContext();
 
         Relation relation = instance.get(this.relationName);
@@ -64,10 +64,10 @@ public class UniqueConstraint implements Constraint {
         BoolExpr rhs = tup1.equalsExpr(tup2);
 
         Expr[] allVars = Stream.concat(tup1.stream(), tup2.stream()).toArray(Expr[]::new);
-        return context.mkForall(allVars, context.mkImplies(lhs, rhs), 1, null, null, null, null);
+        return List.of(context.mkForall(allVars, context.mkImplies(lhs, rhs), 1, null, null, null, null));
     }
 
-    private BoolExpr applyConcrete(Instance instance) {
+    private Iterable<BoolExpr> applyConcrete(Instance instance) {
         MyZ3Context context = instance.getContext();
 
         ConcreteRelation relation = (ConcreteRelation) instance.get(this.relationName);
@@ -78,7 +78,7 @@ public class UniqueConstraint implements Constraint {
 
         Tuple[] tuples = relation.getTuples();
         if (tuples.length == 0) {
-            return context.mkTrue();
+            return List.of();
         }
 
         BoolExpr[] exists = relation.getExists();
@@ -115,6 +115,6 @@ public class UniqueConstraint implements Constraint {
             }
         }
 
-        return context.mkAnd(exprs.toArray(new BoolExpr[0]));
+        return exprs;
     }
 }

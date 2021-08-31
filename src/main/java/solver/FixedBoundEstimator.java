@@ -1,6 +1,6 @@
 package solver;
 
-import cache.QueryTrace;
+import cache.trace.UnmodifiableLinearQueryTrace;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,7 +12,7 @@ public class FixedBoundEstimator extends BoundEstimator {
         this.bound = bound;
     }
 
-    public Map<String, Integer> calculateBounds(Schema schema, QueryTrace trace) {
+    public Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace trace) {
         Map<String, Integer> m = new HashMap<>();
         for (String relationName : schema.getRelationNames()) {
             m.put(relationName, bound);

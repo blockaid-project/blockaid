@@ -21,8 +21,7 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
         this.command = command;
     }
 
-    @Override
-    protected Status doRunNormal() {
+    public String doRunRaw() {
         InputStream stderr = null;
         try {
             startProcess();
@@ -39,7 +38,7 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
             StringBuilder output = new StringBuilder();
             while (scanner.hasNextLine()) {
                 String s = scanner.nextLine();
-                output.append(s);
+                output.append(s).append("\n");
             }
 
             scanner = new Scanner(stderr);
@@ -48,9 +47,9 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
             }
 
             process.waitFor();
-            return getResult(output.toString());
+            return output.toString();
         } catch (InterruptedException e) {
-            return Status.UNKNOWN;
+            return null;
         } catch (Exception e) {
             if (!(e instanceof IOException)) {
                 // IO errors are expected when the process is killed before/while stdin is written because another
@@ -63,66 +62,33 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
                     System.err.println(scanner.nextLine());
                 }
             }
-            return Status.UNKNOWN;
+            return null;
         }
     }
 
     @Override
-    protected Status doRunUnsatCore() {
-        InputStream stderr = null;
-        try {
-            startProcess();
-            InputStream stdout = process.getInputStream();
-            OutputStream stdin = process.getOutputStream();
-            stderr = process.getErrorStream();
-
-            BufferedWriter bufferedStdin = new BufferedWriter(new OutputStreamWriter(stdin));
-            bufferedStdin.write(smtString);
-            bufferedStdin.flush();
-            bufferedStdin.close();
-
-            Scanner scanner = new Scanner(stdout);
-            StringBuilder output = new StringBuilder();
-            while (scanner.hasNextLine()) {
-                String s = scanner.nextLine();
-                output.append(s).append('\n');
-            }
-
-            scanner = new Scanner(stderr);
-            while (scanner.hasNextLine()) {
-                System.err.println(scanner.nextLine());
-            }
-
-            process.waitFor();
-
-            if (output.toString().trim().isEmpty()) {
-                return Status.UNKNOWN;
-            }
-
-            String[] parts = output.toString().split("\n", 2);
-            Status result = getResult(parts[0].trim());
-            if (result == Status.UNSATISFIABLE) {
-                String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
-                setUnsatCore(Arrays.stream(coreParts).map(String::trim).toArray(String[]::new));
-            }
-            // If the formula was not determined to be unsat, no reason to set the unsat core.
-            return result;
-        } catch (InterruptedException e) {
-            return Status.UNKNOWN;
-        } catch (Exception e) {
-            if (!(e instanceof IOException)) {
-                // IO errors are expected when the process is killed before/while stdin is written because another
-                // executor finished already.
-                e.printStackTrace();
-            }
-            if (stderr != null) {
-                Scanner scanner = new Scanner(stderr);
-                while (scanner.hasNextLine()) {
-                    System.err.println(scanner.nextLine());
-                }
-            }
+    protected Status doRunNormal() {
+        String output = doRunRaw();
+        if (output == null) {
             return Status.UNKNOWN;
         }
+        return getResult(output);
+    }
+
+    @Override
+    protected Status doRunUnsatCore() {
+        String output = doRunRaw();
+        if (output == null || output.trim().isEmpty()) {
+            return Status.UNKNOWN;
+        }
+        String[] parts = output.split("\n", 2);
+        Status result = getResult(parts[0].trim());
+        if (result == Status.UNSATISFIABLE) {
+            String[] coreParts = parts[1].replace("\n", " ").replace("(", "").replace(")", "").trim().split("\\s+");
+            setUnsatCore(Arrays.stream(coreParts).map(String::trim).toArray(String[]::new));
+        }
+        // If the formula was not determined to be unsat, no reason to set the unsat core.
+        return result;
     }
 
     private synchronized void startProcess() throws Exception {

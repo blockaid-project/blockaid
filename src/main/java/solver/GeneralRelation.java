@@ -34,15 +34,15 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public BoolExpr isContainedInExpr(Relation other) {
+    public Iterable<BoolExpr> isContainedInExpr(Relation other) {
         Tuple syms = makeFreshHead();
         BoolExpr lhs = this.doesContainExpr(syms);
         BoolExpr rhs = other.doesContainExpr(syms);
         if (syms.isEmpty()) {
-            return context.mkImplies(lhs, rhs);
+            return List.of(context.mkImplies(lhs, rhs));
         }
-        return context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
-                null, null, null, null);
+        return List.of(context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
+                null, null, null, null));
     }
 
     private Tuple makeFreshHead() {
@@ -60,15 +60,15 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public BoolExpr equalsExpr(Relation other) {
+    public List<BoolExpr> equalsExpr(Relation other) {
         checkArgument(other instanceof GeneralRelation);
 
         Tuple syms = makeFreshHead();
         BoolExpr lhs = this.doesContainExpr(syms);
         BoolExpr rhs = other.doesContainExpr(syms);
         if (syms.isEmpty()) {
-            return context.mkEq(lhs, rhs);
+            return List.of(context.mkEq(lhs, rhs));
         }
-        return context.mkForall(syms.toExprArray(), context.mkEq(lhs, rhs), 1, null, null, null, null);
+        return List.of(context.mkForall(syms.toExprArray(), context.mkEq(lhs, rhs), 1, null, null, null, null));
     }
 }

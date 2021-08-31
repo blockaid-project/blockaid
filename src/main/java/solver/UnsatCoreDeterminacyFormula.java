@@ -1,8 +1,10 @@
 package solver;
 
-import cache.QueryTrace;
-import cache.QueryTraceEntry;
+import cache.trace.QueryTrace;
+import cache.trace.QueryTraceEntry;
+import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
 import policy_checker.Policy;
 
@@ -18,10 +20,14 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                 (Integer instNum) -> schema.makeFreshInstance("instance" + instNum),
                 (Instance inst1, Instance inst2) -> {
                     List<BoolExpr> clauses = new ArrayList<>();
-                    clauses.addAll(inst1.getConstraints().values());
-                    clauses.addAll(inst2.getConstraints().values());
+                    for (Iterable<BoolExpr> bs : inst1.getConstraints().values()) {
+                        Iterables.addAll(clauses, bs);
+                    }
+                    for (Iterable<BoolExpr> bs : inst2.getConstraints().values()) {
+                        Iterables.addAll(clauses, bs);
+                    }
                     for (Query v : views) {
-                        clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
+                        Iterables.addAll(clauses, v.apply(inst1).equalsExpr(v.apply(inst2)));
                     }
                     return clauses;
                 });
@@ -38,7 +44,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
         return assertionMap;
     }
 
-    private String generateAssertions(QueryTrace queries) {
+    private String generateAssertions(UnmodifiableLinearQueryTrace queries) {
         Map<String, BoolExpr> exprs = new HashMap<>();
 
         int queryNumber = 0;
@@ -146,13 +152,14 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    public Iterable<BoolExpr> makeBodyFormula(QueryTrace queries) {
+    public Iterable<BoolExpr> makeBodyFormula(UnmodifiableLinearQueryTrace queries) {
         throw new UnsupportedOperationException();
     }
 
-    private String makeMainSMT(QueryTrace queries) {
+    private String makeMainSMT(UnmodifiableLinearQueryTrace queries) {
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema, "cq_p", 0);
-        StringBuilder out = new StringBuilder("(assert " + context.mkNot(query.apply(inst1).equalsExpr(query.apply(inst2))) + ")");
+        StringBuilder out = new StringBuilder("(assert " + context.mkNot(
+                context.mkAnd(query.apply(inst1).equalsExpr(query.apply(inst2)))) + ")");
         for (BoolExpr expr : generateConstantCheck(queries)) {
             out.append("(assert ").append(expr.toString()).append(")\n");
         }
@@ -165,7 +172,7 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     }
 
     @Override
-    protected String makeBodyFormulaSMT(QueryTrace queries) {
+    protected String makeBodyFormulaSMT(UnmodifiableLinearQueryTrace queries) {
         String assertions = generateAssertions(queries);
         return makeMainSMT(queries) + "\n" + assertions;
     }

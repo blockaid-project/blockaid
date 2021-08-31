@@ -1,5 +1,6 @@
 package solver;
 
+import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.BoolExpr;
@@ -17,8 +18,12 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
         super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds, table2KnownRows), (Instance inst1, Instance inst2) -> {
             MyZ3Context context = schema.getContext();
             List<BoolExpr> clauses = new ArrayList<>();
-            clauses.addAll(inst1.getConstraints().values());
-            clauses.addAll(inst2.getConstraints().values());
+            for (Iterable<BoolExpr> bs : inst1.getConstraints().values()) {
+                Iterables.addAll(clauses, bs);
+            }
+            for (Iterable<BoolExpr> bs : inst2.getConstraints().values()) {
+                Iterables.addAll(clauses, bs);
+            }
             if (splitProducts) {
                 for (Query v : views) {
                     // (equal under each part) || (empty on one+ part per instance)
@@ -26,7 +31,7 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                     List<BoolExpr> empty1Parts = new ArrayList<>();
                     List<BoolExpr> empty2Parts = new ArrayList<>();
                     for (Query q : v.getComponents()) {
-                        equalityParts.add(q.apply(inst1).equalsExpr(q.apply(inst2)));
+                        Iterables.addAll(equalityParts, q.apply(inst1).equalsExpr(q.apply(inst2)));
                         empty1Parts.add(q.apply(inst1).isEmptyExpr());
                         empty2Parts.add(q.apply(inst2).isEmptyExpr());
                     }
@@ -42,7 +47,7 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                 }
             } else {
                 for (Query v : views) {
-                    clauses.add(v.apply(inst1).equalsExpr(v.apply(inst2)));
+                    Iterables.addAll(clauses, v.apply(inst1).equalsExpr(v.apply(inst2)));
                 }
             }
             return clauses;

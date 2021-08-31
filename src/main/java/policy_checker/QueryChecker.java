@@ -1,6 +1,7 @@
 package policy_checker;
 
 import cache.*;
+import cache.trace.QueryTrace;
 import com.google.common.collect.*;
 import com.microsoft.z3.*;
 import planner.PrivacyColumn;

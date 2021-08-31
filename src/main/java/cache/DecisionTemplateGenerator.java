@@ -3,8 +3,18 @@ package cache;
 import cache.labels.EqualityLabel;
 import cache.labels.Label;
 import cache.labels.ReturnedRowLabel;
+import cache.trace.QueryTrace;
+import cache.trace.QueryTraceEntry;
+import cache.trace.QueryTupleIdxPair;
+import cache.trace.SubQueryTrace;
+import cache.unsat_core.AbstractUnsatCoreEnumerator;
+import cache.unsat_core.Order;
+import cache.unsat_core.ReturnedRowUnsatCoreEnumerator;
+import cache.unsat_core.UnsatCoreEnumerator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import policy_checker.Policy;
@@ -17,119 +27,128 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
     private final Schema schema;
     private final QueryTrace trace;
-    private final MyUnsatCoreDeterminacyFormula formula;
+    private final Collection<Policy> policies;
+    private final Collection<Query> views;
 
     public DecisionTemplateGenerator(Schema schema, Collection<Policy> policies, Collection<Query> views,
                                      QueryTrace trace) {
         this.schema = schema;
+        this.policies = policies;
+        this.views = views;
         this.trace = trace;
-        this.formula = MyUnsatCoreDeterminacyFormula.create(schema, policies, views, trace);
+    }
+
+    private Collection<Collection<ReturnedRowLabel>> findRRCores() {
+        MyZ3Context context = schema.getContext();
+//        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+        Solver solver = context.mkSolver();
+
+        BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies, views, trace,
+                BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY);
+        solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+
+        Collection<Collection<ReturnedRowLabel>> rrCores;
+        // In `RETURNED_ROWS_ONLY` mode, all `labeledExprs` should be of type `ReturnedRowLabel`.
+        Map<ReturnedRowLabel, BoolExpr> labeledExprs = formula.makeLabeledExprs()
+                .entrySet().stream().collect(Collectors.toMap(
+                        e -> (ReturnedRowLabel) e.getKey(),
+                        Map.Entry::getValue)
+                );
+        try (UnsatCoreEnumerator<ReturnedRowLabel> uce =
+                     new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.ARBITRARY)) {
+            rrCores = uce.enumerateAll();
+        }
+        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
+        return rrCores;
     }
 
     public Collection<DecisionTemplate> generate() {
-        MyZ3Context context = schema.getContext();
-        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
-        solver.add(formula.makeMainFormula().toArray(BoolExpr[]::new));
-
-        Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
-        Map<BoolExpr, Label> boolConst2Label = new HashMap<>();
-        Set<EqualityLabel.Operand> allNonValueOperands = new HashSet<>();
-        for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
-            Label l = entry.getKey();
-            BoolExpr boolConst = context.mkBoolConst(l.toString());
-            checkState(!boolConst2Label.containsKey(boolConst));
-            boolConst2Label.put(boolConst, l);
-
-            if (l.getKind() == Label.Kind.EQUALITY) {
-                EqualityLabel el = (EqualityLabel) l;
-                EqualityLabel.Operand lhs = el.getLhs(), rhs = el.getRhs();
-                if (lhs.getKind() != EqualityLabel.Operand.Kind.VALUE) {
-                    allNonValueOperands.add(el.getLhs());
-                }
-                if (rhs.getKind() != EqualityLabel.Operand.Kind.VALUE) {
-                    allNonValueOperands.add(el.getRhs());
-                }
-            }
-        }
-
         // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
-        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + "Step 1 start" + ANSI_RESET);
-        Collection<Collection<ReturnedRowLabel>> rrCores;
-        {
-            solver.push();
-            solver.add(formula.getAllEquality().toArray(new BoolExpr[0]));
-            HashMap<ReturnedRowLabel, BoolExpr> rrLabeledExprs = new HashMap<>();
-            for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
-                Label l = entry.getKey();
-                if (l.getKind() == Label.Kind.RETURNED_ROW) {
-                    rrLabeledExprs.put((ReturnedRowLabel) l, entry.getValue());
-                }
-            }
-            try (UnsatCoreEnumerator<ReturnedRowLabel> uce =
-                         new UnsatCoreEnumerator<>(context, solver, rrLabeledExprs, false)) {
-                rrCores = uce.enumerateAll();
-            }
-//            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
-            solver.pop();
-        }
-        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + "Step 1 end" + ANSI_RESET);
+//        Collection<Collection<ReturnedRowLabel>> rrCores = findRRCores();
+        Collection<Collection<ReturnedRowLabel>> rrCores = ReturnedRowUnsatCoreEnumerator.create(
+                schema, views, trace
+        ).enumerateAll();
+        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
+        MyZ3Context context = schema.getContext();
         ArrayList<DecisionTemplate> dts = new ArrayList<>();
         for (Collection<ReturnedRowLabel> rrCore : rrCores) {
-            Set<Integer> qIndices = rrCore.stream().map(ReturnedRowLabel::getQueryIdx).collect(Collectors.toSet());
+            ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
+                    .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
+                    .collect(ImmutableList.toImmutableList());
+            SubQueryTrace sqt = trace.getSubTrace(toKeep);
+            BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies, views, sqt,
+                    BoundedUnsatCoreDeterminacyFormula.LabelOption.ALL);
 
-            // Disregard equality labels that refer to parameters from irrelevant queries / attributes of irrelevant
-            // returned rows.
-            HashMap<EqualityLabel, BoolExpr> keptLabeledExprs = new HashMap<>();
-            for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
-                Label l = entry.getKey();
-                if (l.getKind() != Label.Kind.EQUALITY) {
-                    continue;
-                }
-                EqualityLabel el = (EqualityLabel) l;
-                boolean shouldDiscard = Stream.of(el.getLhs(), el.getRhs()).anyMatch(o -> {
-                    // Returns true if this operand causes the label to be DISCARDED.
-                    switch (o.getKind()) {
-                        case QUERY_PARAM:
-                            EqualityLabel.QueryParamOperand qpo = (EqualityLabel.QueryParamOperand) o;
-                            if (qpo.isCurrentQuery()) {
-                                return false;
-                            }
-                            return !qIndices.contains(qpo.getQueryIdx());
-                        case RETURNED_ROW_ATTR:
-                            EqualityLabel.ReturnedRowFieldOperand rro = (EqualityLabel.ReturnedRowFieldOperand) o;
-                            return !rrCore.contains(new ReturnedRowLabel(rro.getQueryIdx(), rro.getReturnedRowIdx()));
-                    }
-                    return false; // Other operands (value, context constant) don't contribute to the decision.
-                });
-                if (!shouldDiscard) {
-                    keptLabeledExprs.put(el, entry.getValue());
-                }
-            }
-//            System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + keptLabeledExprs.keySet() + ANSI_RESET);
+            Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
+            ImmutableSet<EqualityLabel.Operand> allNonValueOperandsOld =
+                    labeledExprs.keySet().stream() // Get all labels.
+                            .filter(l -> l.getKind() == Label.Kind.EQUALITY) // Keep only equality labels.
+                            .map(l -> (EqualityLabel) l)
+                            .flatMap(el -> Stream.of(el.getLhs(), el.getRhs())) // Gather both operands of each label.
+                            .filter(o -> o.getKind() != EqualityLabel.Operand.Kind.VALUE) // Keep only non-value operands.
+                            .map(o -> backMapOperand(o, sqt))
+                            .collect(ImmutableSet.toImmutableSet());
 
-            solver.push();
-            solver.add(rrCore.stream().map(labeledExprs::get).toArray(BoolExpr[]::new));
-            try (UnsatCoreEnumerator<EqualityLabel> uce =
-                         new UnsatCoreEnumerator<>(context, solver, keptLabeledExprs, true)) {
-                Optional<Set<EqualityLabel>> ret;
+            Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+            solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+            try (UnsatCoreEnumerator<Label> uce =
+                         new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.INCREASING)) {
+                Optional<Set<Label>> ret;
                 for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
-                    ArrayList<Label> coreLabels = new ArrayList<>(ret.get());
-                    coreLabels.addAll(rrCore);
-                    dts.add(buildDecisionTemplate(coreLabels, allNonValueOperands));
+                    List<Label> coreLabelsOld = ret.get().stream().map(l -> backMapLabel(l, sqt))
+                            .collect(Collectors.toList());
+                    dts.add(buildDecisionTemplate(coreLabelsOld, allNonValueOperandsOld));
                 }
             }
-            solver.pop();
         }
 
+        checkState(!dts.isEmpty(), "should have generated at least one decision template");
         return dts;
+    }
+
+    private EqualityLabel.Operand backMapOperand(EqualityLabel.Operand o, SubQueryTrace sqt) {
+        switch (o.getKind()) {
+            case CONTEXT_CONSTANT:
+            case VALUE:
+                return o;
+            case QUERY_PARAM:
+                EqualityLabel.QueryParamOperand qpo = (EqualityLabel.QueryParamOperand) o;
+                if (qpo.isCurrentQuery()) {
+                    return qpo;
+                }
+                int oldQueryIdx = sqt.getQueryIdxBackMap().get(qpo.getQueryIdx());
+                return new EqualityLabel.QueryParamOperand(oldQueryIdx, false, qpo.getParamIdx());
+            case RETURNED_ROW_ATTR:
+                EqualityLabel.ReturnedRowFieldOperand rrfo = (EqualityLabel.ReturnedRowFieldOperand) o;
+                QueryTupleIdxPair old = sqt.getBackMap().get(
+                        new QueryTupleIdxPair(rrfo.getQueryIdx(), rrfo.getReturnedRowIdx()));
+                return new EqualityLabel.ReturnedRowFieldOperand(old.getQueryIdx(), old.getTupleIdx(), rrfo.getColIdx());
+        }
+        checkArgument(false, "invalid operand kind: " + o.getKind());
+        return null;
+    }
+
+    private Label backMapLabel(Label l, SubQueryTrace sqt) {
+        switch (l.getKind()) {
+            case EQUALITY:
+                EqualityLabel el = (EqualityLabel) l;
+                return new EqualityLabel(backMapOperand(el.getLhs(), sqt), backMapOperand(el.getRhs(), sqt));
+            case RETURNED_ROW:
+                ReturnedRowLabel rrl = (ReturnedRowLabel) l;
+                QueryTupleIdxPair old = sqt.getBackMap().get(new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()));
+                return new ReturnedRowLabel(old.getQueryIdx(), old.getTupleIdx());
+        }
+        checkArgument(false, "invalid label kind: " + l.getKind());
+        return null;
     }
 
     private DecisionTemplate buildDecisionTemplate(List<Label> unsatCore,

@@ -1,6 +1,6 @@
 package solver.executor;
 
-import cache.QueryTrace;
+import cache.trace.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;

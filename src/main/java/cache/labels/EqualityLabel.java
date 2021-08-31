@@ -3,6 +3,7 @@ package cache.labels;
 import java.util.Objects;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 public class EqualityLabel implements Label {
     private final Operand lhs;
@@ -66,7 +67,10 @@ public class EqualityLabel implements Label {
             this.paramIdx = paramIdx;
         }
 
+        // Should not be called if this is the current query.
+        // TODO(zhangwen): this is ugly; maybe return a tagged enum.
         public int getQueryIdx() {
+            checkState(!isCurrentQuery);
             return queryIdx;
         }
 

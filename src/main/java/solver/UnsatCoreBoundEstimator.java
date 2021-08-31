@@ -1,7 +1,8 @@
 package solver;
 
-import cache.QueryTrace;
-import cache.QueryTraceEntry;
+import cache.trace.QueryTraceEntry;
+import cache.trace.UnmodifiableLinearQueryTrace;
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
@@ -18,16 +19,12 @@ import static com.google.common.base.Preconditions.checkState;
 public class UnsatCoreBoundEstimator extends BoundEstimator {
     private final BoundEstimator initialBounds;
 
-    public UnsatCoreBoundEstimator() {
-        this.initialBounds = new FixedBoundEstimator(0);
-    }
-
     public UnsatCoreBoundEstimator(BoundEstimator initialBounds) {
         this.initialBounds = initialBounds;
     }
 
     @Override
-    public Map<String, Integer> calculateBounds(Schema schema, QueryTrace queries) {
+    public Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace queries) {
         MyZ3Context context = schema.getContext();
         Map<String, Integer> bounds = new HashMap<>(initialBounds.calculateBounds(schema, queries));
         int iters;
@@ -35,11 +32,11 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
             Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
             Instance instance = schema.makeConcreteInstance("inst", bounds);
 
-            Map<Constraint, BoolExpr> constraints = instance.getConstraints();
+            Map<Constraint, Iterable<BoolExpr>> constraints = instance.getConstraints();
             Map<BoolExpr, Constraint> dependencyLabels = new HashMap<>();
-            for (Map.Entry<Constraint, BoolExpr> constraint : constraints.entrySet()) {
+            for (Map.Entry<Constraint, Iterable<BoolExpr>> constraint : constraints.entrySet()) {
                 BoolExpr label = (BoolExpr) context.mkFreshConst("dependency", context.getBoolSort());
-                solver.assertAndTrack(constraint.getValue(), label);
+                solver.assertAndTrack(context.mkAnd(Iterables.toArray(constraint.getValue(), BoolExpr.class)), label);
                 dependencyLabels.put(label, constraint.getKey());
             }
 
@@ -62,38 +59,15 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
             }
 
             // todo timeouts on this...
-            long startMs = System.currentTimeMillis();
+//            long startMs = System.currentTimeMillis();
             Status res = solver.check();
-            long durMs = System.currentTimeMillis() - startMs;
-            if (durMs > 1000 && res == Status.SATISFIABLE) {
-                try {
-                    solver.push();
-                    solver.add(dependencyLabels.keySet().toArray(new BoolExpr[0]));
-                    solver.add(queryLabels.keySet().toArray(new BoolExpr[0]));
-                    Files.writeString(Paths.get("/tmp/estimator.smt2"), solver.toString());
-                    solver.pop();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            System.out.println("\t\t| bound estimator check:\t" + durMs + "\t" + bounds);
+//            long durMs = System.currentTimeMillis() - startMs;
+//            System.out.println("\t\t| bound estimator check:\t" + durMs + "\t" + bounds);
             if (res == Status.SATISFIABLE) {
                 break;
             }
             checkState(res == Status.UNSATISFIABLE, "solver returned: " + res);
             BoolExpr[] core = solver.getUnsatCore();
-
-            if (durMs > 1000) {
-                try {
-                    solver.push();
-                    solver.add(dependencyLabels.keySet().toArray(new BoolExpr[0]));
-                    solver.add(queryLabels.keySet().toArray(new BoolExpr[0]));
-                    Files.writeString(Paths.get("/tmp/estimator.smt2"), solver.toString());
-                    solver.pop();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
 
             Set<String> toIncrement = new HashSet<>();
             for (BoolExpr expr : core) {

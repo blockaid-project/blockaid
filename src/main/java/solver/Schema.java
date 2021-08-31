@@ -1,10 +1,7 @@
 package solver;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ListMultimap;
-import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.*;
-import org.apache.calcite.schema.SchemaPlus;
 import sql.SchemaPlusWithKey;
 
 import java.sql.Types;
@@ -38,7 +35,7 @@ public class Schema {
 
     public Instance makeFreshInstance(String instancePrefix) {
         Instance instance = new Instance(this, false);
-        Map<Constraint, BoolExpr> constraints = new HashMap<>();
+        Map<Constraint, Iterable<BoolExpr>> constraints = new HashMap<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -86,7 +83,7 @@ public class Schema {
                             relationName, knownRows.size(), numTuples));
 
             int i = 0;
-            System.out.println("***\t" + relationName);
+//            System.out.println("***\t" + relationName);
             for (Map<String, Object> knownRow : knownRows) {
                 List<Expr> values = new ArrayList<>();
                 for (Column col : columns) {
@@ -99,7 +96,7 @@ public class Schema {
                     }
                 }
                 tuples[i] = new Tuple(this, values.stream());
-                System.out.println("***\t" + tuples[i]);
+//                System.out.println("***\t" + tuples[i]);
                 exists[i] = context.mkTrue(); // A tuple with a known PK value must exist.
                 i += 1;
             }
@@ -115,7 +112,7 @@ public class Schema {
             instance.put(relationName, new ConcreteRelation(this, colTypes, tuples, exists));
         }
 
-        Map<Constraint, BoolExpr> constraints = new HashMap<>();
+        Map<Constraint, Iterable<BoolExpr>> constraints = new HashMap<>();
         for (Constraint d : dependencies) {
             constraints.put(d, d.apply(instance));
         }

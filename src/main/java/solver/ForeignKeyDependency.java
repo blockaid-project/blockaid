@@ -23,7 +23,7 @@ public class ForeignKeyDependency implements Dependency {
     }
 
     @Override
-    public BoolExpr apply(Instance instance) {
+    public Iterable<BoolExpr> apply(Instance instance) {
         Schema schema = instance.schema;
         int fromIndex = schema.getColumnNames(fromRelation).indexOf(fromColumn);
         checkArgument(fromIndex >= 0);

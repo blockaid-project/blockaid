@@ -1,7 +1,7 @@
 package solver;
 
-import cache.QueryTrace;
-import cache.QueryTraceEntry;
+import cache.trace.QueryTraceEntry;
+import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
 import sql.PrivacyQuery;
 
@@ -17,7 +17,7 @@ public class CountingBoundEstimator extends BoundEstimator {
     private SetMultimap<String, Object> colName2Values = null;
 
     @Override
-    public Map<String, Integer> calculateBounds(Schema schema, QueryTrace trace) {
+    public Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace trace) {
         // TODO(zhangwen): this is ugly.
         checkState(this.colName2Values == null,
                 "a CountingBoundEstimator object can only `calculateBounds` once");

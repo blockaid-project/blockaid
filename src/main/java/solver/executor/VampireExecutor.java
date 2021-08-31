@@ -7,7 +7,6 @@ public abstract class VampireExecutor extends ProcessSMTExecutor {
             "term_to_kill",
             "vampire",
             "--input_syntax", "smtlib2",
-            "--proof", "off",
             "--output_mode", "smtcomp",
     };
 

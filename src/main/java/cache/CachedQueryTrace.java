@@ -1,5 +1,8 @@
 package cache;
 
+import cache.trace.QueryTrace;
+import cache.trace.QueryTraceEntry;
+
 import java.util.*;
 
 public class CachedQueryTrace {

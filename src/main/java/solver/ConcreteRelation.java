@@ -1,5 +1,6 @@
 package solver;
 
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
 
 import java.util.*;
@@ -65,11 +66,11 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr isContainedInExpr(Relation other) {
+    public Iterable<BoolExpr> isContainedInExpr(Relation other) {
         checkArgument(other instanceof ConcreteRelation);
-        if (tuples.length > 10) {
-            System.out.println("*** isContainedInExpr: " + tuples.length);
-        }
+//        if (tuples.length > 10) {
+//            System.out.println("*** isContainedInExpr: " + tuples.length);
+//        }
 
         if (tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD
                 || ((ConcreteRelation) other).tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD) {
@@ -77,20 +78,16 @@ public class ConcreteRelation implements Relation {
             BoolExpr lhs = this.doesContainExpr(syms);
             BoolExpr rhs = other.doesContainExpr(syms);
             if (syms.isEmpty()) {
-                return context.mkImplies(lhs, rhs);
+                return List.of(context.mkImplies(lhs, rhs));
             }
-            return context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
-                    null, null, null, null);
+            return List.of(context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
+                    null, null, null, null));
         } else {
-            BoolExpr[] exprs = new BoolExpr[tuples.length];
-            for (int i = 0; i < exprs.length; ++i) {
-                exprs[i] = context.mkOr(context.mkNot(exists[i]), other.doesContainExpr(tuples[i]));
+            ArrayList<BoolExpr> exprs = new ArrayList<>();
+            for (int i = 0; i < exists.length; ++i) {
+                exprs.add(context.mkOr(context.mkNot(exists[i]), other.doesContainExpr(tuples[i])));
             }
-
-            if (tuples.length == 0) {
-                return context.mkTrue();
-            }
-            return context.mkAnd(exprs);
+            return exprs;
         }
     }
 
@@ -99,11 +96,11 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr equalsExpr(Relation other) {
+    public Iterable<BoolExpr> equalsExpr(Relation other) {
         checkArgument(other instanceof ConcreteRelation);
         ConcreteRelation other_ = (ConcreteRelation) other;
         checkArgument(Arrays.equals(this.signature, other_.signature));
 
-        return context.mkAnd(this.isContainedInExpr(other), other.isContainedInExpr(this));
+        return Iterables.concat(this.isContainedInExpr(other), other.isContainedInExpr(this));
     }
 }

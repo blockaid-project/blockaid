@@ -1,4 +1,4 @@
-package cache;
+package cache.trace;
 
 import com.google.common.collect.ImmutableList;
 import sql.PrivacyQuery;
@@ -22,7 +22,7 @@ public class QueryTraceEntry {
         this(entry.query, entry.parameters, entry.tuples);
     }
 
-    private QueryTraceEntry(PrivacyQuery query, List<Object> parameters, List<List<Object>> tuples) {
+    QueryTraceEntry(PrivacyQuery query, List<Object> parameters, List<List<Object>> tuples) {
         this.query = query;
         this.parameters = new ArrayList<>(parameters);
         if (tuples == null) {

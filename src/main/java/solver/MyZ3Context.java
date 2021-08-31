@@ -1,5 +1,6 @@
 package solver;
 
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
 
 import java.sql.Date;
@@ -17,6 +18,9 @@ public class MyZ3Context extends Context {
     private final HashSet<Expr> untrackedConsts;
     private final HashSet<Expr> trackedConsts;
     private final CustomSorts customSorts;
+
+    private boolean isCachingConsts = false;
+    private final Map<Sort, Map<String, Expr>> constCache = new HashMap<>();
 
     private class CustomSorts {
         private final Sort dateSort;
@@ -220,7 +224,13 @@ public class MyZ3Context extends Context {
 
     @Override
     public Expr mkConst(String s, Sort sort) {
-        Expr c = super.mkConst(s, sort);
+        Expr c;
+        if (isCachingConsts) {
+            c = constCache.computeIfAbsent(sort, k -> new HashMap<>()).computeIfAbsent(s, k -> super.mkConst(k, sort));
+        } else {
+            c = super.mkConst(s, sort);
+        }
+
         if (isTrackingConsts && !untrackedConsts.contains(c)) {
             trackedConsts.add(c);
         } else {
@@ -249,6 +259,21 @@ public class MyZ3Context extends Context {
             return boolExprs[0];
         }
         return super.mkAnd(boolExprs);
+    }
+
+    public BoolExpr mkAnd(Iterable<BoolExpr> boolExprs) {
+        return mkAnd(Iterables.toArray(boolExprs, BoolExpr.class));
+    }
+
+    public void startCachingConsts() {
+        isCachingConsts = true;
+    }
+
+    public void stopCachingConsts() {
+        isCachingConsts = false;
+        for (Map<String, Expr> v : constCache.values()) {
+            v.clear();
+        }
     }
 
     public void startTrackingConsts() {

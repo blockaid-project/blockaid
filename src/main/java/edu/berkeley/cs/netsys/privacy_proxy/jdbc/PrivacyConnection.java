@@ -1,7 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
-import cache.QueryTrace;
-import cache.QueryTraceEntry;
+import cache.trace.QueryTrace;
+import cache.trace.QueryTraceEntry;
 import com.google.common.collect.*;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;

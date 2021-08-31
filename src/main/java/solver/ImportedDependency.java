@@ -36,7 +36,7 @@ public class ImportedDependency implements Dependency {
     }
 
     @Override
-    public BoolExpr apply(Instance instance) {
+    public Iterable<BoolExpr> apply(Instance instance) {
         Schema schema = instance.schema;
         Query solverQuery1 = q1.getSolverQuery(schema);
         Query solverQuery2 = q2.getSolverQuery(schema);

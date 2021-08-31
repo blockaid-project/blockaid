@@ -1,9 +1,9 @@
 package solver;
 
-import cache.QueryTrace;
+import cache.trace.UnmodifiableLinearQueryTrace;
 
 import java.util.Map;
 
 public abstract class BoundEstimator {
-    public abstract Map<String, Integer> calculateBounds(Schema schema, QueryTrace trace);
+    public abstract Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace trace);
 }

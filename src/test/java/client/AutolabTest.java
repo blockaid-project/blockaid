@@ -6,7 +6,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import server.EndToEndTest;
 
 import java.io.File;
 import java.sql.*;
@@ -66,16 +65,7 @@ public class AutolabTest {
                 "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 52 LIMIT 1",
                 "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 52 AND `course_user_data`.`course_id` = 1 LIMIT 1",
                 "SELECT  `courses`.`disabled` FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
-                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
-
-                String.format(
-                        "SELECT `announcements`.* FROM `announcements` " +
-                                "WHERE (start_date < '%1$s' AND end_date > '%1$s') " +
-                                "AND `announcements`.`persistent` = 0 " +
-                                "AND (`announcements`.`course_id` = 1 OR `announcements`.`system` = 1) " +
-                                "ORDER BY `announcements`.`start_date` ASC",
-                        LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS"))),
-
+                "SELECT `announcements`.* FROM `announcements` WHERE (start_date < '%1$s' AND end_date > '%1$s') AND `announcements`.`persistent` = 0 AND (`announcements`.`course_id` = 1 OR `announcements`.`system` = 1) ORDER BY `announcements`.`start_date` ASC",
                 "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
                 "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`id` = 52 LIMIT 1",
                 "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
@@ -140,14 +130,14 @@ public class AutolabTest {
                 "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`id` = 52 LIMIT 1",
                 "SELECT  `assessments`.`id`, `assessments`.`course_id` FROM `assessments` WHERE `assessments`.`id` = 19 LIMIT 1",
                 "SELECT DISTINCT category_name FROM `assessments` WHERE `assessments`.`course_id` = 1",
-                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'CategoryAutograde' AND (start_at < '2021-08-13 03:04:41.058711') LIMIT 1",
-                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'CategoryAutograde' AND (start_at < '2021-08-13 03:04:41.058711') ORDER BY due_at ASC, name ASC",
-                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Homework' AND (start_at < '2021-08-13 03:04:41.067924') LIMIT 1",
-                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Homework' AND (start_at < '2021-08-13 03:04:41.067924') ORDER BY due_at ASC, name ASC",
-                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Lab' AND (start_at < '2021-08-13 03:04:41.085304') LIMIT 1",
-                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Lab' AND (start_at < '2021-08-13 03:04:41.085304') ORDER BY due_at ASC, name ASC",
-                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '2021-08-13 03:04:41.102801') LIMIT 1",
-                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '2021-08-13 03:04:41.102801') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'CategoryAutograde' AND (start_at < '%1$s') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'CategoryAutograde' AND (start_at < '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Homework' AND (start_at < '%1$s') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Homework' AND (start_at < '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Lab' AND (start_at < '%1$s') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Lab' AND (start_at < '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  1 AS one FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '%1$s') LIMIT 1",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '%1$s') ORDER BY due_at ASC, name ASC",
                 "SELECT  1 AS one FROM `attachments` WHERE `attachments`.`course_id` = 1 AND `attachments`.`released` = 1 LIMIT 1",
         };
 
@@ -157,6 +147,9 @@ public class AutolabTest {
             }
 
             for (String q : queries) {
+                if (q.contains("%")) {
+                    q = String.format(q, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")));
+                }
                 try (PreparedStatement stmt = conn.prepareStatement(q)) {
                     stmt.execute();
                     try (ResultSet rs = stmt.getResultSet()) {

@@ -8,6 +8,6 @@ public interface Relation {
     BoolExpr isEmptyExpr();
     BoolExpr doesContainExpr(Tuple tup);
     BoolExpr doesContainExpr(List<Tuple> other);
-    BoolExpr isContainedInExpr(Relation other);
-    BoolExpr equalsExpr(Relation other);
+    Iterable<BoolExpr> isContainedInExpr(Relation other);
+    Iterable<BoolExpr> equalsExpr(Relation other);
 }

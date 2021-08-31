@@ -1,5 +1,6 @@
 package cache;
 
+import cache.trace.QueryTraceEntry;
 import com.google.common.collect.Lists;
 
 import java.util.*;

@@ -13,7 +13,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class Instance extends HashMap<String, Relation> {
     final Schema schema;
     final boolean isConcrete;
-    private Map<Constraint, BoolExpr> constraints;
+    private Map<Constraint, Iterable<BoolExpr>> constraints;
 
     Instance(Schema schema, boolean isConcrete) {
         this.schema = checkNotNull(schema);
@@ -21,11 +21,11 @@ public class Instance extends HashMap<String, Relation> {
         this.constraints = Collections.emptyMap();
     }
 
-    void setConstraints(Map<Constraint, BoolExpr> constraints) {
+    void setConstraints(Map<Constraint, Iterable<BoolExpr>> constraints) {
         this.constraints = constraints;
     }
 
-    public Map<Constraint, BoolExpr> getConstraints() {
+    public Map<Constraint, Iterable<BoolExpr>> getConstraints() {
         return constraints;
     }
 

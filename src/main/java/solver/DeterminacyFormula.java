@@ -1,7 +1,8 @@
 package solver;
 
-import cache.QueryTrace;
-import cache.QueryTraceEntry;
+import cache.trace.QueryTrace;
+import cache.trace.QueryTraceEntry;
+import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
@@ -23,7 +24,7 @@ public abstract class DeterminacyFormula {
     protected final ImmutableList<BoolExpr> preamble;
     private final String preambleSMT;
 
-    protected enum TextOption {
+    public enum TextOption {
         USE_TEXT,
         NO_TEXT
     }
@@ -62,7 +63,7 @@ public abstract class DeterminacyFormula {
         this(schema, makeInstance, mkPreamble, TextOption.USE_TEXT);
     }
 
-    protected Iterable<BoolExpr> generateTupleCheck(QueryTrace queries) {
+    protected Iterable<BoolExpr> generateTupleCheck(UnmodifiableLinearQueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
         for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
             Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
@@ -80,7 +81,7 @@ public abstract class DeterminacyFormula {
         return exprs;
     }
 
-    protected Iterable<BoolExpr> generateConstantCheck(QueryTrace queries) {
+    protected Iterable<BoolExpr> generateConstantCheck(UnmodifiableLinearQueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
         // Constrain constant values.
         for (Map.Entry<String, Integer> entry : queries.getConstMap().entrySet()) {
@@ -94,24 +95,29 @@ public abstract class DeterminacyFormula {
         return exprs;
     }
 
-    public Iterable<BoolExpr> makeBodyFormula(QueryTrace queries) {
+    protected Iterable<BoolExpr> generateNotContains(UnmodifiableLinearQueryTrace queries) {
         /* Both regular and fast unsat share this formula form -- by symmetry, we can write Q(D1) != Q(D2) using
         "not contained in". */
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Tuple extHeadTup = query.makeFreshHead();
-        List<BoolExpr> notContainsFormulas = List.of(
+        return List.of(
                 query.apply(inst1).doesContainExpr(extHeadTup),
-                context.mkNot(query.apply(inst2).doesContainExpr(extHeadTup)));
-        return Iterables.concat(generateTupleCheck(queries), generateConstantCheck(queries), notContainsFormulas);
+                context.mkNot(query.apply(inst2).doesContainExpr(extHeadTup))
+        );
     }
 
-    protected String makeBodyFormulaSMT(QueryTrace queries) {
+    public Iterable<BoolExpr> makeBodyFormula(UnmodifiableLinearQueryTrace queries) {
+        return Iterables.concat(generateTupleCheck(queries), generateConstantCheck(queries),
+                generateNotContains(queries));
+    }
+
+    protected String makeBodyFormulaSMT(UnmodifiableLinearQueryTrace queries) {
         return Streams.stream(makeBodyFormula(queries))
                 .map(formula -> "(assert " + formula + ")")
                 .collect(Collectors.joining("\n"));
     }
 
-    public Iterable<BoolExpr> makeCompleteFormula(QueryTrace queries) {
+    public Iterable<BoolExpr> makeCompleteFormula(UnmodifiableLinearQueryTrace queries) {
         return Iterables.concat(preamble, makeBodyFormula(queries));
     }
 
