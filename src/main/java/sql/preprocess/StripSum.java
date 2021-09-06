@@ -7,7 +7,6 @@ import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 public class StripSum implements Preprocessor {
@@ -15,7 +14,7 @@ public class StripSum implements Preprocessor {
 
     private StripSum() {}
 
-    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
         if (!result.getParsedSql().contains("SUM")) { return Optional.empty(); }
 

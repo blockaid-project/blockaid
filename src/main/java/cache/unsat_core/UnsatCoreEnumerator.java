@@ -44,7 +44,7 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
         checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE,
                 "to enumerate unsat cores, the formulas must be unsat");
         long durMs = System.currentTimeMillis() - startMs;
-        System.out.println("\t\t| Enumerator check:\t" + durMs);
+//        System.out.println("\t\t| Enumerator check:\t" + durMs);
         this.startingUnsatCore = getUnsatCore().get();
     }
 

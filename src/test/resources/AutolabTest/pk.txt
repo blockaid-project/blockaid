@@ -4,3 +4,16 @@ course_user_data:id;
 announcements:id;
 assessments:id;
 assessment_user_data:id;
+attachments:id;
+submissions:id;
+scores:id;
+extensions:id;
+scoreboards:id;
+score_adjustments:id;
+scheduler:id;
+
+courses:name;
+assessments:course_id,name;
+assessment_user_data:latest_submission_id;
+scores:problem_id,submission_id;
+users:email;

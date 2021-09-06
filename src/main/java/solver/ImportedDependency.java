@@ -14,8 +14,8 @@ public class ImportedDependency implements Dependency {
 
     public ImportedDependency(String dependency, SchemaPlusWithKey schema, Parser parser) throws SQLException {
         String[] parts = dependency.split(";", 2);
-        q1 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[0]), schema, new Object[0], Collections.emptyList());
-        q2 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[1]), schema, new Object[0], Collections.emptyList());
+        q1 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[0]), schema, Collections.emptyList(), Collections.emptyList());
+        q2 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[1]), schema, Collections.emptyList(), Collections.emptyList());
 
         relevantColumns = new ImmutableList.Builder<String>()
                 .addAll(q1.getAllNormalizedProjectColumns())

@@ -12,7 +12,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
 
     private DesugarLeftJoinIntoUnion() {}
 
-    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
@@ -71,7 +71,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
                 joinLeft, newWhere, select.getGroup(), select.getHaving(), select.getWindowList(),
                 select.getOrderList(), select.getOffset(), select.getFetch(), select.getHints());
 
-        RenumberDynParams r = new RenumberDynParams(parameters.length);
+        RenumberDynParams r = new RenumberDynParams(parameters.size());
         rhs = rhs.accept(r);
 
         SqlNode union = new SqlBasicCall(SqlStdOperatorTable.UNION, new SqlNode[]{lhs, rhs},
@@ -79,13 +79,12 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
         ParserResult newPR = new ParserResult(union.toString(), union.getKind(), union, false, false) {};
 
         List<SqlDynamicParam> renumberedParams = r.getRenumberedParams();
-        Object[] newParameters = new Object[parameters.length + renumberedParams.size()];
-        System.arraycopy(parameters, 0, newParameters, 0, parameters.length);
+        List<Object> newParameters = new ArrayList<>(parameters);
         ArrayList<String> newParamNames = new ArrayList<>(paramNames);
 
-        for (int i = 0; i < renumberedParams.size(); ++i) {
-            int oldIndex = renumberedParams.get(i).getIndex();
-            newParameters[parameters.length + i] = parameters[oldIndex];
+        for (SqlDynamicParam renumberedParam : renumberedParams) {
+            int oldIndex = renumberedParam.getIndex();
+            newParameters.add(parameters.get(oldIndex));
             newParamNames.add(paramNames.get(oldIndex));
         }
 

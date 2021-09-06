@@ -14,7 +14,7 @@ import java.util.*;
 import static com.google.common.base.Preconditions.checkState;
 
 public abstract class UnmodifiableLinearQueryTrace {
-    public abstract Map<String, Integer> getConstMap();
+    public abstract Map<String, Object> getConstMap();
     public abstract List<QueryTraceEntry> getAllEntries();
     public abstract QueryTraceEntry getCurrentQuery();
 
@@ -63,7 +63,9 @@ public abstract class UnmodifiableLinearQueryTrace {
                 String tableName = parts[0];
                 // FIXME(zhangwen): assumes that no table is aliased to another table's name.
                 if (parts[1].equals(tableName2PkName.get(tableName))) {
-                    checkState(!tableName2PkIdx.containsKey(tableName));
+                    // A SQL query can select the same pk column twice...
+//                    checkState(!tableName2PkIdx.containsKey(tableName),
+//                            "table already appeared: " + tableName);
                     tableName2PkIdx.put(tableName, colIdx);
                 }
 

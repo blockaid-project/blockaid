@@ -51,6 +51,13 @@ public abstract class DeterminacyFormula {
             // Remove the custom sorts from preamble -- we add them back when generating the rest of the formula,
             // because here, sorts that are not used in the preamble but are used later on won't be declared.
             result = result.replaceAll("\\(declare-sort CS![A-Z]+ 0\\)|\\(declare-fun CS![A-Z]+!\\d+ \\(\\) CS![A-Z]+\\)", "");
+            // FIXME(zhangwen): this is janky.
+            result = result.replaceAll("\\(declare-fun [A-Za-z]+ \\(CS!INT CS!INT\\) Bool\\)", "");
+
+            if (!result.contains("!_NOW")) {
+                result += "(declare-fun !_NOW () CS!INT)\n";
+            }
+            context.mkConst("!_NOW", context.getCustomIntSort());
             this.preambleSMT = result;
         } else {
             this.preambleSMT = null;
@@ -84,11 +91,12 @@ public abstract class DeterminacyFormula {
     protected Iterable<BoolExpr> generateConstantCheck(UnmodifiableLinearQueryTrace queries) {
         List<BoolExpr> exprs = new ArrayList<>();
         // Constrain constant values.
-        for (Map.Entry<String, Integer> entry : queries.getConstMap().entrySet()) {
+        for (Map.Entry<String, Object> entry : queries.getConstMap().entrySet()) {
             StringSymbol nameSymbol = context.mkSymbol("!" + entry.getKey());
+            Object value = entry.getValue();
             exprs.add(context.mkEq(
-                    context.mkConst(nameSymbol, context.getCustomIntSort()),
-                    context.mkCustomInt(entry.getValue())
+                    context.mkConst(nameSymbol, Tuple.getSortFromObject(context, value)),
+                    context.mkCustom(entry.getValue())
             ));
         }
 

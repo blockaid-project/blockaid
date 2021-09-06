@@ -1,8 +1,6 @@
 package cache;
 
-import cache.labels.EqualityLabel;
-import cache.labels.Label;
-import cache.labels.ReturnedRowLabel;
+import cache.labels.*;
 import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
 import cache.trace.QueryTupleIdxPair;
@@ -22,6 +20,7 @@ import solver.Query;
 import solver.Schema;
 import util.UnionFind;
 
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -74,9 +73,12 @@ public class DecisionTemplateGenerator {
 //        Collection<Collection<ReturnedRowLabel>> rrCores = ReturnedRowUnsatCoreEnumerator.create(
 //                schema, views, trace
 //        ).enumerateAll();
-        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(ReturnedRowUnsatCoreEnumerator.create(
+//        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(ReturnedRowUnsatCoreEnumerator.create(
+//                schema, policies, views, trace
+//        ).next().get());
+        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(ReturnedRowUnsatCoreEnumerator.getOne(
                 schema, policies, views, trace
-        ).next().get());
+        ));
         System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
@@ -91,12 +93,9 @@ public class DecisionTemplateGenerator {
                     BoundedUnsatCoreDeterminacyFormula.LabelOption.ALL);
 
             Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
-            ImmutableSet<EqualityLabel.Operand> allNonValueOperandsOld =
+            ImmutableSet<Operand> allOperandsOld =
                     labeledExprs.keySet().stream() // Get all labels.
-                            .filter(l -> l.getKind() == Label.Kind.EQUALITY) // Keep only equality labels.
-                            .map(l -> (EqualityLabel) l)
-                            .flatMap(el -> Stream.of(el.getLhs(), el.getRhs())) // Gather both operands of each label.
-                            .filter(o -> o.getKind() != EqualityLabel.Operand.Kind.VALUE) // Keep only non-value operands.
+                            .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
                             .map(o -> backMapOperand(o, sqt))
                             .collect(ImmutableSet.toImmutableSet());
 
@@ -108,7 +107,7 @@ public class DecisionTemplateGenerator {
                 for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
                     List<Label> coreLabelsOld = ret.get().stream().map(l -> backMapLabel(l, sqt))
                             .collect(Collectors.toList());
-                    dts.add(buildDecisionTemplate(coreLabelsOld, allNonValueOperandsOld));
+                    dts.add(buildDecisionTemplate(coreLabelsOld, allOperandsOld));
                 }
             }
         }
@@ -117,33 +116,36 @@ public class DecisionTemplateGenerator {
         return dts;
     }
 
-    private EqualityLabel.Operand backMapOperand(EqualityLabel.Operand o, SubQueryTrace sqt) {
+    public static Operand backMapOperand(Operand o, SubQueryTrace sqt) {
         switch (o.getKind()) {
             case CONTEXT_CONSTANT:
             case VALUE:
                 return o;
             case QUERY_PARAM:
-                EqualityLabel.QueryParamOperand qpo = (EqualityLabel.QueryParamOperand) o;
+                QueryParamOperand qpo = (QueryParamOperand) o;
                 if (qpo.isCurrentQuery()) {
                     return qpo;
                 }
                 int oldQueryIdx = sqt.getQueryIdxBackMap().get(qpo.getQueryIdx());
-                return new EqualityLabel.QueryParamOperand(oldQueryIdx, false, qpo.getParamIdx());
+                return new QueryParamOperand(oldQueryIdx, false, qpo.getParamIdx());
             case RETURNED_ROW_ATTR:
-                EqualityLabel.ReturnedRowFieldOperand rrfo = (EqualityLabel.ReturnedRowFieldOperand) o;
+                ReturnedRowFieldOperand rrfo = (ReturnedRowFieldOperand) o;
                 QueryTupleIdxPair old = sqt.getBackMap().get(
                         new QueryTupleIdxPair(rrfo.getQueryIdx(), rrfo.getReturnedRowIdx()));
-                return new EqualityLabel.ReturnedRowFieldOperand(old.getQueryIdx(), old.getTupleIdx(), rrfo.getColIdx());
+                return new ReturnedRowFieldOperand(old.getQueryIdx(), old.getTupleIdx(), rrfo.getColIdx());
         }
         checkArgument(false, "invalid operand kind: " + o.getKind());
         return null;
     }
 
-    private Label backMapLabel(Label l, SubQueryTrace sqt) {
+    public static Label backMapLabel(Label l, SubQueryTrace sqt) {
         switch (l.getKind()) {
             case EQUALITY:
                 EqualityLabel el = (EqualityLabel) l;
                 return new EqualityLabel(backMapOperand(el.getLhs(), sqt), backMapOperand(el.getRhs(), sqt));
+            case LESS_THAN:
+                LessThanLabel ltl = (LessThanLabel) l;
+                return new LessThanLabel(backMapOperand(ltl.getLhs(), sqt), backMapOperand(ltl.getRhs(), sqt));
             case RETURNED_ROW:
                 ReturnedRowLabel rrl = (ReturnedRowLabel) l;
                 QueryTupleIdxPair old = sqt.getBackMap().get(new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()));
@@ -153,39 +155,41 @@ public class DecisionTemplateGenerator {
         return null;
     }
 
-    private DecisionTemplate buildDecisionTemplate(List<Label> unsatCore,
-                                                   Set<EqualityLabel.Operand> allNonValueOperands) {
-        // Find all equivalence classes consisting of non-value operands.
-        // If an equivalence class is equal to a value, the value is attached as data in the union-find.
-        UnionFind<EqualityLabel.Operand> uf = new UnionFind<>(allNonValueOperands);
+    private DecisionTemplate buildDecisionTemplate(List<Label> unsatCore, Set<Operand> allOperands) {
+        // Find all equivalence classes of operands.
+        UnionFind<Operand> uf = new UnionFind<>(allOperands);
         for (Label l : unsatCore) {
             if (l.getKind() != Label.Kind.EQUALITY) {
                 continue;
             }
 
             EqualityLabel el = (EqualityLabel) l;
-            EqualityLabel.Operand lhs = el.getLhs(), rhs = el.getRhs();
-            if (lhs.getKind() == EqualityLabel.Operand.Kind.VALUE) {
-                EqualityLabel.Operand temp = lhs;
-                lhs = rhs;
-                rhs = temp;
-            }
-            checkState(lhs.getKind() != EqualityLabel.Operand.Kind.VALUE,
-                    "equality of the form value=value should not appear");
-
-            if (rhs.getKind() == EqualityLabel.Operand.Kind.VALUE) {
-                uf.attachData(lhs, ((EqualityLabel.ValueOperand) rhs).getValue());
-            } else {
-                uf.union(lhs, rhs);
-            }
+            uf.union(el.getLhs(), el.getRhs());
         }
 
-        // Assign consecutive indexes (starting from 0) to roots, excluding those with only one element and those
-        // with a concrete value attached.
-        Map<EqualityLabel.Operand, Integer> root2Index = new HashMap<>();
-        for (EqualityLabel.Operand root : uf.getRoots()) {
-            UnionFind<EqualityLabel.Operand>.EquivalenceClass ec = uf.findComplete(root);
-            if (ec.getDatum() == null && ec.getSize() >= 2) {
+        // If an equivalence class is equal to a value, attach the value as data in the union-find.
+        for (Operand o : allOperands) {
+            if (o.getKind() != Operand.Kind.VALUE) {
+                continue;
+            }
+            uf.attachData(o, ((ValueOperand) o).getValue());
+        }
+
+        Set<Operand> rootsUsedInLessThan = unsatCore.stream()
+                .filter(l -> l.getKind() == Label.Kind.LESS_THAN)
+                .flatMap(l -> l.getOperands().stream())
+                .map(uf::find)
+                .collect(Collectors.toSet());
+
+        checkArgument(rootsUsedInLessThan.stream().allMatch(o -> uf.findComplete(o).getDatum() == null),
+                "currently unsupported: less than with value as operand");
+
+        // Assign consecutive indexes (starting from 0) to roots, excluding those with only one element (unless it's
+        // used in a less-than) and those with a concrete value attached.
+        Map<Operand, Integer> root2Index = new HashMap<>();
+        for (Operand root : uf.getRoots()) {
+            UnionFind<Operand>.EquivalenceClass ec = uf.findComplete(root);
+            if (ec.getDatum() == null && (ec.getSize() >= 2 || rootsUsedInLessThan.contains(ec.getRoot()))) {
                 root2Index.put(root, root2Index.size());
             }
         }
@@ -212,24 +216,26 @@ public class DecisionTemplateGenerator {
         ImmutableMap.Builder<String, Integer> constName2ECBuilder = new ImmutableMap.Builder<>();
         ImmutableMap.Builder<String, Object> constName2ValueBuilder = new ImmutableMap.Builder<>();
 
-        for (EqualityLabel.Operand o : allNonValueOperands) {
-            UnionFind<EqualityLabel.Operand>.EquivalenceClass ec = uf.findComplete(o);
+        // Record equivalence classes.
+        for (Operand o : allOperands) {
+            UnionFind<Operand>.EquivalenceClass ec = uf.findComplete(o);
             Object datum = ec.getDatum();
-            if (datum == null && ec.getSize() < 2) {
+            Integer rootIndex = root2Index.get(ec.getRoot());
+            if (rootIndex == null) { // This operand has no constraints on it.
                 continue;
             }
 
             switch (o.getKind()) {
                 case CONTEXT_CONSTANT:
-                    String constName = ((EqualityLabel.ContextConstantOperand) o).getName();
+                    String constName = ((ContextConstantOperand) o).getName();
                     if (datum == null) {
-                        constName2ECBuilder.put(constName, root2Index.get(ec.getRoot()));
+                        constName2ECBuilder.put(constName, rootIndex);
                     } else {
                         constName2ValueBuilder.put(constName, datum);
                     }
                     break;
                 case QUERY_PARAM:
-                    EqualityLabel.QueryParamOperand qpo = (EqualityLabel.QueryParamOperand) o;
+                    QueryParamOperand qpo = (QueryParamOperand) o;
                     // Set param for all entry builder(s) for this query.
                     Collection<DecisionTemplate.EntryBuilder> ebs =
                             qpo.isCurrentQuery() ? List.of(currEB) :
@@ -238,12 +244,12 @@ public class DecisionTemplateGenerator {
                     // If the query index is not in `queryIdx2rowEBs`, the query is irrelevant and so we ignore.
                     ebs.forEach(
                             datum == null ?
-                                    eb -> eb.setParamEC(qpo.getParamIdx(), root2Index.get(ec.getRoot())) :
+                                    eb -> eb.setParamEC(qpo.getParamIdx(), rootIndex) :
                                     eb -> eb.setParamValue(qpo.getParamIdx(), datum)
                     );
                     break;
                 case RETURNED_ROW_ATTR:
-                    EqualityLabel.ReturnedRowFieldOperand rrfo = (EqualityLabel.ReturnedRowFieldOperand) o;
+                    ReturnedRowFieldOperand rrfo = (ReturnedRowFieldOperand) o;
                     Map<Integer, DecisionTemplate.EntryBuilder> rowEBs = queryIdx2rowEBs.get(rrfo.getQueryIdx());
                     if (rowEBs == null) { // This query is irrelevant.
                         break;
@@ -253,14 +259,24 @@ public class DecisionTemplateGenerator {
                         break;
                     }
                     if (datum == null) {
-                        eb.setRowAttrEC(rrfo.getColIdx(), root2Index.get(ec.getRoot()));
+                        eb.setRowAttrEC(rrfo.getColIdx(), rootIndex);
                     } else {
                         eb.setRowAttrValue(rrfo.getColIdx(), datum);
                     }
                     break;
                 default:
-                    assert false;
+                    checkState(false, "unexpected operand: " + o);
             }
+        }
+
+        ArrayList<DecisionTemplate.LessThan> lts = new ArrayList<>();
+        for (Label l : unsatCore) {
+            if (l.getKind() != Label.Kind.LESS_THAN) {
+                continue;
+            }
+            LessThanLabel ltl = (LessThanLabel) l;
+            int lhsIndex = root2Index.get(uf.find(ltl.getLhs())), rhsIndex = root2Index.get(uf.find(ltl.getRhs()));
+            lts.add(new DecisionTemplate.LessThan(lhsIndex, rhsIndex));
         }
 
         ImmutableList.Builder<DecisionTemplate.Entry> entriesBuilder = new ImmutableList.Builder<>();
@@ -270,6 +286,8 @@ public class DecisionTemplateGenerator {
                 entriesBuilder.add(eb.build());
             }
         }
-        return new DecisionTemplate(entriesBuilder.build(), constName2ECBuilder.build(), constName2ValueBuilder.build());
+        return new DecisionTemplate(
+                entriesBuilder.build(), constName2ECBuilder.build(), constName2ValueBuilder.build(), lts
+        );
     }
 }

@@ -1,5 +1,7 @@
 package cache.labels;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Objects;
 
 public class ReturnedRowLabel implements Label {
@@ -22,6 +24,11 @@ public class ReturnedRowLabel implements Label {
     @Override
     public Kind getKind() {
         return Kind.RETURNED_ROW;
+    }
+
+    @Override
+    public Collection<Operand> getOperands() {
+        return Collections.emptyList();
     }
 
     @Override

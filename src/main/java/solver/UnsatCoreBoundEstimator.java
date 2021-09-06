@@ -107,7 +107,7 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
                 bounds.put(r, bounds.get(r) + 1);
             }
         }
-        System.out.println("\t\t| iterations: " + iters + ", bounds: " + bounds);
+//        System.out.println("\t\t| iterations: " + iters + ", bounds: " + bounds);
         return bounds;
     }
 }

@@ -2,12 +2,11 @@ package cache;
 
 import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multimap;
+import com.google.common.collect.*;
+import solver.Tuple;
 
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -21,8 +20,11 @@ public class DecisionTemplate {
     private final ImmutableMap<String, Integer> constName2EC;
     private final ImmutableMap<String, Object> constName2Value; // Only supports non-null values.
 
+    private final ImmutableList<LessThan> lts;
+    private final ImmutableMultimap<Integer, LessThan> ec2LessThan; // Maps EC to relevant less-than constraints.
+
     public DecisionTemplate(List<Entry> entries, Map<String, Integer> constName2EC,
-                            Map<String, Object> constName2Value) {
+                            Map<String, Object> constName2Value, Collection<LessThan> lts) {
         // Assert that constName2EC and constName2Value don't intersect.
         for (String constName : constName2EC.keySet()) {
             checkArgument(!constName2Value.containsKey(constName),
@@ -35,10 +37,18 @@ public class DecisionTemplate {
         this.entries = ImmutableList.copyOf(entries);
         this.constName2EC = ImmutableMap.copyOf(constName2EC);
         this.constName2Value = ImmutableMap.copyOf(constName2Value);
+
+        this.lts = ImmutableList.copyOf(lts);
+        ImmutableMultimap.Builder<Integer, LessThan> builder = new ImmutableMultimap.Builder<>();
+        for (LessThan lt : lts) {
+            builder.put(lt.getLhsEC(), lt);
+            builder.put(lt.getRhsEC(), lt);
+        }
+        this.ec2LessThan = builder.build();
     }
 
     public boolean doesMatch(QueryTrace trace) {
-        PushPopMap<Integer, Object> ec2Value = new PushPopMap<>();
+        PushPopMap<Integer, Object> ec2Value = new PushPopMap<>(this::checkLessThan);
         if (!matchConstants(trace, ec2Value)) {
             return false;
         }
@@ -46,8 +56,21 @@ public class DecisionTemplate {
         return matchQueries(trace, ec2Value, entries.listIterator());
     }
 
+    private boolean checkLessThan(Map<Integer, Object> ec2Value, int ecIdx) {
+        for (LessThan lt : ec2LessThan.get(ecIdx)) {
+            if (!ec2Value.containsKey(lt.getLhsEC()) || !ec2Value.containsKey(lt.getRhsEC())) {
+                continue;
+            }
+            Object lhsValue = ec2Value.get(lt.getLhsEC()), rhsValue = ec2Value.get(lt.getRhsEC());
+            if (!Tuple.valueLessThan(lhsValue, rhsValue)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean matchConstants(QueryTrace trace, PushPopMap<Integer, Object> ec2Value) {
-        Map<String, Integer> constMap = trace.getConstMap();
+        Map<String, Object> constMap = trace.getConstMap();
         for (Map.Entry<String, Object> e : constName2Value.entrySet()) {
             checkArgument(constMap.containsKey(e.getKey()));
             if (!constMap.get(e.getKey()).equals(e.getValue())) {
@@ -137,15 +160,19 @@ public class DecisionTemplate {
                 lines.add("    " + entry.toStringRow());
             }
         }
-        lines.add("--------------------------------------------------------------------------------");
-        lines.add(currQueryText);
-        lines.add("--------------------------------------------------------------------------------");
+
         for (Map.Entry<String, Integer> e : constName2EC.entrySet()) {
             lines.add(String.format("%s = ?%d", e.getKey(), e.getValue()));
         }
         for (Map.Entry<String, Object> e : constName2Value.entrySet()) {
             lines.add(String.format("%s = %s", e.getKey(), e.getValue()));
         }
+        for (LessThan lt : lts) {
+            lines.add(String.format("?%d < ?%d", lt.getLhsEC(), lt.getRhsEC()));
+        }
+
+        lines.add("--------------------------------------------------------------------------------");
+        lines.add(currQueryText);
 
         String result = String.join("\n", lines);
         if (useColors) {
@@ -157,6 +184,38 @@ public class DecisionTemplate {
     @Override
     public String toString() {
         return toString(true);
+    }
+
+    // A less-than constraint between equivalence classes.  Value operands not yet supported.
+    public static class LessThan {
+        private final int lhsEC;
+        private final int rhsEC;
+
+        public LessThan(int lhsEC, int rhsEC) {
+            this.lhsEC = lhsEC;
+            this.rhsEC = rhsEC;
+        }
+
+        public int getLhsEC() {
+            return lhsEC;
+        }
+
+        public int getRhsEC() {
+            return rhsEC;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            LessThan lessThan = (LessThan) o;
+            return lhsEC == lessThan.lhsEC && rhsEC == lessThan.rhsEC;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(lhsEC, rhsEC);
+        }
     }
 
     // The existence of a (previous query, returned row)-pair, or constraints on the current query.
@@ -258,8 +317,8 @@ public class DecisionTemplate {
             return matchHelper(tup, rowAttrIdx2Value, rowAttrIdx2EC, ec2Value);
         }
 
-        private static boolean matchHelper(List<Object> target, Map<Integer, Object> idx2Value, Map<Integer, Integer> idx2EC,
-                                    PushPopMap<Integer, Object> ec2Value) {
+        private static boolean matchHelper(List<Object> target, Map<Integer, Object> idx2Value,
+                                    Map<Integer, Integer> idx2EC, PushPopMap<Integer, Object> ec2Value) {
             for (Map.Entry<Integer, Object> e : idx2Value.entrySet()) {
                 if (!target.get(e.getKey()).equals(e.getValue())) {
                     return false;

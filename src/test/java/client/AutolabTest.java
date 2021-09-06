@@ -1,16 +1,17 @@
 package client;
 
 import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
+import org.apache.commons.io.FileUtils;
 import org.flywaydb.core.Flyway;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 public class AutolabTest {
     private static final String dbDatabaseName = "autolab_development";
@@ -20,15 +21,19 @@ public class AutolabTest {
     private static final String dbPassword = "12345678";
     private static final String resourcePath = "src/test/resources/AutolabTest";
 
-    @Rule
-    public TemporaryFolder tempFolder = new TemporaryFolder();
+    private static final String setupDbDir = checkNotNull(System.getenv("AUTOLAB_SETUP_PATH"));
+    private static final String setupDbPath = setupDbDir + "/db";
+    private static final String setupDbUrl = "jdbc:h2:" + setupDbPath;
 
     private String proxyUrl;
 
     @Before
     public void setupDb() throws Exception {
-        File setupDbFile = tempFolder.newFile("db");
-        String setupDbUrl = "jdbc:h2:" + setupDbFile.getPath();
+        {
+            File dir = new File(setupDbDir);
+            FileUtils.forceDelete(dir);
+            FileUtils.forceMkdir(dir);
+        }
 
         Flyway flyway = new Flyway();
         flyway.setDataSource(setupDbUrl, dbUsername, dbPassword);
@@ -55,10 +60,32 @@ public class AutolabTest {
         );
     }
 
-    @Test
-    public void testMyCourse() throws ClassNotFoundException, SQLException {
+    private void testQueries(String[] queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
+        try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
+            while (numRounds-- > 0) {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.execute("SET @_MY_UID = " + userId);
+                }
 
+                for (String q : queries) {
+                    if (q.contains("%")) {
+                        q = String.format(q, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")));
+                    }
+                    try (PreparedStatement stmt = conn.prepareStatement(q)) {
+                        stmt.execute();
+                        try (ResultSet rs = stmt.getResultSet()) {
+                            while (rs.next()) {
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testMyCourseSimple() throws ClassNotFoundException, SQLException {
         String[] queries = new String[]{
                 "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'AutoPopulated' LIMIT 1",
                 "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 52 ORDER BY `users`.`id` ASC LIMIT 1",
@@ -140,24 +167,49 @@ public class AutolabTest {
                 "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`category_name` = 'Quiz' AND (start_at < '%1$s') ORDER BY due_at ASC, name ASC",
                 "SELECT  1 AS one FROM `attachments` WHERE `attachments`.`course_id` = 1 AND `attachments`.`released` = 1 LIMIT 1",
         };
+        testQueries(queries, 52, 1);
+    }
 
-        try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            try (Statement stmt = conn.createStatement()) {
-                stmt.execute("SET @_MY_UID = 52");
-            }
+    @Test
+    public void testMyCourseComplex() throws ClassNotFoundException, SQLException {
+        String[] queries = new String[] {
+                "SELECT `scheduler`.* FROM `scheduler` WHERE (`scheduler`.`next` < '%1$s')",
+                "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'AutoPopulated' LIMIT 1",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 2 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 2 LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 2 AND `course_user_data`.`course_id` = 1 LIMIT 1",
+                "SELECT  `courses`.`disabled` FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  1 AS one FROM `users` WHERE `users`.`email` = BINARY 'user0_autopopulated@foo.bar' AND `users`.`id` != 2 LIMIT 1",
+                "SELECT `announcements`.* FROM `announcements` WHERE (start_date < '%1$s' AND end_date > '%1$s') AND `announcements`.`persistent` = 0 AND (`announcements`.`course_id` = 1 OR `announcements`.`system` = 1) ORDER BY `announcements`.`start_date` ASC",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`id` = 2 LIMIT 1 FOR UPDATE",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  `assessments`.`id` FROM `assessments` WHERE `assessments`.`course_id` = 1 ORDER BY due_at DESC, name DESC LIMIT 1",
+                "SELECT  `assessment_user_data`.* FROM `assessment_user_data` WHERE `assessment_user_data`.`assessment_id` = 4 AND `assessment_user_data`.`course_user_datum_id` = 2 LIMIT 1",
+                "SELECT  `submissions`.* FROM `submissions` WHERE `submissions`.`id` = 37 LIMIT 1",
 
-            for (String q : queries) {
-                if (q.contains("%")) {
-                    q = String.format(q, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")));
-                }
-                try (PreparedStatement stmt = conn.prepareStatement(q)) {
-                    stmt.execute();
-                    try (ResultSet rs = stmt.getResultSet()) {
-                        while (rs.next()) {
-                        }
-                    }
-                }
-            }
-        }
+        };
+        testQueries(queries, 2, 2);
+    }
+
+    @Test
+    public void testMyCourseTime() throws ClassNotFoundException, SQLException {
+        String[] queries = new String[] {
+                "SELECT `scheduler`.* FROM `scheduler` WHERE (`scheduler`.`next` < '%1$s')",
+                "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'AutoPopulated' LIMIT 1",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 2 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 2 LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 2 AND `course_user_data`.`course_id` = 1 LIMIT 1",
+                "SELECT  `courses`.`disabled` FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 1 LIMIT 1",
+                "SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 1 AND `assessments`.`name` = 'homework3' LIMIT 1",
+                "SELECT  `assessments`.* FROM `assessments` WHERE `assessments`.`id` = 4 LIMIT 1",
+                "SELECT submissions.id AS submission_id, problems.id AS problem_id, scores.id AS score_id, scores.* FROM `submissions` JOIN problems ON" +
+                        "        submissions.assessment_id = problems.assessment_id JOIN scores ON" +
+                        "        (submissions.id = scores.submission_id" +
+                        "        AND problems.id = scores.problem_id AND scores.released = 1) WHERE `submissions`.`assessment_id` = 4 AND `submissions`.`course_user_datum_id` = 2"
+        };
+        testQueries(queries, 2, 1);
     }
 }

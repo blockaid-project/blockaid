@@ -10,7 +10,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkState;
 
 public class PrivacyQueryUnion extends PrivacyQuery {
     private final List<PrivacyQuery> queries;
@@ -33,7 +32,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
             List<Object> partParameters = parameters.subList(paramOffset, paramOffset + paramCount);
             List<String> partParamNames = paramNames.subList(paramOffset, paramOffset + paramCount);
             PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new UnionPartParserResult(operand), schema,
-                    partParameters.toArray(new Object[0]), partParamNames);
+                    partParameters, partParamNames);
             queries.add(query);
 
             paramOffset += paramCount;

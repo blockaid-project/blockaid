@@ -47,7 +47,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 20000; // ms
+    public static long SOLVE_TIMEOUT = 2000; // ms
 
     private final Schema schema;
     private final List<Policy> policySet;
@@ -186,17 +186,12 @@ public class QueryChecker {
         System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
         executors.add(new Z3Executor("z3_fast", fastCheckSMT, latch, false, true, false));
         executors.add(new VampireLrsExecutor("vampire_lrs_fast", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireOttExecutor("vampire_ott_fast", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireDisExecutor("vampire_dis_fast", fastCheckSMT, latch, false, true, false));
         printFormula(fastCheckSMT, "fast_unsat", queries);
 
         // regular check
         startTime = System.currentTimeMillis();
         String regularSMT = this.determinacyFormula.generateSMT(queries);
         System.out.println("\t| Make regular:\t" + (System.currentTimeMillis() - startTime));
-//        executors.add(new Z3Executor(regularSMT, latch, true, true));
-//        executors.add(new VampireCascExecutor(regularSMT, latch, true, true, false));
-//        executors.add(new VampireFMBExecutor(regularSMT, latch, true, true, false));
         executors.add(new CVC4Executor("cvc4", regularSMT, latch, true, true, false));
         printFormula(regularSMT, "regular", queries);
 

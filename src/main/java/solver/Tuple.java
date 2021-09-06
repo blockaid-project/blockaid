@@ -149,4 +149,26 @@ public class Tuple {
             throw new UnsupportedOperationException("unknown type for constant loading: " + value);
         }
     }
+
+    // FIXME(zhangwen): move this somewhere.
+    public static boolean valueLessThan(Object value1, Object value2) {
+        if (value1 instanceof Integer) {
+            value1 = Long.valueOf((Integer) value1);
+        }
+        if (value2 instanceof Integer) {
+            value2 = Long.valueOf((Integer) value2);
+        }
+        if (value1 instanceof Long && value2 instanceof Long && (long) value1 < (long) value2) {
+            return true;
+        }
+        if (value1 instanceof Timestamp && value2 instanceof Timestamp
+                && ((Timestamp) value1).compareTo((Timestamp) value2) < 0) {
+            return true;
+        }
+        if (value1 instanceof Date && value2 instanceof Date && ((Date) value1).compareTo((Date) value2) < 0) {
+            return true;
+        }
+        return false;
+    }
+
 }

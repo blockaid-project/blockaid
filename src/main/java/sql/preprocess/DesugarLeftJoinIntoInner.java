@@ -1,14 +1,12 @@
 package sql.preprocess;
 
 import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import sql.ParserResult;
 import sql.PrivacyQuery;
 import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -20,7 +18,7 @@ public class DesugarLeftJoinIntoInner implements Preprocessor {
     private DesugarLeftJoinIntoInner() {}
 
     @Override
-    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();

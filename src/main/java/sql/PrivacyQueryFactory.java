@@ -2,9 +2,6 @@ package sql;
 
 import sql.preprocess.*;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class PrivacyQueryFactory {
@@ -16,8 +13,8 @@ public class PrivacyQueryFactory {
             StripSum.INSTANCE,
     };
 
-    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
-                                                  List<String> paramNames)
+    public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema,
+                                                  List<Object> parameters, List<String> paramNames)
     {
         if (result == null) {
             return null;
@@ -31,7 +28,7 @@ public class PrivacyQueryFactory {
         }
 
         // Extract literals into query parameters.
-        ArrayList<Object> newParams = new ArrayList<>(Arrays.asList(parameters));
+        ArrayList<Object> newParams = new ArrayList<>(parameters);
         ArrayList<String> newParamNames = new ArrayList<>(paramNames);
         result = ExtractParams.perform(result, newParams, newParamNames);
 

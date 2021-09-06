@@ -10,7 +10,6 @@ import sql.SchemaPlusWithKey;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -19,7 +18,7 @@ public class StripOrderBy implements Preprocessor {
 
     private StripOrderBy() {}
 
-    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
         if (result.getKind() != SqlKind.ORDER_BY) {
             return Optional.empty();
@@ -31,10 +30,9 @@ public class StripOrderBy implements Preprocessor {
 
         // We might have removed some parameters in the query.  Remove them in `parameters` and `paramNames`, too.
         int numParamsInSubQuery = subQuery.accept(DynParamCounter.INSTANCE);
-        if (numParamsInSubQuery != parameters.length) {
+        if (numParamsInSubQuery != parameters.size()) {
             // Assuming the removed parameters are at the end of the list.  This is correct?
-            parameters = Arrays.stream(parameters).limit(numParamsInSubQuery).collect(Collectors.toList())
-                    .toArray(new Object[numParamsInSubQuery]);
+            parameters = parameters.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
             paramNames = paramNames.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
         }
 

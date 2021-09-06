@@ -1,6 +1,7 @@
 package cache.unsat_core;
 
 import cache.BoundedUnsatCoreDeterminacyFormula;
+import cache.DecisionTemplateGenerator;
 import cache.MyUnsatCoreDeterminacyFormula;
 import cache.labels.Label;
 import cache.labels.ReturnedRowLabel;
@@ -35,23 +36,106 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
     private final String smtPreamble;
     private Set<ReturnedRowLabel> prevCore = null;
 
+    private static final int TIMEOUT_S = 2;
+
+    public static Set<ReturnedRowLabel> getOne(Schema schema, Collection<Policy> policies,
+                                               Collection<Query> views, QueryTrace trace) {
+        UnmodifiableLinearQueryTrace traceToUse = trace;
+        int maxBound = Collections.max(new CountingBoundEstimator().calculateBounds(schema, trace).values());
+//        int totalNumTuples = trace.getAllEntries().stream().mapToInt(e -> e.getTuples().size()).sum();
+
+//        if (totalNumTuples > 10) {
+        if (maxBound > 10) {
+            long startMs = System.currentTimeMillis();
+            MyZ3Context context = schema.getContext();
+            Solver solver = context.mkSolver();
+            MyUnsatCoreDeterminacyFormula myFormula = new MyUnsatCoreDeterminacyFormula(schema, views, trace);
+            solver.add(Iterables.toArray(myFormula.makeBackgroundFormulas(), BoolExpr.class));
+            Map<ReturnedRowLabel, BoolExpr> labeledExprs = myFormula.makeLabeledExprs();
+            for (Map.Entry<ReturnedRowLabel, BoolExpr> entry : labeledExprs.entrySet()) {
+                BoolExpr boolConst = context.mkBoolConst(entry.getKey().toString());
+                solver.add(context.mkImplies(boolConst, entry.getValue()));
+                solver.add(boolConst);
+            }
+            String smtVampire = solver.toString();
+            System.out.println("\t\t| Prepare Vampire:\t" + (System.currentTimeMillis() - startMs));
+
+            ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
+            CountDownLatch latch = new CountDownLatch(1);
+            executors.add(new VampireProofExecutor("vampire_lrs", smtVampire, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
+            executors.add(new VampireProofExecutor("vampire_dis+11_3", smtVampire, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_" + (TIMEOUT_S * 10)));
+            executors.add(new VampireProofExecutor("vampire_dis+3_1", smtVampire, latch, "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_" + (TIMEOUT_S * 10)));
+            executors.add(new VampireProofExecutor("vampire_dis+2_3", smtVampire, latch, "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
+            executors.add(new VampireProofExecutor("vampire_lrs+1011", smtVampire, latch, "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_" + (TIMEOUT_S * 10)));
+
+            for (SMTExecutor executor : executors) {
+                executor.start();
+            }
+
+            startMs = System.currentTimeMillis();
+            try {
+                latch.await(2000, TimeUnit.MILLISECONDS);
+                for (SMTExecutor executor : executors) {
+                    executor.signalShutdown();
+                }
+                for (SMTExecutor executor : executors) {
+                    executor.join();
+                }
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+
+            Set<ReturnedRowLabel> smallestCore = null;
+            for (ProcessSMTExecutor e : executors) {
+                if (e.getResult() != Status.UNSATISFIABLE) {
+                    continue;
+                }
+                System.out.println(e.getName());
+                Set<ReturnedRowLabel> core = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)").matcher(e.getOutput())
+                        .results()
+                        .map(r -> new ReturnedRowLabel(Integer.parseInt(r.group(1)), Integer.parseInt(r.group(2))))
+                        .collect(Collectors.toSet());
+                System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + core + ANSI_RESET);
+                if (smallestCore == null || smallestCore.size() > core.size()) {
+                    smallestCore = core;
+                }
+            }
+            System.out.println("\t\t| Vampire:\t" + (System.currentTimeMillis() - startMs));
+
+            try {
+                Files.write(Paths.get("/tmp/get_unsat_core_vampire.smt2"), smtVampire.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+            checkState(smallestCore != null);
+            traceToUse = trace.getSubTrace(
+                    smallestCore.stream()
+                            .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
+                            .collect(ImmutableList.toImmutableList())
+            );
+        }
+
+        MyZ3Context context = schema.getContext();
+        Solver solver = context.mkSolver();
+        BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies,
+                views, traceToUse, BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY);
+        solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+        Map<ReturnedRowLabel, BoolExpr> labeledExprs = formula.makeLabeledExprs().entrySet().stream()
+                .collect(Collectors.toMap(e -> (ReturnedRowLabel) e.getKey(), Map.Entry::getValue));
+        Set<ReturnedRowLabel> s = new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.ARBITRARY).next().get();
+        if (traceToUse instanceof SubQueryTrace) {
+            SubQueryTrace sqt = (SubQueryTrace) traceToUse;
+            s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, sqt)).collect(Collectors.toSet());
+        }
+        return s;
+    }
+
     public static AbstractUnsatCoreEnumerator<ReturnedRowLabel> create(Schema schema, Collection<Policy> policies,
                                                         Collection<Query> views, QueryTrace trace) {
         int maxBound = Collections.max(new CountingBoundEstimator().calculateBounds(schema, trace).values());
         // FIXME(zhangwen): this is a hack for small traces.
         if (maxBound <= 10) {
-            MyZ3Context context = schema.getContext();
-            Solver solver = context.mkSolver();
-            BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies,
-                    views, trace, BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY);
-            solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
-            for (Map.Entry<Label, BoolExpr> e : formula.makeLabeledExprs().entrySet()) {
-                solver.add(context.mkImplies(context.mkBoolConst(e.getKey().toString()), e.getValue()));
-            }
-            return new UnsatCoreEnumerator<>(context, solver,
-                    formula.makeLabeledExprs().entrySet().stream()
-                            .collect(Collectors.toMap(e -> (ReturnedRowLabel) e.getKey(), Map.Entry::getValue)),
-                    Order.ARBITRARY);
         }
 
         // TODO(zhangwen): This code is duplicated.
@@ -218,6 +302,8 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
             }
         }
 
+        System.out.println("\t\t| Concrete:");
+        long startMs = System.currentTimeMillis();
         SubQueryTrace sqt = trace.getSubTrace(
                 labels.stream()
                         .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
@@ -227,12 +313,15 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new CountingBoundEstimator());
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, sqt);
         Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 2);
+        System.out.println("\t\t\t| Bound est:\t" + (System.currentTimeMillis() - startMs));
 
+        startMs = System.currentTimeMillis();
         BoundedDeterminacyFormula formula = new BoundedDeterminacyFormula(schema, views, slackBounds, true,
                 DeterminacyFormula.TextOption.NO_TEXT, sqt.computeKnownRows(schema));
         Solver solver = schema.getContext().mkSolver();
         solver.add(Iterables.toArray(formula.makeCompleteFormula(sqt), BoolExpr.class));
         Status status = solver.check();
+        System.out.println("\t\t\t| Solve:\t" + (System.currentTimeMillis() - startMs));
         if (status == Status.SATISFIABLE) {
             return Optional.of(labels);
         }

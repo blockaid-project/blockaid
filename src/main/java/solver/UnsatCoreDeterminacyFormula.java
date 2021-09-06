@@ -107,11 +107,13 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
             ++queryNumber;
         }
 
-        for (Map.Entry<String, Integer> constants : queries.getConstMap().entrySet()) {
-            if (!equalitySets.containsKey(constants.getValue())) {
-                equalitySets.put(constants.getValue(), new HashSet<>());
+        for (Map.Entry<String, Object> constants : queries.getConstMap().entrySet()) {
+            Object value = constants.getValue();
+            if (!equalitySets.containsKey(value)) {
+                equalitySets.put(value, new HashSet<>());
             }
-            equalitySets.get(constants.getValue()).add(context.mkConst("!" + constants.getKey(), context.getCustomIntSort()));
+            equalitySets.get(value).add(context.mkConst("!" + constants.getKey(),
+                    Tuple.getSortFromObject(context, value)));
         }
 
         this.assertionMap = new HashMap<>();

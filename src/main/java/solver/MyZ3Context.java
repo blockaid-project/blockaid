@@ -55,7 +55,18 @@ public class MyZ3Context extends Context {
             valuesStack = new ArrayList<>();
             valuesStack.add(new Values());
 
-            intLt = ctx.mkFreshFuncDecl("lt", new Sort[]{intSort, intSort}, ctx.getBoolSort());
+            intLt = ctx.mkFuncDecl("lt", new Sort[]{intSort, intSort}, ctx.getBoolSort());
+//            {
+//                Expr x = mkConst("x", intSort), y = mkConst("y", intSort), z = mkConst("z", intSort);
+//                BoolExpr trans = mkForall(
+//                        new Expr[]{x, y, z},
+//                        mkImplies(
+//                                mkAnd((BoolExpr) intLt.apply(x, y), (BoolExpr) intLt.apply(y, z)),
+//                                (BoolExpr) intLt.apply(x, z)
+//                        ), 1, null, null, null, null
+//                );
+//                intLtAxioms = ImmutableList.of(trans);
+//            }
         }
 
         private void push() {
@@ -141,6 +152,25 @@ public class MyZ3Context extends Context {
             return Optional.empty();
         }
 
+        private <T extends Comparable<? super T>> Collection<BoolExpr> mkLtConstraints(Map<T, Expr> exprs) {
+            if (exprs.size() <= 1) {
+                return Collections.emptyList();
+            }
+
+            ArrayList<T> keys = new ArrayList<>(exprs.keySet());
+            Collections.sort(keys);
+            ArrayList<BoolExpr> res = new ArrayList<>();
+            // Encodes transitivity of less-than.  Should use a forall axiom, but that breaks QF bounded formulas.
+            for (int i = 0; i < keys.size(); ++i) {
+                Expr thisElem = exprs.get(keys.get(i));
+                for (int j = i + 1; j < keys.size(); ++j) {
+                    Expr otherElem = exprs.get(keys.get(j));
+                    res.add((BoolExpr) intLt.apply(thisElem, otherElem));
+                }
+            }
+            return res;
+        }
+
         // Prepares Solver for use with custom sorts (adds uniqueness constraints)
         private Solver prepareSolver(Solver solver) {
             if (solver.getNumAssertions() > 0) {
@@ -149,14 +179,17 @@ public class MyZ3Context extends Context {
             Map<Date, Expr> dateValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.dateValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
             if (dateValues.size() > 1) {
                 solver.add(mkDistinct(dateValues.values().toArray(new Expr[0])));
+                solver.add(mkLtConstraints(dateValues).toArray(new BoolExpr[0]));
             }
             Map<Timestamp, Expr> tsValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.tsValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
             if (tsValues.size() > 1) {
                 solver.add(mkDistinct(tsValues.values().toArray(new Expr[0])));
+                solver.add(mkLtConstraints(tsValues).toArray(new BoolExpr[0]));
             }
             Map<Long, Expr> intValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.intValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
             if (intValues.size() > 1) {
                 solver.add(mkDistinct(intValues.values().toArray(new Expr[0])));
+                solver.add(mkLtConstraints(intValues).toArray(new BoolExpr[0]));
             }
             Map<Double, Expr> realValues = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(v.realValues); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
             if (realValues.size() > 1) {
@@ -166,6 +199,7 @@ public class MyZ3Context extends Context {
             if (stringValues.size() > 1) {
                 solver.add(mkDistinct(stringValues.values().toArray(new Expr[0])));
             }
+//            solver.add(intLtAxioms.toArray(new BoolExpr[0]));
             return solver;
         }
 
@@ -176,13 +210,16 @@ public class MyZ3Context extends Context {
 //            sb.append("(declare-sort ").append(tsSort.getSExpr()).append(" 0)\n");
             sb.append("(declare-sort ").append(realSort.getSExpr()).append(" 0)\n");
             sb.append("(declare-sort ").append(stringSort.getSExpr()).append(" 0)\n");
+            sb.append("(declare-sort ").append(intSort.getSExpr()).append(" 0)\n");
 
-            String customIntSortName = intSort.getSExpr();
-            sb.append("(declare-sort ").append(customIntSortName).append(" 0)\n");
+            sb.append(intLt.getSExpr()).append("\n");
+//            for (BoolExpr e : intLtAxioms) {
+//                sb.append("(assert ").append(e.getSExpr()).append(")\n");
+//            }
 
-            prepareSortValues(sb, v -> v.dateValues);
-            prepareSortValues(sb, v -> v.tsValues);
-            prepareSortValues(sb, v -> v.intValues);
+            prepareSortValuesComparable(sb, v -> v.dateValues);
+            prepareSortValuesComparable(sb, v -> v.tsValues);
+            prepareSortValuesComparable(sb, v -> v.intValues);
             prepareSortValues(sb, v -> v.realValues);
             prepareSortValues(sb, v -> v.stringValues);
             return sb.toString();
@@ -205,7 +242,16 @@ public class MyZ3Context extends Context {
 
             distinct.append("))\n");
             if (numValues > 1) {
-                sb.append(distinct);
+                sb.append(distinct).append("\n");
+            }
+        }
+
+        private <T extends Comparable<? super T>> void prepareSortValuesComparable(
+                StringBuilder sb, Function<Values, Map<T, Expr>> valueMapPicker) {
+            prepareSortValues(sb, valueMapPicker);
+            Map<T, Expr> value2Expr = valuesStack.stream().reduce(new HashMap<>(), (m, v) -> { m.putAll(valueMapPicker.apply(v)); return m; }, (m1, m2) -> { m1.putAll(m2); return m1; });
+            for (BoolExpr e : mkLtConstraints(value2Expr)) {
+                sb.append("(assert ").append(e.getSExpr()).append(")\n");
             }
         }
     }
@@ -356,7 +402,25 @@ public class MyZ3Context extends Context {
         return customSorts.getInt(value);
     }
 
-    public Expr mkCustomIntLt(Expr left, Expr right) { return customSorts.intLt.apply(left, right); }
+    public Expr mkCustom(Object value) {
+        if (value instanceof Long) {
+            return mkCustomInt((long) value);
+        } else if (value instanceof Integer) {
+            return mkCustomInt((int) value);
+        } else if (value instanceof String) {
+            return mkCustomString((String) value);
+        } else if ((value instanceof Float) || (value instanceof Double)) {
+            return mkCustomReal((double) value);
+        } else if (value instanceof Timestamp) {
+            return customSorts.getTimestamp((Timestamp) value);
+        } else if (value instanceof Date) {
+            return customSorts.getDate((Date) value);
+        } else {
+            throw new UnsupportedOperationException("object not supported: " + value);
+        }
+    }
+
+    public BoolExpr mkCustomIntLt(Expr left, Expr right) { return (BoolExpr) customSorts.intLt.apply(left, right); }
 
     // Overrides to deprecate Z3's standard sorts where we have custom uninterpreted sorts.
     @Override

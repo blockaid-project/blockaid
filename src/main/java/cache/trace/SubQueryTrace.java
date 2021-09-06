@@ -12,12 +12,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class SubQueryTrace extends UnmodifiableLinearQueryTrace {
     private final List<QueryTraceEntry> queryList;
-    private final Map<String, Integer> constMap;
+    private final Map<String, Object> constMap;
     private final QueryTraceEntry currentQuery;
     private final ImmutableMap<QueryTupleIdxPair, QueryTupleIdxPair> backMap;
     private final ImmutableMap<Integer, Integer> queryIdxBackMap;
 
-    SubQueryTrace(List<QueryTraceEntry> queryList, Map<String, Integer> constMap,
+    SubQueryTrace(List<QueryTraceEntry> queryList, Map<String, Object> constMap,
                   QueryTraceEntry currentQuery,
                   Map<QueryTupleIdxPair, QueryTupleIdxPair> backMap) {
         this.queryList = checkNotNull(queryList);
@@ -37,7 +37,7 @@ public class SubQueryTrace extends UnmodifiableLinearQueryTrace {
     }
 
     @Override
-    public Map<String, Integer> getConstMap() {
+    public Map<String, Object> getConstMap() {
         return Collections.unmodifiableMap(constMap);
     }
 

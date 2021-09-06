@@ -43,9 +43,9 @@ public class CachedQueryTrace {
                     return false;
                 }
             }
-            for (Map.Entry<String, Integer> c : trace.getConstMap().entrySet()) {
+            for (Map.Entry<String, Object> c : trace.getConstMap().entrySet()) {
                 String name = c.getKey();
-                Integer value = c.getValue();
+                Object value = c.getValue();
                 if (constEqualities.containsKey(name)) {
                     Integer index = constEqualities.get(name);
                     if (index != null && !mappedIndices.get(index).equals(value)) {

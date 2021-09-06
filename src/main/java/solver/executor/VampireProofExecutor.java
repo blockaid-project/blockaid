@@ -13,7 +13,6 @@ public class VampireProofExecutor extends ProcessSMTExecutor {
             "--input_syntax", "smtlib2",
 //            "--mode", "casc",
 //            "--cores", "8",
-            "--time_limit", "10d"
     };
 
     public VampireProofExecutor(String name, String smtString, CountDownLatch latch, String config) {

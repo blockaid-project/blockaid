@@ -3,6 +3,9 @@ package cache.trace;
 import com.google.common.collect.*;
 import sql.PrivacyQuery;
 
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -12,6 +15,7 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
     private final ArrayListMultimap<String, QueryTraceEntry> queries;
     private final ArrayList<QueryTraceEntry> queryList; // Used to maintain order between queries.
     private QueryTraceEntry currentQuery;
+    private Instant lastNow = null;
 
     // For de-duplication.
     private final HashSet<QueryTraceEntry> entrySet;
@@ -19,7 +23,7 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
     // Maps constants to their values (e.g., _MY_UID -> 2).
     // TODO(zhangwen): The existing code seems to assume constants are integers (in ParsedPSJ.getPredicate),
     //  so I do the same here.
-    private final HashMap<String, Integer> constMap;
+    private final HashMap<String, Object> constMap;
 
     public QueryTrace() {
         queries = ArrayListMultimap.create();
@@ -29,7 +33,7 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
         constMap = new HashMap<>();
     }
 
-    public void setConstValue(String name, Integer value) {
+    public void setConstValue(String name, Object value) {
         checkArgument(constMap.getOrDefault(name, value).equals(value));
         constMap.put(name, value);
     }
@@ -38,8 +42,16 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
      * Gets the constant map (constant name -> value).
      * @return a read-only view into the const map.
      */
-    public Map<String, Integer> getConstMap() {
-        return Collections.unmodifiableMap(constMap);
+    public Map<String, Object> getConstMap() {
+        Instant now = Instant.now();
+        // HACK: it's probably unnecessary to generate too many "now" timestamps that are close to each other.
+        // A more proper way would be to remove "now" from tracked constants after each formula generation.
+        if (lastNow == null || Duration.between(lastNow, now).getSeconds() >= 60) {
+            lastNow = now;
+        }
+        HashMap<String, Object> cm = new HashMap<>(constMap);
+        cm.put("_NOW", Timestamp.from(lastNow));
+        return Collections.unmodifiableMap(cm);
     }
 
     public void startQuery(PrivacyQuery query, List<Object> parameters) {
@@ -127,6 +139,6 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
         checkArgument(!pickedQueryTuples.containsKey(queryList.size() - 1)); // The current query can't be picked.
         QueryTraceEntry newCurrQuery = new QueryTraceEntry(currentQuery);
         newQueryList.add(newCurrQuery);
-        return new SubQueryTrace(newQueryList, constMap, newCurrQuery, backMap);
+        return new SubQueryTrace(newQueryList, getConstMap(), newCurrQuery, backMap);
     }
 }

@@ -7,7 +7,6 @@ import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 public class StripUnaryOpSubquery implements Preprocessor {
@@ -15,7 +14,7 @@ public class StripUnaryOpSubquery implements Preprocessor {
 
     private StripUnaryOpSubquery() {}
 
-    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, Object[] parameters,
+    public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
         if (result.getKind() != SqlKind.SELECT) {
             return Optional.empty();
@@ -41,7 +40,7 @@ public class StripUnaryOpSubquery implements Preprocessor {
         }
 
         // Only handling the case where this stripping doesn't remove any parameters.
-        if (sqlSelect.accept(DynParamCounter.INSTANCE) != parameters.length) {
+        if (sqlSelect.accept(DynParamCounter.INSTANCE) != parameters.size()) {
             return Optional.empty();
         };
 
