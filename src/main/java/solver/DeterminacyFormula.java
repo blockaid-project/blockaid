@@ -5,6 +5,7 @@ import cache.trace.QueryTraceEntry;
 import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
 
@@ -153,10 +154,11 @@ public abstract class DeterminacyFormula {
         "not contained in". */
         Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
         Tuple extHeadTup = query.makeFreshHead();
-        return List.of(
-                query.apply(inst1).doesContainExpr(extHeadTup),
-                context.mkNot(query.apply(inst2).doesContainExpr(extHeadTup))
-        );
+        List<BoolExpr> res = Lists.newArrayList(query.apply(inst1).doesContainExpr(extHeadTup));
+        res.add(context.mkNot(
+                context.mkAnd(query.apply(inst2).doesContainExpr(extHeadTup))
+        ));
+        return res;
     }
 
     public Iterable<BoolExpr> makeBodyFormula(UnmodifiableLinearQueryTrace queries) {

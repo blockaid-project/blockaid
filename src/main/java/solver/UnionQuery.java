@@ -4,6 +4,7 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
 
 import java.util.Arrays;
+import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -34,12 +35,13 @@ public class UnionQuery extends Query {
     }
 
     @Override
-    public BoolExpr doesContain(Instance instance, Tuple tuple) {
+    public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
+        MyZ3Context context = instance.getContext();
         BoolExpr[] exprs = new BoolExpr[queries.length];
         for (int i = 0; i < queries.length; ++i) {
-            exprs[i] = queries[i].doesContain(instance, tuple);
+            exprs[i] = context.mkAnd(queries[i].doesContain(instance, tuple));
         }
-        return instance.getContext().mkOr(exprs);
+        return List.of(context.mkOr(exprs));
     }
 
     @Override

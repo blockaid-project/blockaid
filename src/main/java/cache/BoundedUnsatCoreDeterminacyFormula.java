@@ -202,7 +202,7 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
                 Tuple tuple = tuples.get(rowIdx);
                 Label l = new ReturnedRowLabel(queryIdx, rowIdx);
-                label2Expr.put(l, context.mkAnd(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple)));
+                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple))));
             }
         }
         return label2Expr;
@@ -290,7 +290,7 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
                 }
 
                 Label l = new ReturnedRowLabel(queryIdx, rowIdx);
-                label2Expr.put(l, context.mkAnd(r1.doesContainExpr(head), r2.doesContainExpr(head)));
+                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(head), r2.doesContainExpr(head))));
             }
         }
 
@@ -388,8 +388,8 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
             checkState(option == LabelOption.ALL, "illegal option: " + option);
             Query query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
             Tuple extHeadTup = query.makeFreshHead();
-            formulas.add(query.apply(inst1).doesContainExpr(extHeadTup));
-            formulas.add(context.mkNot(query.apply(inst2).doesContainExpr(extHeadTup)));
+            Iterables.addAll(formulas, query.apply(inst1).doesContainExpr(extHeadTup));
+            formulas.add(context.mkNot(context.mkAnd(query.apply(inst2).doesContainExpr(extHeadTup))));
         }
         return formulas;
     }

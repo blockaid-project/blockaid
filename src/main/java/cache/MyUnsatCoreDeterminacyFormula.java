@@ -45,7 +45,7 @@ public class MyUnsatCoreDeterminacyFormula extends FastCheckDeterminacyFormula {
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
                 Tuple tuple = tuples.get(rowIdx);
                 ReturnedRowLabel l = new ReturnedRowLabel(queryIdx, rowIdx);
-                label2Expr.put(l, context.mkAnd(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple)));
+                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple))));
             }
         }
         return label2Expr;

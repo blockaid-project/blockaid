@@ -13,7 +13,7 @@ public abstract class Query {
     public abstract Schema getSchema();
     public abstract Sort[] headTypes();
     // To generate expression for "Q(inst) contains tup", use `query.apply(inst).doesContainExpr(tup)`.
-    protected abstract BoolExpr doesContain(Instance instance, Tuple tuple);
+    protected abstract Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple);
     protected abstract Tuple[] generateTuples(Instance instance);
     protected abstract BoolExpr[] generateExists(Instance instance);
     protected BoolExpr[] generateExists(Instance instance, Solver solver) {

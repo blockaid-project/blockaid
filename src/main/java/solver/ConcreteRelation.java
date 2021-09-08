@@ -1,6 +1,7 @@
 package solver;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
 
 import java.util.*;
@@ -38,7 +39,7 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr doesContainExpr(Tuple tup) {
+    public Iterable<BoolExpr> doesContainExpr(Tuple tup) {
         checkArgument(tup.getSchema() == schema);
         tup = tup.replaceNullsWithFreshConsts(signature);
         List<BoolExpr> syms = new ArrayList<>();
@@ -48,21 +49,12 @@ public class ConcreteRelation implements Relation {
                 syms.add(context.mkAnd(exists[i], tupEq));
             }
         }
-        return context.mkOr(syms.toArray(new BoolExpr[0]));
+        return List.of(context.mkOr(syms.toArray(new BoolExpr[0])));
     }
 
     @Override
     public BoolExpr isEmptyExpr() {
         return context.mkNot(context.mkOr(exists));
-    }
-
-    @Override
-    public Iterable<BoolExpr> doesContainExpr(List<Tuple> other) {
-        if (other.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return other.stream().map(this::doesContainExpr).collect(Collectors.toList());
     }
 
     @Override
@@ -75,8 +67,8 @@ public class ConcreteRelation implements Relation {
         if (tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD
                 || ((ConcreteRelation) other).tuples.length > CONTAINMENT_USE_QUANTIFIER_THRESHOLD) {
             Tuple syms = makeFreshHead();
-            BoolExpr lhs = this.doesContainExpr(syms);
-            BoolExpr rhs = other.doesContainExpr(syms);
+            BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
+            BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
             if (syms.isEmpty()) {
                 return List.of(context.mkImplies(lhs, rhs));
             }
@@ -85,7 +77,7 @@ public class ConcreteRelation implements Relation {
         } else {
             ArrayList<BoolExpr> exprs = new ArrayList<>();
             for (int i = 0; i < exists.length; ++i) {
-                exprs.add(context.mkOr(context.mkNot(exists[i]), other.doesContainExpr(tuples[i])));
+                exprs.add(context.mkOr(context.mkNot(exists[i]), context.mkAnd(other.doesContainExpr(tuples[i]))));
             }
             return exprs;
         }

@@ -60,7 +60,8 @@ public class UniqueConstraint implements Constraint {
 
         BoolExpr agreeFormula = context.mkAnd(agreeFormulaExprs);
 
-        BoolExpr lhs = context.mkAnd(relation.doesContainExpr(tup1), relation.doesContainExpr(tup2), agreeFormula);
+        BoolExpr lhs = context.mkAnd(context.mkAnd(relation.doesContainExpr(tup1)),
+                context.mkAnd(relation.doesContainExpr(tup2)), agreeFormula);
         BoolExpr rhs = tup1.equalsExpr(tup2);
 
         Expr[] allVars = Stream.concat(tup1.stream(), tup2.stream()).toArray(Expr[]::new);
