@@ -32,7 +32,7 @@ public class ForeignKeyDependency implements Dependency {
         PSJ selectFromQuery = new PSJ(schema, Collections.singletonList(fromRelation)) {
             @Override
             protected Tuple headSelector(Tuple... tuples) {
-                return new Tuple(schema, tuples[0].get(fromIndex));
+                return new Tuple(getSchema(), tuples[0].get(fromIndex));
             }
             @Override
             protected Sort[] headTypeSelector(Sort[]... types) {
@@ -42,7 +42,7 @@ public class ForeignKeyDependency implements Dependency {
         PSJ selectToQuery = new PSJ(schema, Collections.singletonList(toRelation)) {
             @Override
             protected Tuple headSelector(Tuple... tuples) {
-                return new Tuple(schema, tuples[0].get(toIndex));
+                return new Tuple(getSchema(), tuples[0].get(toIndex));
             }
             @Override
             protected Sort[] headTypeSelector(Sort[]... types) {

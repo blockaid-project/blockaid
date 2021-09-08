@@ -143,6 +143,13 @@ public class DecisionTemplate {
     public String toString(boolean useColors) {
         ArrayList<String> lines = new ArrayList<>();
 
+        for (Map.Entry<String, Integer> e : constName2EC.entrySet()) {
+            lines.add(String.format("%s = ?%d", e.getKey(), e.getValue()));
+        }
+        for (Map.Entry<String, Object> e : constName2Value.entrySet()) {
+            lines.add(String.format("%s = %s", e.getKey(), e.getValue()));
+        }
+
         String currQueryText = null;
         Multimap<String, Entry> entriesByStr = ArrayListMultimap.create();
         for (Entry entry : entries) {
@@ -161,12 +168,6 @@ public class DecisionTemplate {
             }
         }
 
-        for (Map.Entry<String, Integer> e : constName2EC.entrySet()) {
-            lines.add(String.format("%s = ?%d", e.getKey(), e.getValue()));
-        }
-        for (Map.Entry<String, Object> e : constName2Value.entrySet()) {
-            lines.add(String.format("%s = %s", e.getKey(), e.getValue()));
-        }
         for (LessThan lt : lts) {
             lines.add(String.format("?%d < ?%d", lt.getLhsEC(), lt.getRhsEC()));
         }

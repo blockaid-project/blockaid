@@ -4,6 +4,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.BoolExpr;
+import com.microsoft.z3.Solver;
 
 import java.util.*;
 
@@ -24,6 +25,10 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
             for (Iterable<BoolExpr> bs : inst2.getConstraints().values()) {
                 Iterables.addAll(clauses, bs);
             }
+
+            Solver solver = context.mkSolver();
+            solver.add(clauses.toArray(new BoolExpr[0]));
+
             if (splitProducts) {
                 for (Query v : views) {
                     // (equal under each part) || (empty on one+ part per instance)
@@ -47,7 +52,7 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                 }
             } else {
                 for (Query v : views) {
-                    Iterables.addAll(clauses, v.apply(inst1).equalsExpr(v.apply(inst2)));
+                    Iterables.addAll(clauses, v.apply(inst1, solver).equalsExpr(v.apply(inst2, solver)));
                 }
             }
             return clauses;

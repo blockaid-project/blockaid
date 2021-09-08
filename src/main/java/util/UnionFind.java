@@ -7,6 +7,7 @@ import com.google.common.collect.ImmutableMap;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -18,6 +19,10 @@ public class UnionFind<T> {
     private final int[] rank;
     private final int[] size; // Size of the equivalence class rooted at each element.
     private final Object[] data; // Data associated with each equivalence class; null means no data.
+
+    public UnionFind(Stream<T> elements) {
+        this(elements.collect(ImmutableList.toImmutableList()));
+    }
 
     public UnionFind(Collection<T> elements) {
         this.elements = ImmutableList.copyOf(elements);

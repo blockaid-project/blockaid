@@ -42,7 +42,7 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, trace);
         Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 1);
-        System.out.println("\t\t| Compute bounds:\t" + (System.currentTimeMillis() - startTime));
+        System.out.println("\t\t| Compute bounds:\t" + (System.currentTimeMillis() - startTime) + "\t" + bounds);
 
         // FIXME(zhangwen): we can't actually constrain the tables to contain known rows, because then we wouldn't be
         //  able to tell the difference made by removing a previous query.

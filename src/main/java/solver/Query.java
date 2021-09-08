@@ -2,6 +2,7 @@ package solver;
 
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
+import com.microsoft.z3.Solver;
 import com.microsoft.z3.Sort;
 
 import java.util.Arrays;
@@ -15,6 +16,9 @@ public abstract class Query {
     protected abstract BoolExpr doesContain(Instance instance, Tuple tuple);
     protected abstract Tuple[] generateTuples(Instance instance);
     protected abstract BoolExpr[] generateExists(Instance instance);
+    protected BoolExpr[] generateExists(Instance instance, Solver solver) {
+        return generateExists(instance);
+    }
 
     /**
      * Returns a set of queries which, when joined together by cartesian product,
@@ -25,12 +29,16 @@ public abstract class Query {
         return Collections.singletonList(this);
     }
 
-    public Relation apply(Instance instance) {
+    public Relation apply(Instance instance, Solver solver) {
         if (instance.isConcrete) {
-            return new ConcreteRelation(instance.schema, headTypes(), generateTuples(instance), generateExists(instance));
+            return new ConcreteRelation(instance.schema, headTypes(), generateTuples(instance), generateExists(instance, solver));
         } else {
             return new GeneralRelation(instance.schema, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
         }
+    }
+
+    public Relation apply(Instance instance) {
+        return apply(instance, null);
     }
 
     public Tuple makeHead(IntFunction<String> nameGenerator) {

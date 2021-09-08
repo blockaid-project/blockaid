@@ -4,6 +4,7 @@ import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -56,13 +57,12 @@ public class ConcreteRelation implements Relation {
     }
 
     @Override
-    public BoolExpr doesContainExpr(List<Tuple> other) {
+    public Iterable<BoolExpr> doesContainExpr(List<Tuple> other) {
         if (other.isEmpty()) {
-            return context.mkTrue();
+            return Collections.emptyList();
         }
 
-        BoolExpr[] syms = other.stream().map(this::doesContainExpr).toArray(BoolExpr[]::new);
-        return context.mkAnd(syms);
+        return other.stream().map(this::doesContainExpr).collect(Collectors.toList());
     }
 
     @Override

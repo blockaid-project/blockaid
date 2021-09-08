@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -81,10 +82,54 @@ public abstract class DeterminacyFormula {
                             v -> Tuple.getExprFromObject(context, v)
                     ))).collect(Collectors.toList());
             if (!tuples.isEmpty()) {
-                exprs.add(r1.doesContainExpr(tuples));
-                exprs.add(r2.doesContainExpr(tuples));
+                Iterables.addAll(exprs, postProcess(r1.doesContainExpr(tuples)));
+                Iterables.addAll(exprs, postProcess(r2.doesContainExpr(tuples)));
             }
         }
+        return exprs;
+    }
+
+    private Iterable<BoolExpr> postProcess(Iterable<BoolExpr> exprs) {
+//        for (Expr e : exprs) {
+//            if (e.isQuantifier()) {
+//                Quantifier q = (Quantifier) e;
+//                if (q.isExistential()) {
+//                    Expr body = q.getBody();
+//                    if (body.isAnd()) {
+//                        for (Expr andArg : body.getArgs()) {
+//                            if (andArg.isEq()) {
+//                                Expr[] eqArgs = andArg.getArgs();
+//                                Expr lhs = eqArgs[0], rhs = eqArgs[1];
+//                                if (rhs.isVar()) {
+//                                    Expr temp = rhs;
+//                                    rhs = lhs;
+//                                    lhs = temp;
+//                                }
+//                                System.out.println(lhs + ", " + rhs + ", " + (lhs.equals(rhs)));
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//        return Streams.stream(exprs).flatMap(e -> {
+//            if (e.isQuantifier()) {
+//                Quantifier q = (Quantifier) e;
+//                if (q.isExistential()) {
+//                    Expr body = q.getBody();
+//                    if (body.isAnd()) {
+//                        for (Expr andArg : body.getArgs()) {
+//                            if (andArg.isEq()) {
+//                                Expr[] eqArgs = andArg.getArgs();
+//                            }
+//                        }
+//
+//                        return Arrays.stream(body.getArgs()).map(e1 -> (BoolExpr) e1);
+//                    }
+//                }
+//            }
+//            return Stream.of(e);
+//        }).collect(Collectors.toList());
         return exprs;
     }
 

@@ -47,7 +47,7 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 2000; // ms
+    public static long SOLVE_TIMEOUT = 40000; // ms
 
     private final Schema schema;
     private final List<Policy> policySet;
@@ -177,6 +177,14 @@ public class QueryChecker {
     }
 
     private boolean doCheckPolicy(QueryTrace queries) {
+//        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new CountingBoundEstimator());
+//        Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
+//        Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 2);
+//        BoundedDeterminacyFormula bdf = new BoundedDeterminacyFormula(schema, policyQueries, slackBounds,
+//                false, DeterminacyFormula.TextOption.NO_TEXT, queries.computeKnownRows(schema));
+//        Solver solver = schema.getContext().mkSolver();
+//        return solver.check(Iterables.toArray(bdf.makeCompleteFormula(queries), BoolExpr.class)) == Status.UNSATISFIABLE;
+
         CountDownLatch latch = new CountDownLatch(1);
         List<SMTExecutor> executors = new ArrayList<>();
 
@@ -185,7 +193,14 @@ public class QueryChecker {
         String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
         System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
         executors.add(new Z3Executor("z3_fast", fastCheckSMT, latch, false, true, false));
-        executors.add(new VampireLrsExecutor("vampire_lrs_fast", fastCheckSMT, latch, false, true, false));
+//        executors.add(new VampireLrsExecutor("vampire_lrs_fast", fastCheckSMT, latch, false, true, false));
+        executors.add(new VampireExecutor("vampire_lrs_fast", "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_10000", fastCheckSMT, latch, false, true, false));
+//        executors.add(new VampireExecutor("vampire_dis+11_3_fast", "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_10000", fastCheckSMT, latch, false, true, false));
+//        executors.add(new VampireExecutor("vampire_dis+3_1_fast", "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_10000", fastCheckSMT, latch, false, true, false));
+//        executors.add(new VampireExecutor("vampire_dis+2_3_fast", "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_10000", fastCheckSMT, latch, false, true, false));
+//        executors.add(new VampireExecutor("vampire_lrs+1011_fast", "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_10000", fastCheckSMT, latch, false, true, false));
+//        executors.add(new VampireExecutor("vampire_lrs+11_20_fast", "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_10000", fastCheckSMT, latch, false, true, false));
+        executors.add(new VampireExecutor("vampire_lrs+1_7_fast", "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_10000", fastCheckSMT, latch, false, true, false));
         printFormula(fastCheckSMT, "fast_unsat", queries);
 
         // regular check

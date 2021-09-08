@@ -7,7 +7,7 @@ import com.microsoft.z3.enumerations.Z3_sort_kind;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public class Z3Function implements Function {
+public class Z3Function implements RelationFunction {
     private final FuncDecl functionDecl;
 
     public FuncDecl getFunctionDecl() {

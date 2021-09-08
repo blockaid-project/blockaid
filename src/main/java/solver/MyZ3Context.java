@@ -19,7 +19,6 @@ public class MyZ3Context extends Context {
     private final HashSet<Expr> trackedConsts;
     private final CustomSorts customSorts;
 
-    private boolean isCachingConsts = false;
     private final Map<Sort, Map<String, Expr>> constCache = new HashMap<>();
 
     private class CustomSorts {
@@ -270,13 +269,7 @@ public class MyZ3Context extends Context {
 
     @Override
     public Expr mkConst(String s, Sort sort) {
-        Expr c;
-        if (isCachingConsts) {
-            c = constCache.computeIfAbsent(sort, k -> new HashMap<>()).computeIfAbsent(s, k -> super.mkConst(k, sort));
-        } else {
-            c = super.mkConst(s, sort);
-        }
-
+        Expr c = super.mkConst(s, sort);
         if (isTrackingConsts && !untrackedConsts.contains(c)) {
             trackedConsts.add(c);
         } else {
@@ -304,6 +297,11 @@ public class MyZ3Context extends Context {
         if (boolExprs.length == 1) {
             return boolExprs[0];
         }
+        for (BoolExpr boolExpr : boolExprs) {
+            if (boolExpr.isFalse()) {
+                return mkFalse();
+            }
+        }
         return super.mkAnd(boolExprs);
     }
 
@@ -311,15 +309,11 @@ public class MyZ3Context extends Context {
         return mkAnd(Iterables.toArray(boolExprs, BoolExpr.class));
     }
 
-    public void startCachingConsts() {
-        isCachingConsts = true;
-    }
-
-    public void stopCachingConsts() {
-        isCachingConsts = false;
-        for (Map<String, Expr> v : constCache.values()) {
-            v.clear();
+    public BoolExpr myMkExists(Collection<Expr> quantifiers, BoolExpr body) {
+        if (quantifiers.isEmpty()) {
+            return body;
         }
+        return mkExists(quantifiers.toArray(new Expr[0]), body, 1, null, null, null, null);
     }
 
     public void startTrackingConsts() {

@@ -91,6 +91,7 @@ public class Tuple {
         Expr[] convertedExprs = new Expr[size()];
         for (int i = 0; i < size(); ++i) {
             convertedExprs[i] = content.get(i).orElse(schema.getContext().mkFreshConst("null", sorts[i]));
+//            convertedExprs[i] = content.get(i).orElse(schema.getContext().mkConst("null" + sorts[i].toString(), sorts[i]));
         }
 
         return new Tuple(this.getSchema(), convertedExprs);

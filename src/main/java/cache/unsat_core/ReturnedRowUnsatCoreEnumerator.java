@@ -36,7 +36,7 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
     private final String smtPreamble;
     private Set<ReturnedRowLabel> prevCore = null;
 
-    private static final int TIMEOUT_S = 2;
+    private static final int TIMEOUT_S = 20;
 
     public static Set<ReturnedRowLabel> getOne(Schema schema, Collection<Policy> policies,
                                                Collection<Query> views, QueryTrace trace) {
@@ -61,12 +61,14 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
             System.out.println("\t\t| Prepare Vampire:\t" + (System.currentTimeMillis() - startMs));
 
             ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
-            CountDownLatch latch = new CountDownLatch(1);
-            executors.add(new VampireProofExecutor("vampire_lrs", smtVampire, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
+            CountDownLatch latch = new CountDownLatch(2);
+            executors.add(new VampireProofExecutor("vampire_lrs+10_1", smtVampire, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
             executors.add(new VampireProofExecutor("vampire_dis+11_3", smtVampire, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_" + (TIMEOUT_S * 10)));
             executors.add(new VampireProofExecutor("vampire_dis+3_1", smtVampire, latch, "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_" + (TIMEOUT_S * 10)));
             executors.add(new VampireProofExecutor("vampire_dis+2_3", smtVampire, latch, "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
             executors.add(new VampireProofExecutor("vampire_lrs+1011", smtVampire, latch, "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_" + (TIMEOUT_S * 10)));
+            executors.add(new VampireProofExecutor("vampire_lrs+11_20", smtVampire, latch, "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_" + (TIMEOUT_S * 10)));
+            executors.add(new VampireProofExecutor("vampire_lrs+1_7", smtVampire, latch, "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_" + (TIMEOUT_S * 10)));
 
             for (SMTExecutor executor : executors) {
                 executor.start();
@@ -74,7 +76,7 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
 
             startMs = System.currentTimeMillis();
             try {
-                latch.await(2000, TimeUnit.MILLISECONDS);
+                latch.await(TIMEOUT_S, TimeUnit.SECONDS);
                 for (SMTExecutor executor : executors) {
                     executor.signalShutdown();
                 }
@@ -116,6 +118,7 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
             );
         }
 
+        long startMs = System.currentTimeMillis();
         MyZ3Context context = schema.getContext();
         Solver solver = context.mkSolver();
         BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies,
@@ -128,6 +131,7 @@ public class ReturnedRowUnsatCoreEnumerator extends AbstractUnsatCoreEnumerator<
             SubQueryTrace sqt = (SubQueryTrace) traceToUse;
             s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, sqt)).collect(Collectors.toSet());
         }
+        System.out.println("\t\t| Bounded RRL core:\t" + (System.currentTimeMillis() - startMs));
         return s;
     }
 

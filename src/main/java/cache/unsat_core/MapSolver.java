@@ -9,6 +9,8 @@ import solver.MyZ3Context;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkState;
+import static util.TerminalColor.ANSI_RED;
+import static util.TerminalColor.ANSI_RESET;
 
 // For enumerating minimal unsat cores using the MARCO algorithm.
 // Adapted from https://github.com/Z3Prover/z3/blob/master/examples/python/mus/marco.py.
@@ -101,5 +103,13 @@ class MapSolver<L> {
         solver.add(context.mkOr(
                 labels.stream().map(l -> context.mkNot(label2Var.get(l))).toArray(BoolExpr[]::new)
         ));
+    }
+
+    public void restrictTo(Set<L> subset) {
+        for (L l : allLabels) {
+            if (!subset.contains(l)) {
+                solver.add(context.mkNot(label2Var.get(l)));
+            }
+        }
     }
 }

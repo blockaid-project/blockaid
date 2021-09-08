@@ -8,19 +8,16 @@ import cache.trace.SubQueryTrace;
 import cache.unsat_core.Order;
 import cache.unsat_core.ReturnedRowUnsatCoreEnumerator;
 import cache.unsat_core.UnsatCoreEnumerator;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.*;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
+import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import solver.MyZ3Context;
 import solver.Query;
 import solver.Schema;
 import util.UnionFind;
 
-import java.lang.reflect.Array;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -101,12 +98,45 @@ public class DecisionTemplateGenerator {
 
             Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
             solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+
+            // Assert the returned-row labels in the solver, and exclude them from enumeration.
+            List<Label> thisRRLabels = labeledExprs.keySet().stream()
+                    .filter(l -> l.getKind() == Label.Kind.RETURNED_ROW)
+                    .collect(Collectors.toList());
+            for (Label rrl : thisRRLabels) {
+                solver.add(labeledExprs.get(rrl));
+            }
+            Map<Label, BoolExpr> thisNonRRLabel2Expr = Maps.filterKeys(labeledExprs,
+                    l -> l.getKind() != Label.Kind.RETURNED_ROW);
+
             try (UnsatCoreEnumerator<Label> uce =
-                         new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.INCREASING)) {
+                         new UnsatCoreEnumerator<>(context, solver, thisNonRRLabel2Expr, Order.INCREASING)) {
+                System.out.println("total    #labels =\t" + thisNonRRLabel2Expr.size());
+                Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
+                System.out.println("starting #labels =\t" + startingUnsatCore.size());
+
+                Solver thisSolver = context.mkSolver();
+                for (Label l : startingUnsatCore) {
+                    thisSolver.add(thisNonRRLabel2Expr.get(l));
+                }
+                Set<Label> consequence = new HashSet<>();
+                for (Map.Entry<Label, BoolExpr> entry : thisNonRRLabel2Expr.entrySet()) {
+                    Label l = entry.getKey();
+                    if (startingUnsatCore.contains(l)
+                            || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
+                        consequence.add(l);
+                    }
+                }
+                System.out.println("conseq   #labels =\t" + consequence.size());
+                uce.restrictTo(consequence);
+
                 Optional<Set<Label>> ret;
                 for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
-                    List<Label> coreLabelsOld = ret.get().stream().map(l -> backMapLabel(l, sqt))
-                            .collect(Collectors.toList());
+                    Stream<Label> thisCore = Stream.concat(
+                            thisRRLabels.stream(),
+                            ret.get().stream()
+                    );
+                    List<Label> coreLabelsOld = thisCore.map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
                     dts.add(buildDecisionTemplate(coreLabelsOld, allOperandsOld));
                 }
             }
@@ -156,6 +186,8 @@ public class DecisionTemplateGenerator {
     }
 
     private DecisionTemplate buildDecisionTemplate(List<Label> unsatCore, Set<Operand> allOperands) {
+        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + unsatCore + ANSI_RESET);
+
         // Find all equivalence classes of operands.
         UnionFind<Operand> uf = new UnionFind<>(allOperands);
         for (Label l : unsatCore) {
@@ -218,10 +250,14 @@ public class DecisionTemplateGenerator {
 
         // Record equivalence classes.
         for (Operand o : allOperands) {
+            if (o.getKind() == Operand.Kind.VALUE) {
+                continue;
+            }
+
             UnionFind<Operand>.EquivalenceClass ec = uf.findComplete(o);
             Object datum = ec.getDatum();
             Integer rootIndex = root2Index.get(ec.getRoot());
-            if (rootIndex == null) { // This operand has no constraints on it.
+            if (rootIndex == null && datum == null) { // This operand has no constraints on it.
                 continue;
             }
 

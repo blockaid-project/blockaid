@@ -141,8 +141,12 @@ public class Schema {
     }
 
     public Tuple makeFreshTuple(String relationName) {
+        return makeFreshTuple(relationName, "v");
+    }
+
+    public Tuple makeFreshTuple(String relationName, String prefix) {
         List<Column> columns = relations.get(relationName.toUpperCase());
-        return new Tuple(this, columns.stream().map(column -> context.mkFreshConst("v", column.type)));
+        return new Tuple(this, columns.stream().map(column -> context.mkFreshConst(prefix, column.type)));
     }
 
     public static Sort getSortFromSqlType(MyZ3Context context, int type) {

@@ -97,9 +97,9 @@ public class UniqueConstraint implements Constraint {
 
         // Fast path: single-column integer primary key.
         // Unclear whether tthis is actually faster, though.
-//        if (columnNames.size() == 1 && syms[0][0].getSort().equals(context.getCustomIntSort())) {
-//            return context.mkDistinct(syms[0]);
-//        }
+        if (columnNames.size() == 1 && syms[0][0].getSort().equals(context.getCustomIntSort())) {
+            return List.of(context.mkDistinct(syms[0]));
+        }
 
         List<BoolExpr> exprs = new ArrayList<>();
         for (int i = 0; i < tuples.length; ++i) {

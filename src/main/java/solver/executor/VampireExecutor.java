@@ -1,8 +1,10 @@
 package solver.executor;
 
+import com.google.common.collect.ObjectArrays;
+
 import java.util.concurrent.CountDownLatch;
 
-public abstract class VampireExecutor extends ProcessSMTExecutor {
+public class VampireExecutor extends ProcessSMTExecutor {
     protected static final String[] BASE_COMMAND = new String[]{
             "term_to_kill",
             "vampire",
@@ -10,7 +12,11 @@ public abstract class VampireExecutor extends ProcessSMTExecutor {
             "--output_mode", "smtcomp",
     };
 
-    protected VampireExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
-        super(name, smtString, latch, command, satConclusive, unsatConclusive, unknownConclusive, false);
+    public VampireExecutor(String name, String config, String smtString, CountDownLatch latch, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive) {
+        super(name, smtString, latch, ObjectArrays.concat(
+                BASE_COMMAND, new String[]{
+                        "--decode",
+                        config
+                }, String.class), satConclusive, unsatConclusive, unknownConclusive, false);
     }
 }

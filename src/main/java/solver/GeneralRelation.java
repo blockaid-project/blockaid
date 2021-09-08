@@ -3,7 +3,9 @@ package solver;
 import com.microsoft.z3.*;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -11,10 +13,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class GeneralRelation implements Relation {
     private final Schema schema;
     private final MyZ3Context context;
-    private final Function function;
+    private final RelationFunction function;
     private final Sort[] signature;
 
-    public GeneralRelation(Schema schema, Function function, Sort[] signature) {
+    public GeneralRelation(Schema schema, RelationFunction function, Sort[] signature) {
         this.schema = checkNotNull(schema);
         this.context = schema.getContext();
         this.function = checkNotNull(function);
@@ -50,13 +52,12 @@ public class GeneralRelation implements Relation {
     }
 
     @Override
-    public BoolExpr doesContainExpr(List<Tuple> other) {
+    public Iterable<BoolExpr> doesContainExpr(List<Tuple> other) {
         if (other.isEmpty()) {
-            return context.mkTrue();
+            return Collections.emptyList();
         }
 
-        BoolExpr[] syms = other.stream().map(this::doesContainExpr).toArray(BoolExpr[]::new);
-        return context.mkAnd(syms);
+        return other.stream().map(this::doesContainExpr).collect(Collectors.toList());
     }
 
     @Override

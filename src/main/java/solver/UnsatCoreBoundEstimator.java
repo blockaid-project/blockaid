@@ -54,7 +54,7 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
                             tuple -> new Tuple(schema, tuple.stream().map(
                                     v -> Tuple.getExprFromObject(context, v)
                             ))).collect(Collectors.toList());
-                    BoolExpr expr = r.doesContainExpr(tuples);
+                    BoolExpr expr = context.mkAnd(Iterables.toArray(r.doesContainExpr(tuples), BoolExpr.class));
                     BoolExpr label = (BoolExpr) context.mkFreshConst("query", context.getBoolSort());
                     solver.assertAndTrack(expr, label);
                     queryLabels.put(label, query);

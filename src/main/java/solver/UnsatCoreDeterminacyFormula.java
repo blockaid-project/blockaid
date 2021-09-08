@@ -101,7 +101,12 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
                     }
                 }
 
-                exprs.put("a_q!" + queryNumber, context.mkAnd(r1.doesContainExpr(tupleConstants), r2.doesContainExpr(tupleConstants)));
+                exprs.put("a_q!" + queryNumber, context.mkAnd(
+                        Iterables.toArray(
+                                Iterables.concat(r1.doesContainExpr(tupleConstants), r2.doesContainExpr(tupleConstants)),
+                                BoolExpr.class
+                        )
+                ));
             }
 
             ++queryNumber;

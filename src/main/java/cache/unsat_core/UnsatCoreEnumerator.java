@@ -15,6 +15,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
+    private final MyZ3Context context;
     private final Solver solver;
     private final ImmutableMap<L, BoolExpr> label2BoolConst;
     private final ImmutableMap<BoolExpr, L> boolConst2Label;
@@ -25,6 +26,7 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
     public UnsatCoreEnumerator(MyZ3Context context, Solver solver, Map<L, BoolExpr> labeledExprs, Order order) {
         super(context, labeledExprs.keySet(), order);
 
+        this.context = context;
         this.solver = solver;
         solver.push();
 
@@ -55,10 +57,44 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
     @Override
     protected Optional<Set<L>> isSubsetSat(Set<L> labels) {
         BoolExpr[] boolConsts = labels.stream().map(label2BoolConst::get).toArray(BoolExpr[]::new);
-//        long startMs = System.currentTimeMillis();
+        long startMs = System.currentTimeMillis();
         Status status = solver.check(boolConsts);
-//        System.out.println("\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
 
+        if (status == Status.SATISFIABLE) {
+            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + ")\t" + (System.currentTimeMillis() - startMs));
+            return Optional.of(labels);
+            // `getModel` is too slow...
+//            long modelStartMs = System.currentTimeMillis();
+//            Model m = solver.getModel();
+//            System.out.println("\t\t\t\t| getModel:\t" + (System.currentTimeMillis() - modelStartMs));
+//            // Gather all the labels that are not false in the model.
+//            Set<L> satLabels = label2BoolConst.entrySet().stream()
+//                    .filter(e -> !m.eval(e.getValue(), false).isFalse())
+//                    .map(Map.Entry::getKey)
+//                    .collect(Collectors.toSet());
+//            checkState(satLabels.containsAll(labels));
+//            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + " -> " + satLabels.size() + ")\t" + (System.currentTimeMillis() - startMs));
+//            return Optional.of(satLabels);
+        }
+        checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
+        System.out.println("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
+        return Optional.empty();
+    }
+
+    @Override
+    protected boolean supportsIsSubsetSatWithBound() {
+        // Doesn't seem to help.  Disabled for now.
+        return false;
+    }
+
+    @Override
+    protected Optional<Set<L>> isSubsetSat(Set<L> labels, int atLeast) {
+        long startMs = System.currentTimeMillis();
+        checkArgument(atLeast >= labels.size());
+        List<BoolExpr> clauses = labels.stream().map(label2BoolConst::get).collect(Collectors.toList());
+        clauses.add(context.mkAtLeast(getLabels().stream().map(label2BoolConst::get).toArray(BoolExpr[]::new), atLeast));
+
+        Status status = solver.check(clauses.toArray(new BoolExpr[0]));
         if (status == Status.SATISFIABLE) {
             Model m = solver.getModel();
             // Gather all the labels that are not false in the model.
@@ -67,9 +103,11 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
                     .map(Map.Entry::getKey)
                     .collect(Collectors.toSet());
             checkState(satLabels.containsAll(labels));
+            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + " -> " + satLabels.size() + ")\t" + (System.currentTimeMillis() - startMs));
             return Optional.of(satLabels);
         }
         checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
+        System.out.println("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
         return Optional.empty();
     }
 
