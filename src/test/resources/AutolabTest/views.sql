@@ -1,6 +1,11 @@
 SELECT users.* FROM users WHERE users.id = _MY_UID;
 
 SELECT course_user_data.* FROM course_user_data WHERE course_user_data.user_id = _MY_UID;
+-- SELECT o.* FROM course_user_data o, course_user_data me WHERE me.user_id = _MY_UID AND me.course_assistant = 1 AND o.course_id = me.course_id AND o.section = me.section;
+-- Autolab seems to allow a course assistant to grade any student's assessment.
+-- SELECT o.* FROM course_user_data o, course_user_data me WHERE me.user_id = _MY_UID AND me.course_assistant = 1 AND o.course_id = me.course_id;
+SELECT o.* FROM course_user_data o, course_user_data me WHERE me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1) AND o.course_id = me.course_id;
+SELECT users.id, users.first_name, users.last_name, users.email, users.school, users.major, users.`year`, users.administrator FROM users, course_user_data o, course_user_data me WHERE me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1) AND o.course_id = me.course_id AND users.id = o.user_id;
 
 -- Autolab reveals the distinction between a class being nonexistent (404) and
 -- a user not being enrolled in an class that does exist
@@ -27,13 +32,21 @@ SELECT announcements.* FROM announcements, courses, course_user_data WHERE cours
 -- These fields are visible whether or not the assessment is released, and whether or not the course is disabled---
 -- * A list of assessments for disabled courses show up on the front page.
 -- * The date-related fields are used for grace-day calculation, which involves all assignments.
-SELECT assessments.id, assessments.course_id, assessments.name, assessments.display_name, assessments.start_at, assessments.end_at, assessments.due_at, assessments.max_grace_days, assessments.category_name FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID;
+SELECT assessments.id, assessments.course_id, assessments.name, assessments.display_name, assessments.start_at, assessments.end_at, assessments.due_at, assessments.max_grace_days, assessments.category_name, assessments.updated_at FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID;
 -- But other fields are only visible for released assignments, i.e., those with `start_at < _NOW`.
 SELECT assessments.* FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0;
+SELECT assessments.* FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.course_assistant = 1 AND courses.disabled = 0;
+SELECT assessments.* FROM assessments, course_user_data WHERE course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
 
 -- We allow viewing assessment user data regardless of whether the assessment is released or not
 -- because it doesn't include sensitive information about the course.
 SELECT assessment_user_data.* FROM assessment_user_data, course_user_data WHERE assessment_user_data.course_user_datum_id = course_user_data.id AND course_user_data.user_id = _MY_UID;
+-- SELECT assessment_user_data.* FROM assessment_user_data, course_user_data o, course_user_data me WHERE assessment_user_data.course_user_datum_id = o.id AND o.course_id = me.course_id AND o.section = me.section AND me.user_id = _MY_UID AND me.course_assistant = 1;
+-- SELECT assessment_user_data.* FROM assessment_user_data, course_user_data o, course_user_data me WHERE assessment_user_data.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND me.course_assistant = 1;
+SELECT assessment_user_data.* FROM assessment_user_data, course_user_data o, course_user_data me WHERE assessment_user_data.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1);
+
+SELECT `groups`.* FROM `groups`, assessment_user_data, course_user_data WHERE `groups`.id = assessment_user_data.group_id AND assessment_user_data.course_user_datum_id = course_user_data.id AND course_user_data.user_id = _MY_UID;
+SELECT `groups`.* FROM `groups`, assessment_user_data, course_user_data o, course_user_data me WHERE `groups`.id = assessment_user_data.group_id AND assessment_user_data.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND me.instructor = 1;
 
 -- TODO(zhangwen): The application seems fine with showing unreleased attachments.  I filed an issue on GitHub.
 -- TODO(zhangwen): The application also seems fine with showing attachments of assessments that haven't started...
@@ -42,17 +55,31 @@ SELECT attachments.* FROM attachments, courses, course_user_data WHERE courses.i
 
 -- Within an accessible course, Autolab allows the user to distinguish between a nonexistent submission ID vs an
 -- existing one that the user has no access to.
-SELECT submissions.id FROM submissions, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0 AND submissions.assessment_id = assessments.id;
--- TODO(zhangwen): exam in progress?
-SELECT submissions.* FROM submissions, course_user_data WHERE submissions.course_user_datum_id = course_user_data.id AND course_user_data.user_id = _MY_UID;
+SELECT courses.id, assessments.id, submissions.id FROM submissions, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0 AND submissions.assessment_id = assessments.id;
+-- Every field other than real_filename.
+SELECT `submissions`.`id`, `submissions`.`version`, `submissions`.`course_user_datum_id`, `submissions`.`assessment_id`, `submissions`.`filename`, `submissions`.`created_at`, `submissions`.`updated_at`, `submissions`.`notes`, `submissions`.`mime_type`, `submissions`.`special_type`, `submissions`.`submitted_by_id`, `submissions`.`autoresult`, `submissions`.`detected_mime_type`, `submissions`.`submitter_ip`, `submissions`.`tweak_id`, `submissions`.`ignored`, `submissions`.`dave`, `submissions`.`settings`, `submissions`.`embedded_quiz_form_answer`, `submissions`.`submitted_by_app_id` FROM submissions, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0 AND submissions.assessment_id = assessments.id AND submissions.course_user_datum_id = course_user_data.id;
+-- File name is only visible in none-exam settings.
+SELECT submissions.* FROM submissions, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND assessments.exam = 0 AND courses.disabled = 0 AND courses.exam_in_progress = 0 AND submissions.assessment_id = assessments.id AND submissions.course_user_datum_id = course_user_data.id;
+SELECT submissions.* FROM submissions, course_user_data o, course_user_data me WHERE submissions.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1);
+
+SELECT annotations.* FROM annotations, submissions, assessments, courses, course_user_data WHERE annotations.submission_id = submissions.id AND courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND _NOW < assessments.grading_deadline AND assessments.exam = 0 AND courses.disabled = 0 AND courses.exam_in_progress = 0 AND submissions.assessment_id = assessments.id AND submissions.course_user_datum_id = course_user_data.id;
+SELECT annotations.* FROM annotations, submissions, course_user_data o, course_user_data me WHERE annotations.submission_id = submissions.id AND submissions.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1);
 
 SELECT scores.* FROM scores, submissions, course_user_data WHERE scores.submission_id = submissions.id AND scores.released = 1 AND submissions.course_user_datum_id = course_user_data.id AND course_user_data.user_id = _MY_UID;
+-- SELECT scores.* FROM scores, submissions, course_user_data o, course_user_data me WHERE scores.submission_id = submissions.id AND submissions.course_user_datum_id = o.id AND o.course_id = me.course_id AND o.section = me.section AND me.user_id = _MY_UID AND me.course_assistant = 1;
+-- SELECT scores.* FROM scores, submissions, course_user_data o, course_user_data me WHERE scores.submission_id = submissions.id AND submissions.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND me.course_assistant = 1;
+SELECT scores.* FROM scores, submissions, course_user_data o, course_user_data me WHERE scores.submission_id = submissions.id AND submissions.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1);
 
 SELECT extensions.* FROM extensions, course_user_data WHERE extensions.course_user_datum_id = course_user_data.id AND course_user_data.user_id = _MY_UID;
+SELECT extensions.* FROM extensions, course_user_data o, course_user_data me WHERE extensions.course_user_datum_id = o.id AND o.course_id = me.course_id AND me.user_id = _MY_UID AND (me.instructor = 1 OR me.course_assistant = 1);
 
 SELECT scoreboards.* FROM scoreboards, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0 AND scoreboards.assessment_id = assessments.id;
+SELECT scoreboards.* FROM scoreboards, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.course_assistant = 1 AND courses.disabled = 0 AND scoreboards.assessment_id = assessments.id;
+SELECT scoreboards.* FROM scoreboards, assessments, course_user_data WHERE course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1 AND scoreboards.assessment_id = assessments.id;
 
 SELECT problems.* FROM problems, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = 0 AND problems.assessment_id = assessments.id;
+SELECT problems.* FROM problems, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.course_assistant = 1 AND courses.disabled = 0 AND problems.assessment_id = assessments.id;
+SELECT problems.* FROM problems, assessments, course_user_data WHERE course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1 AND problems.assessment_id = assessments.id;
 
 -- doesn't seem to include sensitive information.
 SELECT score_adjustments.* FROM score_adjustments;
@@ -66,5 +93,9 @@ SELECT score_adjustments.* FROM score_adjustments;
 SELECT scheduler.* FROM scheduler;
 
 SELECT schema_migrations.* FROM schema_migrations;
+
+SELECT risk_conditions.* FROM risk_conditions, course_user_data WHERE risk_conditions.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
+SELECT watchlist_instances.* FROM watchlist_instances, course_user_data WHERE watchlist_instances.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
+SELECT autograders.* FROM autograders, assessments, course_user_data WHERE autograders.assessment_id = assessments.id AND assessments.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
 
 -- TODO: administrator has access to everything.

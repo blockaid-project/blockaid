@@ -15,3 +15,8 @@ extensions.course_user_datum_id:course_user_data.id;
 extensions.assessment_id:assessments.id;
 scoreboards.assessment_id:assessments.id;
 problems.assessment_id:assessments.id;
+risk_conditions.course_id:courses.id;
+watchlist_instances.course_id:courses.id;
+watchlist_instances.course_user_datum_id:course_user_data.id;
+watchlist_instances.risk_condition_id:risk_conditions.id;
+autograders.assessment_id:assessments.id;

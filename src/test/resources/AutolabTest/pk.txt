@@ -11,6 +11,9 @@ extensions:id;
 scoreboards:id;
 score_adjustments:id;
 scheduler:id;
+risk_conditions:id;
+watchlist_instances:id;
+autograders:id;
 
 courses:name;
 assessments:course_id,name;
