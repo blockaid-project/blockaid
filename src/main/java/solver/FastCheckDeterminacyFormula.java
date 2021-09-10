@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-public class FastCheckDeterminacyFormula extends DeterminacyFormula{
+public class FastCheckDeterminacyFormula extends DeterminacyFormula {
     public FastCheckDeterminacyFormula(Schema schema, Collection<Query> views, TextOption textOption) {
         super(schema,
                 (Integer instNum) -> schema.makeFreshInstance("instance" + instNum),

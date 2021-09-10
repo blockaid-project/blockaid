@@ -25,6 +25,10 @@ public class GeneralRelation implements Relation {
         this.signature = signature;
     }
 
+    RelationFunction getFunction() {
+        return function;
+    }
+
     @Override
     public Iterable<BoolExpr> doesContainExpr(Tuple tup) {
         Expr[] args = tup.replaceNullsWithFreshConsts(signature).toExprArray();

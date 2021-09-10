@@ -268,6 +268,17 @@ public class MyZ3Context extends Context {
     }
 
     @Override
+    public BoolExpr mkBoolConst(String s) {
+        BoolExpr c = super.mkBoolConst(s);
+        if (isTrackingConsts && !untrackedConsts.contains(c)) {
+            trackedConsts.add(c);
+        } else {
+            untrackedConsts.add(c);
+        }
+        return c;
+    }
+
+    @Override
     public Expr mkConst(String s, Sort sort) {
         Expr c = super.mkConst(s, sort);
         if (isTrackingConsts && !untrackedConsts.contains(c)) {

@@ -1,6 +1,5 @@
 package solver;
 
-import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
 import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.ImmutableList;
@@ -8,16 +7,20 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
+import com.microsoft.z3.enumerations.Z3_decl_kind;
+import util.UnionFind;
 
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.stream.IntStream;
 
 import static com.google.common.base.Preconditions.checkState;
 
 public abstract class DeterminacyFormula {
+    private static final boolean MERGE_TRACE = false;
+
     protected final MyZ3Context context;
     protected final Schema schema;
     protected final Instance inst1;
@@ -72,65 +75,129 @@ public abstract class DeterminacyFormula {
         this(schema, makeInstance, mkPreamble, TextOption.USE_TEXT);
     }
 
+    // FIXME(zhangwen): this is ugly.
+    private static boolean extractFact(Instance inst, BoolExpr e, Map<String, Map<Expr, UnionFind<Integer>>> facts) {
+        if (inst.isConcrete) {
+            return false;
+        }
+        if (!e.isQuantifier()) {
+            return false;
+        }
+        Quantifier q = (Quantifier) e;
+        if (!q.isExistential()) {
+            return false;
+        }
+        Expr body = q.getBody();
+        if (!body.isApp()) {
+            return false;
+        }
+        FuncDecl fd = body.getFuncDecl();
+        if (fd.getDeclKind() != Z3_decl_kind.Z3_OP_UNINTERPRETED) {
+            return false;
+        }
+        String relationName = inst.getRelNameFromFuncDecl(fd);
+        if (relationName == null) {
+            return false;
+        }
+        Optional<ImmutableList<String>> oPkColumns = inst.schema.getRawSchema().getPrimaryKeyColumns(relationName);
+        if (oPkColumns.isEmpty()) {
+            return false;
+        }
+        List<String> pkColumns = oPkColumns.get();
+        if (pkColumns.size() != 1) {
+            return false;
+        }
+        List<String> columnNames = inst.schema.getColumnNames(relationName);
+        int pkIdx = columnNames.indexOf(pkColumns.get(0));
+        checkState(pkIdx >= 0);
+
+        Expr[] args = body.getArgs();
+        Expr pk = args[pkIdx];
+        if (pk.isVar()) {
+            return false;
+        }
+
+        Map<Expr, UnionFind<Integer>> relFacts = facts.computeIfAbsent(relationName, _k -> new HashMap<>());
+        UnionFind<Integer> rowFacts = relFacts.computeIfAbsent(pk,
+                _k -> new UnionFind<>(IntStream.range(0, columnNames.size()).boxed()));
+        for (int i = 0; i < columnNames.size(); ++i) {
+            if (!args[i].isVar()) {
+                rowFacts.attachData(i, args[i]);
+                continue;
+            }
+            for (int j = i + 1; j < columnNames.size(); ++j) {
+                if (args[j].equals(args[i])) {
+                    rowFacts.union(i, j);
+                }
+            }
+        }
+        return true;
+    }
+
+    private static List<BoolExpr> generateChecks(Instance inst, Map<String, Map<Expr, UnionFind<Integer>>> facts) {
+        ArrayList<BoolExpr> checks = new ArrayList<>();
+
+        Schema schema = inst.schema;
+        MyZ3Context ctx = schema.getContext();
+        for (Map.Entry<String, Map<Expr, UnionFind<Integer>>> relEntry : facts.entrySet()) {
+            String relName = relEntry.getKey();
+            List<Column> columns = schema.getColumns(relName);
+            Relation rel = inst.get(relName);
+            for (UnionFind<Integer> rowUF : relEntry.getValue().values()) {
+                ArrayList<Expr> existentialVars = new ArrayList<>();
+                Expr[] atomBody = new Expr[columns.size()];
+                for (int i = 0; i < columns.size(); ++i) {
+                    Expr e = (Expr) rowUF.findComplete(i).getDatum();
+                    if (e == null) {
+                        e = ctx.mkFreshConst("e", columns.get(i).type);
+                        existentialVars.add(e);
+                        // FIXME(zhangwen): when the value is null, the attached data conflict if the nulls are
+                        //  represented as different constants.
+                        rowUF.attachData(i, e);
+                    }
+                    atomBody[i] = e;
+                }
+                BoolExpr check = ctx.myMkExists(existentialVars,
+                        ctx.mkAnd(rel.doesContainExpr(new Tuple(schema, atomBody))));
+                checks.add(check);
+            }
+        }
+
+        return checks;
+    }
+
+    public static List<Tuple> getTupleObjects(QueryTraceEntry qte, Schema schema) {
+        return qte.getTuplesStream().map(
+                tuple -> new Tuple(schema, tuple.stream().map(
+                        v -> Tuple.getExprFromObject(schema.getContext(), v)
+                ))).collect(Collectors.toList());
+    }
+
     protected Iterable<BoolExpr> generateTupleCheck(UnmodifiableLinearQueryTrace queries) {
+        // Table -> primary key -> union find of column indices.
+        Map<String, Map<Expr, UnionFind<Integer>>> facts = new HashMap<>();
+
         List<BoolExpr> exprs = new ArrayList<>();
         for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
             Query query = queryTraceEntry.getQuery().getSolverQuery(schema);
             Relation r1 = query.apply(inst1);
-            Relation r2 = query.apply(inst2);
-            List<Tuple> tuples = queryTraceEntry.getTuplesStream().map(
-                    tuple -> new Tuple(schema, tuple.stream().map(
-                            v -> Tuple.getExprFromObject(context, v)
-                    ))).collect(Collectors.toList());
-            if (!tuples.isEmpty()) {
-                Iterables.addAll(exprs, postProcess(r1.doesContainExpr(tuples)));
-                Iterables.addAll(exprs, postProcess(r2.doesContainExpr(tuples)));
+            List<Tuple> tuples = getTupleObjects(queryTraceEntry, schema);
+            for (Tuple tup : tuples) {
+                for (BoolExpr e : r1.doesContainExpr(tup)) {
+                    if (!MERGE_TRACE || extractFact(inst1, e, facts)) {
+                        exprs.add(e);
+                    }
+//                    if (!extractFact(inst1, e, facts)) {
+//                        exprs.add(e);
+//                    }
+                }
             }
         }
-        return exprs;
-    }
 
-    private Iterable<BoolExpr> postProcess(Iterable<BoolExpr> exprs) {
-//        for (Expr e : exprs) {
-//            if (e.isQuantifier()) {
-//                Quantifier q = (Quantifier) e;
-//                if (q.isExistential()) {
-//                    Expr body = q.getBody();
-//                    if (body.isAnd()) {
-//                        for (Expr andArg : body.getArgs()) {
-//                            if (andArg.isEq()) {
-//                                Expr[] eqArgs = andArg.getArgs();
-//                                Expr lhs = eqArgs[0], rhs = eqArgs[1];
-//                                if (rhs.isVar()) {
-//                                    Expr temp = rhs;
-//                                    rhs = lhs;
-//                                    lhs = temp;
-//                                }
-//                                System.out.println(lhs + ", " + rhs + ", " + (lhs.equals(rhs)));
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//        return Streams.stream(exprs).flatMap(e -> {
-//            if (e.isQuantifier()) {
-//                Quantifier q = (Quantifier) e;
-//                if (q.isExistential()) {
-//                    Expr body = q.getBody();
-//                    if (body.isAnd()) {
-//                        for (Expr andArg : body.getArgs()) {
-//                            if (andArg.isEq()) {
-//                                Expr[] eqArgs = andArg.getArgs();
-//                            }
-//                        }
-//
-//                        return Arrays.stream(body.getArgs()).map(e1 -> (BoolExpr) e1);
-//                    }
-//                }
-//            }
-//            return Stream.of(e);
-//        }).collect(Collectors.toList());
+        if (MERGE_TRACE) {
+            exprs.addAll(generateChecks(inst1, facts));
+        }
+
         return exprs;
     }
 
@@ -176,7 +243,7 @@ public abstract class DeterminacyFormula {
         return Iterables.concat(preamble, makeBodyFormula(queries));
     }
 
-    public String generateSMT(QueryTrace queries) {
+    public String generateSMT(UnmodifiableLinearQueryTrace queries) {
         checkState(textOption == TextOption.USE_TEXT);
 
         context.startTrackingConsts();

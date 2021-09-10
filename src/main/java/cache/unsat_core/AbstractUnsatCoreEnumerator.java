@@ -37,7 +37,7 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
                 if (unsatCore.isPresent()) {
                     currSeed = unsatCore.get();
                 }
-                if (order != Order.INCREASING) { // Must shrink.
+                if (order != Order.INCREASING && !isUnsatCoreAlwaysMin()) { // Must shrink.
                     long startMs = System.currentTimeMillis();
                     for (L label : seed) {
                         if (!currSeed.remove(label)) {
@@ -135,5 +135,9 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
     // Called after `isSubsetSat` returns empty.
     protected Optional<Set<L>> getUnsatCore() {
         return Optional.empty();
+    }
+    // Returns true if getUnsatCore() always returns a minimal unsat core.
+    protected boolean isUnsatCoreAlwaysMin() {
+        return false;
     }
 }

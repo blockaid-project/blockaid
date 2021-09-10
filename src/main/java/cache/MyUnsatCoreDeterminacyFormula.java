@@ -6,6 +6,7 @@ import cache.labels.ReturnedRowLabel;
 import cache.trace.QueryTraceEntry;
 import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
@@ -21,41 +22,37 @@ import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.ANSI_RED;
 import static util.TerminalColor.ANSI_RESET;
 
+/**
+ * Marks returned row labels, for use with Vampire.
+ */
 public class MyUnsatCoreDeterminacyFormula extends FastCheckDeterminacyFormula {
-    protected final UnmodifiableLinearQueryTrace trace;
-
-    public MyUnsatCoreDeterminacyFormula(Schema schema, Collection<Query> views, UnmodifiableLinearQueryTrace trace) {
-        super(schema, views, TextOption.NO_TEXT);
-        this.trace = trace;
+    public MyUnsatCoreDeterminacyFormula(Schema schema, Collection<Query> views) {
+        super(schema, views, TextOption.USE_TEXT);
     }
 
-    public Map<ReturnedRowLabel, BoolExpr> makeLabeledExprs() {
-        Map<ReturnedRowLabel, BoolExpr> label2Expr = new HashMap<>();
+    @Override
+    protected Iterable<BoolExpr> generateTupleCheck(UnmodifiableLinearQueryTrace trace) {
+        ArrayList<BoolExpr> exprs = new ArrayList<>();
+
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
         for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
             QueryTraceEntry qte = allEntries.get(queryIdx);
+            if (!qte.hasTuples()) {
+                continue;
+            }
             Query query = qte.getQuery().getSolverQuery(schema);
             Relation r1 = query.apply(inst1);
-            Relation r2 = query.apply(inst2);
-            List<Tuple> tuples = qte.getTuplesStream().map(
-                    tuple -> new Tuple(schema, tuple.stream().map(
-                            v -> Tuple.getExprFromObject(context, v)
-                    ))).collect(Collectors.toList());
+            List<Tuple> tuples = getTupleObjects(qte, schema);
 
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
                 Tuple tuple = tuples.get(rowIdx);
                 ReturnedRowLabel l = new ReturnedRowLabel(queryIdx, rowIdx);
-                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple))));
+                BoolExpr boolConst = context.mkBoolConst(l.toString());
+                exprs.add(context.mkImplies(boolConst, context.mkAnd(r1.doesContainExpr(tuple))));
+                exprs.add(boolConst);
             }
         }
-        return label2Expr;
-    }
 
-    // Makes formula that is not under consideration for unsat core.
-    public Iterable<BoolExpr> makeBackgroundFormulas() {
-        ArrayList<BoolExpr> formulas = new ArrayList<>(preamble);
-        Iterables.addAll(formulas, generateConstantCheck(trace));
-        Iterables.addAll(formulas, generateNotContains(trace));
-        return formulas;
+        return exprs;
     }
 }

@@ -34,7 +34,7 @@ public class Schema {
     }
 
     public Instance makeFreshInstance(String instancePrefix) {
-        Instance instance = new Instance(this, false);
+        Instance instance = new Instance(instancePrefix, this, false);
         Map<Constraint, Iterable<BoolExpr>> constraints = new HashMap<>();
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
@@ -65,7 +65,7 @@ public class Schema {
      */
     public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds,
                                          ListMultimap<String, Map<String, Object>> table2KnownRows) {
-        Instance instance = new Instance(this, true);
+        Instance instance = new Instance(instancePrefix, this, true);
         for (Map.Entry<String, List<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -147,6 +147,12 @@ public class Schema {
     public Tuple makeFreshTuple(String relationName, String prefix) {
         List<Column> columns = relations.get(relationName.toUpperCase());
         return new Tuple(this, columns.stream().map(column -> context.mkFreshConst(prefix, column.type)));
+    }
+
+    public Tuple makeNamedTuple(String relationName, String prefix) {
+        List<Column> columns = relations.get(relationName.toUpperCase());
+        return new Tuple(this, columns.stream().map(column ->
+                context.mkConst(prefix + "_" + relationName + "!" + column.name, column.type)));
     }
 
     public static Sort getSortFromSqlType(MyZ3Context context, int type) {

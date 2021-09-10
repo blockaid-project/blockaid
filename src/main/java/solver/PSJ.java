@@ -77,7 +77,14 @@ public abstract class PSJ extends Query {
 
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
-        Tuple[] symbolicTups = relations.stream().map(r -> schema.makeFreshTuple(r, "mdct")).toArray(Tuple[]::new);
+        Tuple[] symbolicTups = new Tuple[relations.size()];
+        for (int i = 0; i < relations.size(); ++i) {
+            String relationName = relations.get(i);
+            // We'll look for the identifier string `mdct!` later on.
+            symbolicTups[i] = schema.makeNamedTuple(relationName, "mdct!" + i);
+        }
+
+//        Tuple[] symbolicTups = relations.stream().map(r -> schema.makeFreshTuple(r, "mdct")).toArray(Tuple[]::new);
         BoolExpr predicate = predicateGenerator(symbolicTups);
         Tuple headSymTup = headSelector(symbolicTups);
 

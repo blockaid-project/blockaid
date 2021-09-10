@@ -30,6 +30,7 @@ public class PrivacyConnection implements Connection {
   private final ArrayList<Policy> policy_list;
   private QueryTrace current_trace;
   private final SchemaPlusWithKey schema;
+  private int queryCount;
 
   /**
    * Takes ownership of direct_info.
@@ -84,6 +85,7 @@ public class PrivacyConnection implements Connection {
             fks.lines().toArray(String[]::new)
     );
     current_trace = new QueryTrace();
+    queryCount = 0;
   }
 
   private void set_policy(Properties info, QueryContext ctx) {
@@ -135,10 +137,11 @@ public class PrivacyConnection implements Connection {
   public void resetSequence() {
     current_trace = new QueryTrace();
     query_checker.resetSequence();
+    queryCount = 0;
   }
 
   private boolean connCheckPolicy(ParserResult parserResult, List<String> paramNames, List<Object> paramValues) {
-    String message = "[" + current_trace.size() + "] checkPolicy: "
+    String message = "[" + (queryCount++) + "] checkPolicy: "
             + parserResult.getParsedSql() + "\t" + paramValues;
     if (USE_COLORS) {
       message = ANSI_BLUE_BACKGROUND + ANSI_BLACK + "\n" + message + ANSI_RESET;

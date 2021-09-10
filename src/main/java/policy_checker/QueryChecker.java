@@ -2,6 +2,9 @@ package policy_checker;
 
 import cache.*;
 import cache.trace.QueryTrace;
+import cache.trace.QueryTraceEntry;
+import cache.trace.QueryTupleIdxPair;
+import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
 import com.microsoft.z3.*;
 import planner.PrivacyColumn;
@@ -22,10 +25,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static util.TerminalColor.USE_COLORS;
 
 public class QueryChecker {
-    public static boolean ENABLE_CACHING = true;
+    public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
+    public static boolean PICK_TRACE = true;
     public static boolean UNNAMED_EQUALITY = true;
 
     public enum PrecheckSetting {
@@ -47,16 +52,19 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 40000; // ms
+    public static long SOLVE_TIMEOUT = 2000; // ms
 
     private final Schema schema;
     private final List<Policy> policySet;
     private final List<Query> policyQueries;
     private final DeterminacyFormula fastCheckDeterminacyFormula;
-    private final DeterminacyFormula determinacyFormula;
+//    private final DeterminacyFormula determinacyFormula;
 //    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
 //    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormulaEliminate;
     private final DecisionCache cache;
+
+    private int queryCount; // Number of queries processed so far.
+    private final DecisionTemplateGenerator dtg;
 
     /**
      * For sharing decision cache among `QueryChecker` objects for the same database / policy.
@@ -108,10 +116,11 @@ public class QueryChecker {
 
         this.schema = new Schema(context, rawSchema, relations, dependencies);
         this.policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
-        this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
+//        this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
 //        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
 //        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
+        this.dtg = new DecisionTemplateGenerator(this, schema, policySet, policyQueries);
 
         // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
         this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
@@ -124,6 +133,7 @@ public class QueryChecker {
         MyZ3Context context = schema.getContext();
         context.customSortsPop();
         context.customSortsPush();
+        queryCount = 0;
     }
 
     private boolean precheckPolicyApproval(PrivacyQuery query) {
@@ -165,10 +175,10 @@ public class QueryChecker {
      * @param formula the formula to print.
      * @param fileNamePrefix the prefix of the file name.
      */
-    private static void printFormula(String formula, String fileNamePrefix, QueryTrace queries) {
+    public void printFormula(String formula, String fileNamePrefix) {
         if (PRINT_FORMULAS) {
             try {
-                String path = String.format("%s/%s_%d.smt2", FORMULA_DIR, fileNamePrefix, queries.size() - 1);
+                String path = String.format("%s/%s_%d.smt2", FORMULA_DIR, fileNamePrefix, queryCount - 1);
                 Files.write(Paths.get(path), formula.getBytes());
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -176,7 +186,7 @@ public class QueryChecker {
         }
     }
 
-    private boolean doCheckPolicy(QueryTrace queries) {
+    private boolean doCheckPolicy(UnmodifiableLinearQueryTrace queries) {
 //        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new CountingBoundEstimator());
 //        Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
 //        Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 2);
@@ -193,7 +203,6 @@ public class QueryChecker {
         String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
         System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
         executors.add(new Z3Executor("z3_fast", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireLrsExecutor("vampire_lrs_fast", fastCheckSMT, latch, false, true, false));
         executors.add(new VampireExecutor("vampire_lrs_fast", "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_10000", fastCheckSMT, latch, false, true, false));
 //        executors.add(new VampireExecutor("vampire_dis+11_3_fast", "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_10000", fastCheckSMT, latch, false, true, false));
 //        executors.add(new VampireExecutor("vampire_dis+3_1_fast", "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_10000", fastCheckSMT, latch, false, true, false));
@@ -201,14 +210,14 @@ public class QueryChecker {
 //        executors.add(new VampireExecutor("vampire_lrs+1011_fast", "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_10000", fastCheckSMT, latch, false, true, false));
 //        executors.add(new VampireExecutor("vampire_lrs+11_20_fast", "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_10000", fastCheckSMT, latch, false, true, false));
         executors.add(new VampireExecutor("vampire_lrs+1_7_fast", "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_10000", fastCheckSMT, latch, false, true, false));
-        printFormula(fastCheckSMT, "fast_unsat", queries);
+        printFormula(fastCheckSMT, "fast_unsat");
 
         // regular check
-        startTime = System.currentTimeMillis();
-        String regularSMT = this.determinacyFormula.generateSMT(queries);
-        System.out.println("\t| Make regular:\t" + (System.currentTimeMillis() - startTime));
-        executors.add(new CVC4Executor("cvc4", regularSMT, latch, true, true, false));
-        printFormula(regularSMT, "regular", queries);
+//        startTime = System.currentTimeMillis();
+//        String regularSMT = this.determinacyFormula.generateSMT(queries);
+//        System.out.println("\t| Make regular:\t" + (System.currentTimeMillis() - startTime));
+//        executors.add(new CVC4Executor("cvc4", regularSMT, latch, true, true, false));
+//        printFormula(regularSMT, "regular", queries);
 
 //        executors.add(new ProcessBoundedExecutor("z3_bounded_process", latch, schema, policyQueries, queries));
 
@@ -297,7 +306,54 @@ public class QueryChecker {
         return FastCheckDecision.UNKNOWN;
     }
 
+    /**
+     * Picks entries in the trace that are likely relevant to the current query's compliance.
+     * @param trace the entire trace.
+     * @return the sub-trace.
+     */
+    private UnmodifiableLinearQueryTrace pickTrace(QueryTrace trace) {
+        QueryTraceEntry checkedEntry = trace.getCurrentQuery();
+        checkArgument(checkedEntry != null, "there must be a query being checked");
+        List<Object> checkedQueryParams = checkedEntry.getParameters();
+
+        List<QueryTraceEntry> allEntries = trace.getAllEntries();
+        ArrayList<QueryTupleIdxPair> picked = new ArrayList<>();
+        for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
+            QueryTraceEntry qte = allEntries.get(queryIdx);
+            if (!qte.hasTuples()) {
+                continue;
+            }
+
+            List<List<Object>> tuples = qte.getTuples();
+            Optional<Integer> oPkColIdxForCutting = qte.isEligibleForCutting(schema);
+            if (oPkColIdxForCutting.isEmpty()) { // Keep them all.
+                for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
+                    picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
+                }
+            } else {
+//                System.out.println("=== picking ===");
+//                System.out.println(qte.getParsedSql());
+                int pkColIdx = oPkColIdxForCutting.get();
+                for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
+                    Object v = tuples.get(tupIdx).get(pkColIdx);
+//                    System.out.println("\tlooking:\t" + v);
+                    if (checkedQueryParams.contains(v)) { // TODO(zhangwen): this is a hack.
+                        picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
+                    }
+//                    else {
+//                        System.out.println("\ttossed:\t" + tuples.get(tupIdx));
+//                    }
+                }
+//                System.out.println("=== done ===");
+            }
+        }
+
+        return trace.getSubTrace(picked);
+    }
+
     public boolean checkPolicy(QueryTrace queries) {
+        queryCount += 1;
+
         PrivacyQuery currQuery = queries.getCurrentQuery().getQuery();
         System.out.println("transformed: "
                 + currQuery.parsedSql.getParsedSql()
@@ -318,21 +374,27 @@ public class QueryChecker {
                 return cacheResult;
             }
         }
-        // todo: should we be caching timeout/unknown?
-        boolean policyResult = doCheckPolicy(queries);
+
+        // Cache miss.  Check compliance!
+        UnmodifiableLinearQueryTrace pickedTrace = PICK_TRACE ? pickTrace(queries) : queries;
+//        System.out.println(pickedTrace);
         if (ENABLE_CACHING) {
-            if (policyResult) {
-                System.out.println("\t| Generate decision template:");
-                for (DecisionTemplate dt : new DecisionTemplateGenerator(schema, policySet, policyQueries, queries)
-                        .generate()) {
-                    System.out.println(dt.toString(USE_COLORS));
-                    cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
-                            currQuery.paramNames, dt);
-                }
+            System.out.println("\t| Generate decision template:");
+            Optional<Collection<DecisionTemplate>> oTemplates = dtg.generate(pickedTrace);
+            if (oTemplates.isEmpty()) {
+                return false;
+            }
+            for (DecisionTemplate dt : oTemplates.get()) {
+                System.out.println(dt.toString(USE_COLORS));
+                cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
+                        currQuery.paramNames, dt);
             }
 //            cacheDecision(queries, policyResult);
+            // FIXME(zhangwen): in case of noncompliance, find model.
+            return true;
+        } else {
+            return doCheckPolicy(pickedTrace);
         }
-        return policyResult;
     }
 
     /**

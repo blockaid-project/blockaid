@@ -18,6 +18,8 @@ public class UnionFind<T> {
     private final int[] root;
     private final int[] rank;
     private final int[] size; // Size of the equivalence class rooted at each element.
+
+    // TODO(zhangwen): type parameter for data?
     private final Object[] data; // Data associated with each equivalence class; null means no data.
 
     public UnionFind(Stream<T> elements) {
@@ -41,6 +43,10 @@ public class UnionFind<T> {
         }
         this.rank = new int[this.index.size()];
         this.data = new Object[this.index.size()];
+    }
+
+    public ImmutableList<T> getAllElements() {
+        return elements;
     }
 
     public T find(T element) {

@@ -50,10 +50,7 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
                 Query solverQuery = query.getSolverQuery(schema);
                 Relation r = solverQuery.apply(instance);
                 if (queryTraceEntry.hasTuples()) {
-                    List<Tuple> tuples = queryTraceEntry.getTuplesStream().map(
-                            tuple -> new Tuple(schema, tuple.stream().map(
-                                    v -> Tuple.getExprFromObject(context, v)
-                            ))).collect(Collectors.toList());
+                    List<Tuple> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
                     BoolExpr expr = context.mkAnd(Iterables.toArray(r.doesContainExpr(tuples), BoolExpr.class));
                     BoolExpr label = (BoolExpr) context.mkFreshConst("query", context.getBoolSort());
                     solver.assertAndTrack(expr, label);

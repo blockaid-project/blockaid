@@ -1,10 +1,7 @@
 package cache;
 
 import cache.labels.*;
-import cache.trace.QueryTrace;
-import cache.trace.QueryTraceEntry;
-import cache.trace.QueryTupleIdxPair;
-import cache.trace.SubQueryTrace;
+import cache.trace.*;
 import cache.unsat_core.Order;
 import cache.unsat_core.ReturnedRowUnsatCoreEnumerator;
 import cache.unsat_core.UnsatCoreEnumerator;
@@ -13,6 +10,7 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import policy_checker.Policy;
+import policy_checker.QueryChecker;
 import solver.MyZ3Context;
 import solver.Query;
 import solver.Schema;
@@ -28,122 +26,99 @@ import static util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
     private final Schema schema;
-    private final QueryTrace trace;
     private final Collection<Policy> policies;
     private final Collection<Query> views;
+    private final ReturnedRowUnsatCoreEnumerator rruce;
 
-    public DecisionTemplateGenerator(Schema schema, Collection<Policy> policies, Collection<Query> views,
-                                     QueryTrace trace) {
+    public DecisionTemplateGenerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
+                                     Collection<Query> views) {
         this.schema = schema;
         this.policies = policies;
         this.views = views;
-        this.trace = trace;
+        this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, schema, policies, views);
     }
 
-    private Collection<Collection<ReturnedRowLabel>> findRRCores() {
-        MyZ3Context context = schema.getContext();
-//        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
-        Solver solver = context.mkSolver();
-
-        BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies, views, trace,
-                BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY);
-        solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
-
-        Collection<Collection<ReturnedRowLabel>> rrCores;
-        // In `RETURNED_ROWS_ONLY` mode, all `labeledExprs` should be of type `ReturnedRowLabel`.
-        Map<ReturnedRowLabel, BoolExpr> labeledExprs = formula.makeLabeledExprs()
-                .entrySet().stream().collect(Collectors.toMap(
-                        e -> (ReturnedRowLabel) e.getKey(),
-                        Map.Entry::getValue)
-                );
-        try (UnsatCoreEnumerator<ReturnedRowLabel> uce =
-                     new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.ARBITRARY)) {
-            rrCores = uce.enumerateAll();
-        }
-        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
-        return rrCores;
-    }
-
-    public Collection<DecisionTemplate> generate() {
+    // Returns empty if formula is not determined UNSAT.
+    public Optional<Collection<DecisionTemplate>> generate(UnmodifiableLinearQueryTrace trace) {
         // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
-//        Collection<Collection<ReturnedRowLabel>> rrCores = findRRCores();
-//        Collection<Collection<ReturnedRowLabel>> rrCores = ReturnedRowUnsatCoreEnumerator.create(
-//                schema, views, trace
-//        ).enumerateAll();
-//        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(ReturnedRowUnsatCoreEnumerator.create(
-//                schema, policies, views, trace
-//        ).next().get());
-        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(ReturnedRowUnsatCoreEnumerator.getOne(
-                schema, policies, views, trace
-        ));
+        Optional<Set<ReturnedRowLabel>> oCore = rruce.getOne(trace);
+        if (oCore.isEmpty()) {
+            return Optional.empty();
+        }
+        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(oCore.get());
         System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         MyZ3Context context = schema.getContext();
         ArrayList<DecisionTemplate> dts = new ArrayList<>();
         for (Collection<ReturnedRowLabel> rrCore : rrCores) {
-            ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
-                    .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
-                    .collect(ImmutableList.toImmutableList());
-            SubQueryTrace sqt = trace.getSubTrace(toKeep);
-            BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies, views, sqt,
-                    BoundedUnsatCoreDeterminacyFormula.LabelOption.ALL);
+            try {
+                context.startTrackingConsts();
+                ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
+                        .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
+                        .collect(ImmutableList.toImmutableList());
+                SubQueryTrace sqt = trace.getSubTrace(toKeep);
+                BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies, views, sqt,
+                        BoundedUnsatCoreDeterminacyFormula.LabelOption.ALL);
 
-            Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
-            ImmutableSet<Operand> allOperandsOld =
-                    labeledExprs.keySet().stream() // Get all labels.
-                            .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
-                            .map(o -> backMapOperand(o, sqt))
-                            .collect(ImmutableSet.toImmutableSet());
+                Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
+                ImmutableSet<Operand> allOperandsOld =
+                        labeledExprs.keySet().stream() // Get all labels.
+                                .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
+                                .map(o -> backMapOperand(o, sqt))
+                                .collect(ImmutableSet.toImmutableSet());
 
-            Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
-            solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+                Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+                solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
 
-            // Assert the returned-row labels in the solver, and exclude them from enumeration.
-            List<Label> thisRRLabels = labeledExprs.keySet().stream()
-                    .filter(l -> l.getKind() == Label.Kind.RETURNED_ROW)
-                    .collect(Collectors.toList());
-            for (Label rrl : thisRRLabels) {
-                solver.add(labeledExprs.get(rrl));
-            }
-            Map<Label, BoolExpr> thisNonRRLabel2Expr = Maps.filterKeys(labeledExprs,
-                    l -> l.getKind() != Label.Kind.RETURNED_ROW);
-
-            try (UnsatCoreEnumerator<Label> uce =
-                         new UnsatCoreEnumerator<>(context, solver, thisNonRRLabel2Expr, Order.INCREASING)) {
-                System.out.println("total    #labels =\t" + thisNonRRLabel2Expr.size());
-                Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
-                System.out.println("starting #labels =\t" + startingUnsatCore.size());
-
-                Solver thisSolver = context.mkSolver();
-                for (Label l : startingUnsatCore) {
-                    thisSolver.add(thisNonRRLabel2Expr.get(l));
+                // Assert the returned-row labels in the solver, and exclude them from enumeration.
+                List<Label> thisRRLabels = labeledExprs.keySet().stream()
+                        .filter(l -> l.getKind() == Label.Kind.RETURNED_ROW)
+                        .collect(Collectors.toList());
+                for (Label rrl : thisRRLabels) {
+                    solver.add(labeledExprs.get(rrl));
                 }
-                Set<Label> consequence = new HashSet<>();
-                for (Map.Entry<Label, BoolExpr> entry : thisNonRRLabel2Expr.entrySet()) {
-                    Label l = entry.getKey();
-                    if (startingUnsatCore.contains(l)
-                            || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
-                        consequence.add(l);
+                Map<Label, BoolExpr> thisNonRRLabel2Expr = Maps.filterKeys(labeledExprs,
+                        l -> l.getKind() != Label.Kind.RETURNED_ROW);
+
+                try (UnsatCoreEnumerator<Label> uce =
+                             new UnsatCoreEnumerator<>(context, solver, thisNonRRLabel2Expr, Order.INCREASING)) {
+                    System.out.println("total    #labels =\t" + thisNonRRLabel2Expr.size());
+                    Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
+                    System.out.println("starting #labels =\t" + startingUnsatCore.size());
+
+                    Solver thisSolver = context.mkSolver();
+                    for (Label l : startingUnsatCore) {
+                        thisSolver.add(thisNonRRLabel2Expr.get(l));
+                    }
+                    Set<Label> consequence = new HashSet<>();
+                    for (Map.Entry<Label, BoolExpr> entry : thisNonRRLabel2Expr.entrySet()) {
+                        Label l = entry.getKey();
+                        if (startingUnsatCore.contains(l)
+                                || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
+                            consequence.add(l);
+                        }
+                    }
+                    System.out.println("conseq   #labels =\t" + consequence.size());
+                    uce.restrictTo(consequence);
+
+                    Optional<Set<Label>> ret;
+                    for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
+                        Stream<Label> thisCore = Stream.concat(
+                                thisRRLabels.stream(),
+                                ret.get().stream()
+                        );
+                        List<Label> coreLabelsOld = thisCore.map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
+                        dts.add(buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld));
                     }
                 }
-                System.out.println("conseq   #labels =\t" + consequence.size());
-                uce.restrictTo(consequence);
-
-                Optional<Set<Label>> ret;
-                for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
-                    Stream<Label> thisCore = Stream.concat(
-                            thisRRLabels.stream(),
-                            ret.get().stream()
-                    );
-                    List<Label> coreLabelsOld = thisCore.map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
-                    dts.add(buildDecisionTemplate(coreLabelsOld, allOperandsOld));
-                }
+            } finally {
+                context.stopTrackingConsts();
             }
         }
 
         checkState(!dts.isEmpty(), "should have generated at least one decision template");
-        return dts;
+        return Optional.of(dts);
     }
 
     public static Operand backMapOperand(Operand o, SubQueryTrace sqt) {
@@ -185,7 +160,8 @@ public class DecisionTemplateGenerator {
         return null;
     }
 
-    private DecisionTemplate buildDecisionTemplate(List<Label> unsatCore, Set<Operand> allOperands) {
+    private DecisionTemplate buildDecisionTemplate(UnmodifiableLinearQueryTrace trace,
+                                                   List<Label> unsatCore, Set<Operand> allOperands) {
         System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + unsatCore + ANSI_RESET);
 
         // Find all equivalence classes of operands.

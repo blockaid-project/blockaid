@@ -2,12 +2,12 @@ package cache.unsat_core;
 
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Model;
-import com.microsoft.z3.Solver;
-import com.microsoft.z3.Status;
+import com.microsoft.z3.*;
 import solver.MyZ3Context;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,15 +20,17 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
     private final ImmutableMap<L, BoolExpr> label2BoolConst;
     private final ImmutableMap<BoolExpr, L> boolConst2Label;
 
-    private final Set<L> startingUnsatCore;
-
-    // Uses L::toString() as boolean constant names.
+    // Sets solver to minimize unsat cores.
     public UnsatCoreEnumerator(MyZ3Context context, Solver solver, Map<L, BoolExpr> labeledExprs, Order order) {
         super(context, labeledExprs.keySet(), order);
 
         this.context = context;
         this.solver = solver;
         solver.push();
+
+        Params p = context.mkParams();
+        p.add("core.minimize", true);
+        solver.setParameters(p);
 
         ImmutableBiMap.Builder<L, BoolExpr> builder = new ImmutableBiMap.Builder<>();
         for (Map.Entry<L, BoolExpr> entry : labeledExprs.entrySet()) {
@@ -40,24 +42,42 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
         ImmutableBiMap<L, BoolExpr> bm = builder.build();
         this.label2BoolConst = bm;
         this.boolConst2Label = bm.inverse();
+    }
 
-        long startMs = System.currentTimeMillis();
-        // The entire formula had better be unsatisfiable; otherwise there is no unsat core!
-        checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE,
-                "to enumerate unsat cores, the formulas must be unsat");
-        long durMs = System.currentTimeMillis() - startMs;
-//        System.out.println("\t\t| Enumerator check:\t" + durMs);
-        this.startingUnsatCore = getUnsatCore().get();
+    @Override
+    protected boolean isUnsatCoreAlwaysMin() {
+        return true;
     }
 
     public Set<L> getStartingUnsatCore() {
-        return startingUnsatCore;
+        long startMs = System.currentTimeMillis();
+
+        // The entire formula had better be unsatisfiable; otherwise there is no unsat core!
+        checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE,
+                "to enumerate unsat cores, the formulas must be unsat");
+
+        long durMs = System.currentTimeMillis() - startMs;
+        System.out.println("\t\t| getStartingUnsatCore:\t" + durMs);
+
+        try {
+            StringBuilder sb = new StringBuilder(solver.toString());
+            int i = 0;
+            for (BoolExpr b : label2BoolConst.values()) {
+                sb.append("(assert (! ").append(b.getSExpr()).append(" :named label").append(i).append("))\n");
+                ++i;
+            }
+            Files.write(Paths.get("/tmp/get_unsat_core_eql.smt2"), sb.toString().getBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        return getUnsatCore().get();
     }
 
     @Override
     protected Optional<Set<L>> isSubsetSat(Set<L> labels) {
-        BoolExpr[] boolConsts = labels.stream().map(label2BoolConst::get).toArray(BoolExpr[]::new);
         long startMs = System.currentTimeMillis();
+        BoolExpr[] boolConsts = labels.stream().map(label2BoolConst::get).toArray(BoolExpr[]::new);
         Status status = solver.check(boolConsts);
 
         if (status == Status.SATISFIABLE) {

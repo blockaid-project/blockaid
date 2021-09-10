@@ -1,9 +1,6 @@
 package cache.trace;
 
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.ListMultimap;
+import com.google.common.collect.*;
 import solver.Schema;
 import sql.PrivacyQuery;
 import sql.PrivacyQuerySelect;
@@ -11,12 +8,61 @@ import sql.SchemaPlusWithKey;
 
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public abstract class UnmodifiableLinearQueryTrace {
     public abstract Map<String, Object> getConstMap();
     public abstract List<QueryTraceEntry> getAllEntries();
     public abstract QueryTraceEntry getCurrentQuery();
+
+    public int size() {
+        return getAllEntries().size();
+    }
+
+    /**
+     * Makes a sub-trace consisting of picked queries and tuples.  Always includes the current query, but does not put
+     * it in the back map.
+     * @param pickedQueryTuples picked (query index, tuple idx) pairs.
+     * @return an unmodifiable linear sub-trace.
+     */
+    public SubQueryTrace getSubTrace(Collection<QueryTupleIdxPair> pickedQueryTuples) {
+        // Maps query index to tuple indices.
+        Multimap<Integer, Integer> picked = pickedQueryTuples.stream().collect(
+                ImmutableSetMultimap.toImmutableSetMultimap(
+                        QueryTupleIdxPair::getQueryIdx,
+                        QueryTupleIdxPair::getTupleIdx
+                )
+        );
+        return getSubTrace(picked);
+    }
+
+    public SubQueryTrace getSubTrace(Multimap<Integer, Integer> pickedQueryTuples) {
+        HashMap<QueryTupleIdxPair, QueryTupleIdxPair> backMap = new HashMap<>();
+        ArrayList<QueryTraceEntry> newQueryList = new ArrayList<>();
+        List<QueryTraceEntry> queryList = getAllEntries();
+        for (int oldQueryIdx : pickedQueryTuples.keySet()) {
+            QueryTraceEntry oldEntry = queryList.get(oldQueryIdx);
+
+            List<List<Object>> oldTuples = oldEntry.getTuples();
+            ArrayList<List<Object>> newTuples = new ArrayList<>();
+            for (int oldTupleIdx : pickedQueryTuples.get(oldQueryIdx)) {
+                backMap.put(
+                        new QueryTupleIdxPair(newQueryList.size(), newTuples.size()),
+                        new QueryTupleIdxPair(oldQueryIdx, oldTupleIdx)
+                );
+                newTuples.add(oldTuples.get(oldTupleIdx));
+            }
+            newQueryList.add(new QueryTraceEntry(oldEntry.getQuery(), oldEntry.getParameters(), newTuples));
+        }
+
+        QueryTraceEntry currQuery = getCurrentQuery();
+        checkState(currQuery != null);
+        checkArgument(!pickedQueryTuples.containsKey(queryList.size() - 1)); // The current query can't be picked.
+        QueryTraceEntry newCurrQuery = new QueryTraceEntry(currQuery);
+        newQueryList.add(newCurrQuery);
+        return new SubQueryTrace(newQueryList, getConstMap(), newCurrQuery, backMap);
+    }
 
     public ListMultimap<String, Map<String, Object>> computeKnownRows(Schema schema) {
         SchemaPlusWithKey rawSchema = schema.getRawSchema();
@@ -105,6 +151,7 @@ public abstract class UnmodifiableLinearQueryTrace {
         }
         return knownRows;
     }
+
     private static class TableColumnPair {
         public final String table;
         public final Object value;
@@ -126,5 +173,25 @@ public abstract class UnmodifiableLinearQueryTrace {
         public int hashCode() {
             return Objects.hash(table, value);
         }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        List<QueryTraceEntry> allEntries = getAllEntries();
+        for (int i = 0; i < allEntries.size(); ++i) {
+            QueryTraceEntry qte = allEntries.get(i);
+            boolean isCurrentQuery = qte == getCurrentQuery();
+            if (isCurrentQuery) {
+                sb.append("[*] ");
+            } else {
+                sb.append("[").append(i).append("] ");
+            }
+            sb.append(qte.getParsedSql()).append("\n");
+            if (!isCurrentQuery) {
+                sb.append("\t").append(qte.getTuples().size()).append(" tuple(s)\n");
+            }
+        }
+        return sb.toString();
     }
 }

@@ -191,18 +191,19 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
         for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
             QueryTraceEntry qte = allEntries.get(queryIdx);
+            if (!qte.hasTuples()) {
+                continue;
+            }
             Query query = qte.getQuery().getSolverQuery(schema);
             Relation r1 = query.apply(inst1);
-            Relation r2 = query.apply(inst2);
-            List<Tuple> tuples = qte.getTuplesStream().map(
-                    tuple -> new Tuple(schema, tuple.stream().map(
-                            v -> Tuple.getExprFromObject(context, v)
-                    ))).collect(Collectors.toList());
+//            Relation r2 = query.apply(inst2);
+            List<Tuple> tuples = getTupleObjects(qte, schema);
 
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
                 Tuple tuple = tuples.get(rowIdx);
                 Label l = new ReturnedRowLabel(queryIdx, rowIdx);
-                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple))));
+//                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple))));
+                label2Expr.put(l, context.mkAnd(r1.doesContainExpr(tuple)));
             }
         }
         return label2Expr;
@@ -458,7 +459,7 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
 
     @Deprecated
     @Override
-    public String generateSMT(QueryTrace queries) {
+    public String generateSMT(UnmodifiableLinearQueryTrace queries) {
         throw new UnsupportedOperationException();
     }
 }
