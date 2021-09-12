@@ -1,6 +1,5 @@
 package cache.unsat_core;
 
-import com.google.common.collect.ImmutableSet;
 import solver.MyZ3Context;
 
 import java.util.*;
@@ -29,43 +28,51 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
     public Optional<Set<L>> next() {
         Optional<Set<L>> o;
         while ((o = ms.getNextSeed()).isPresent()) {
-            ImmutableSet<L> seed = ImmutableSet.copyOf(o.get());
-            Optional<Set<L>> satLabels = isSubsetSat(seed);
-            if (satLabels.isEmpty()) { // UNSAT.
-                Set<L> currSeed = new HashSet<>(seed);
-                Optional<Set<L>> unsatCore = getUnsatCore();
-                if (unsatCore.isPresent()) {
-                    currSeed = unsatCore.get();
-                }
-                if (order != Order.INCREASING && !isUnsatCoreAlwaysMin()) { // Must shrink.
-                    long startMs = System.currentTimeMillis();
-                    for (L label : seed) {
-                        if (!currSeed.remove(label)) {
-                            continue;
-                        }
-                        satLabels = isSubsetSat(currSeed);
-                        if (satLabels.isEmpty()) {
-                            unsatCore = getUnsatCore();
-                            if (unsatCore.isPresent()) {
-                                currSeed = unsatCore.get();
-                            }
-                        } else {
-                            currSeed.add(label);
-                        }
-                    }
-                    System.out.println("\t\t| Shrink:\t" + (System.currentTimeMillis() - startMs));
-                }
-                ms.blockUp(currSeed);
-                return Optional.of(currSeed);
+            Optional<Set<L>> oUnsatCore = processSeed(o.get());
+            if (oUnsatCore.isPresent()) {
+                return oUnsatCore;
             }
-
-            // SAT case: grow.
-            Set<L> currSeed = satLabels.get();
-            if (order != Order.DECREASING) {
-                currSeed = grow(currSeed);
-            }
-            ms.blockDown(currSeed);
         }
+        return Optional.empty();
+    }
+
+    // Returns unsat core if seed is unsat, empty otherwise.  Updates unexplored region.
+    protected Optional<Set<L>> processSeed(Set<L> seed) {
+        Optional<Set<L>> satLabels = isSubsetSat(seed);
+        if (satLabels.isEmpty()) { // UNSAT.
+            Set<L> currSeed = new HashSet<>(seed);
+            Optional<Set<L>> unsatCore = getUnsatCore();
+            if (unsatCore.isPresent()) {
+                currSeed = unsatCore.get();
+            }
+            if (order != Order.INCREASING && !isUnsatCoreAlwaysMin()) { // Must shrink.
+                long startMs = System.currentTimeMillis();
+                for (L label : seed) {
+                    if (!currSeed.remove(label)) {
+                        continue;
+                    }
+                    satLabels = isSubsetSat(currSeed);
+                    if (satLabels.isEmpty()) {
+                        unsatCore = getUnsatCore();
+                        if (unsatCore.isPresent()) {
+                            currSeed = unsatCore.get();
+                        }
+                    } else {
+                        currSeed.add(label);
+                    }
+                }
+                System.out.println("\t\t| Shrink:\t" + (System.currentTimeMillis() - startMs));
+            }
+            ms.blockUp(currSeed);
+            return Optional.of(currSeed);
+        }
+
+        // SAT case: grow.
+        Set<L> currSeed = satLabels.get();
+        if (order != Order.DECREASING) {
+            currSeed = grow(currSeed);
+        }
+        ms.blockDown(currSeed);
         return Optional.empty();
     }
 
@@ -77,21 +84,21 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
         }
     }
 
+    // Assumes that seed is satisfiable.
     private Set<L> growBinarySearch(Set<L> seed) {
         long startMs = System.currentTimeMillis();
         int lowerBound = seed.size(), upperBound = getLabels().size();
         while (lowerBound < upperBound) {
             int mid = (lowerBound + upperBound + 1) / 2;
-            Optional<Set<L>> satLabels = isSubsetSat(seed, mid);
-            if (satLabels.isEmpty()) {
-                upperBound = mid - 1;
+            if (isSubsetSatExists(seed, mid)) {
+                lowerBound = mid;
             } else {
-                seed = satLabels.get();
-                lowerBound = seed.size();
+                upperBound = mid - 1;
             }
         }
+        Optional<Set<L>> satLabels = isSubsetSat(seed, lowerBound);
         System.out.println("\t\t| GrowB:\t" + (System.currentTimeMillis() - startMs));
-        return seed;
+        return satLabels.get();
     }
 
     private Set<L> growLinear(Set<L> seed) {
@@ -120,6 +127,22 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
         ms.restrictTo(subset);
     }
 
+    // Finds critical clauses and constrain all subsets searched to contain them.
+    public void optimizeCritical() {
+        HashSet<L> currSubset = new HashSet<>(labels);
+        ArrayList<L> critical = new ArrayList<>();
+        for (L label : labels) {
+            currSubset.remove(label);
+            // If removing this label alone makes the formula SAT, this label is critical.
+            if (isSubsetSat(currSubset).isPresent()) {
+                critical.add(label);
+            }
+            currSubset.add(label);
+        }
+        System.out.println("critical clauses: " + critical.size() + " / " + labels.size());
+        ms.mustContainAll(critical);
+    }
+
     protected Collection<L> getLabels() {
         return Collections.unmodifiableCollection(labels);
     }
@@ -130,6 +153,16 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
         return false;
     }
     protected Optional<Set<L>> isSubsetSat(Set<L> labels, int atLeast) {
+        throw new UnsupportedOperationException("isSubsetSat with lower bound is not implemented");
+    }
+
+    /**
+     * Checks if there exists a satisfiable subset that (1) contains specified labels and (2) has specified minimum size.
+     * @param labels labels that the unsat core must contain.
+     * @param atLeast minimum size.
+     * @return true if such satisfiable subset exists.
+     */
+    protected boolean isSubsetSatExists(Set<L> labels, int atLeast) {
         throw new UnsupportedOperationException("isSubsetSat with lower bound is not implemented");
     }
     // Called after `isSubsetSat` returns empty.

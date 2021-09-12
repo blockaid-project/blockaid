@@ -59,17 +59,17 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
         long durMs = System.currentTimeMillis() - startMs;
         System.out.println("\t\t| getStartingUnsatCore:\t" + durMs);
 
-        try {
-            StringBuilder sb = new StringBuilder(solver.toString());
-            int i = 0;
-            for (BoolExpr b : label2BoolConst.values()) {
-                sb.append("(assert (! ").append(b.getSExpr()).append(" :named label").append(i).append("))\n");
-                ++i;
-            }
-            Files.write(Paths.get("/tmp/get_unsat_core_eql.smt2"), sb.toString().getBytes());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+//        try {
+//            StringBuilder sb = new StringBuilder(solver.toString());
+//            int i = 0;
+//            for (BoolExpr b : label2BoolConst.values()) {
+//                sb.append("(assert (! ").append(b.getSExpr()).append(" :named label").append(i).append("))\n");
+//                ++i;
+//            }
+//            Files.write(Paths.get("/tmp/get_unsat_core_eql.smt2"), sb.toString().getBytes());
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
 
         return getUnsatCore().get();
     }
@@ -81,7 +81,7 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
         Status status = solver.check(boolConsts);
 
         if (status == Status.SATISFIABLE) {
-            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + ")\t" + (System.currentTimeMillis() - startMs));
+//            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + ")\t" + (System.currentTimeMillis() - startMs));
             return Optional.of(labels);
             // `getModel` is too slow...
 //            long modelStartMs = System.currentTimeMillis();
@@ -97,14 +97,14 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
 //            return Optional.of(satLabels);
         }
         checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
-        System.out.println("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
+//        System.out.println("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
         return Optional.empty();
     }
 
     @Override
     protected boolean supportsIsSubsetSatWithBound() {
         // Doesn't seem to help.  Disabled for now.
-        return false;
+        return true;
     }
 
     @Override
@@ -123,12 +123,27 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
                     .map(Map.Entry::getKey)
                     .collect(Collectors.toSet());
             checkState(satLabels.containsAll(labels));
-            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + " -> " + satLabels.size() + ")\t" + (System.currentTimeMillis() - startMs));
+//            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + " -> " + satLabels.size() + ")\t" + (System.currentTimeMillis() - startMs));
             return Optional.of(satLabels);
         }
         checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
-        System.out.println("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
+//        System.out.println("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.currentTimeMillis() - startMs));
         return Optional.empty();
+    }
+
+    @Override
+    protected boolean isSubsetSatExists(Set<L> labels, int atLeast) {
+        long startMs = System.currentTimeMillis();
+        checkArgument(atLeast >= labels.size());
+        List<BoolExpr> clauses = labels.stream().map(label2BoolConst::get).collect(Collectors.toList());
+        clauses.add(context.mkAtLeast(getLabels().stream().map(label2BoolConst::get).toArray(BoolExpr[]::new), atLeast));
+        Status status = solver.check(clauses.toArray(new BoolExpr[0]));
+//        System.out.println("\t\t\t| isSubsetSatExists (" + atLeast + "):\t" + status + "\t" + (System.currentTimeMillis() - startMs));
+        if (status == Status.SATISFIABLE) {
+            return true;
+        }
+        checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
+        return false;
     }
 
     @Override

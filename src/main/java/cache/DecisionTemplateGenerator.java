@@ -49,6 +49,7 @@ public class DecisionTemplateGenerator {
         System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
+        BoundedUnsatCoreDeterminacyFormula boundedFormula = rruce.getBoundedFormula();
         MyZ3Context context = schema.getContext();
         ArrayList<DecisionTemplate> dts = new ArrayList<>();
         for (Collection<ReturnedRowLabel> rrCore : rrCores) {
@@ -58,10 +59,8 @@ public class DecisionTemplateGenerator {
                         .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
                         .collect(ImmutableList.toImmutableList());
                 SubQueryTrace sqt = trace.getSubTrace(toKeep);
-                BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies, views, sqt,
-                        BoundedUnsatCoreDeterminacyFormula.LabelOption.ALL);
 
-                Map<Label, BoolExpr> labeledExprs = formula.makeLabeledExprs();
+                Map<Label, BoolExpr> labeledExprs = boundedFormula.makeLabeledExprs(sqt, BoundedUnsatCoreDeterminacyFormula.LabelOption.PARAM_LABELS_ONLY);
                 ImmutableSet<Operand> allOperandsOld =
                         labeledExprs.keySet().stream() // Get all labels.
                                 .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
@@ -69,7 +68,7 @@ public class DecisionTemplateGenerator {
                                 .collect(ImmutableSet.toImmutableSet());
 
                 Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
-                solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
+                solver.add(Iterables.toArray(boundedFormula.makeBackgroundFormulas(sqt, BoundedUnsatCoreDeterminacyFormula.LabelOption.PARAM_LABELS_ONLY), BoolExpr.class));
 
                 // Assert the returned-row labels in the solver, and exclude them from enumeration.
                 List<Label> thisRRLabels = labeledExprs.keySet().stream()
@@ -87,6 +86,7 @@ public class DecisionTemplateGenerator {
                     Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
                     System.out.println("starting #labels =\t" + startingUnsatCore.size());
 
+                    long startMs = System.currentTimeMillis();
                     Solver thisSolver = context.mkSolver();
                     for (Label l : startingUnsatCore) {
                         thisSolver.add(thisNonRRLabel2Expr.get(l));
@@ -101,12 +101,16 @@ public class DecisionTemplateGenerator {
                     }
                     System.out.println("conseq   #labels =\t" + consequence.size());
                     uce.restrictTo(consequence);
+//                    uce.optimizeCritical();
+                    System.out.println("\t\t| Find conseq:\t" + (System.currentTimeMillis() - startMs));
 
-                    Optional<Set<Label>> ret;
-                    for (int i = 0; i < 1 && (ret = uce.next()).isPresent(); ++i) {
+                    Optional<Set<Label>> oRet;
+                    for (int i = 0; i < 1 && (oRet = uce.next()).isPresent(); ++i) {
+                        Set<Label> ret = oRet.get();
+                        System.out.println("final #labels =\t" + ret.size());
                         Stream<Label> thisCore = Stream.concat(
                                 thisRRLabels.stream(),
-                                ret.get().stream()
+                                ret.stream()
                         );
                         List<Label> coreLabelsOld = thisCore.map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
                         dts.add(buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld));
@@ -162,7 +166,7 @@ public class DecisionTemplateGenerator {
 
     private DecisionTemplate buildDecisionTemplate(UnmodifiableLinearQueryTrace trace,
                                                    List<Label> unsatCore, Set<Operand> allOperands) {
-        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + unsatCore + ANSI_RESET);
+//        System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + unsatCore + ANSI_RESET);
 
         // Find all equivalence classes of operands.
         UnionFind<Operand> uf = new UnionFind<>(allOperands);

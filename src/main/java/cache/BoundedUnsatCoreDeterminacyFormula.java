@@ -1,7 +1,6 @@
 package cache;
 
 import cache.labels.*;
-import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
 import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
@@ -16,47 +15,40 @@ import sql.PrivacyQuerySelect;
 import sql.SchemaPlusWithKey;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
-import static util.TerminalColor.ANSI_RED;
-import static util.TerminalColor.ANSI_RESET;
 
 public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormula {
     public enum LabelOption {
         RETURNED_ROWS_ONLY,
-        ALL,
+        PARAM_LABELS_ONLY, // FIXME(zhangwen): rename?
     }
 
-    private final UnmodifiableLinearQueryTrace trace;
     private final ImmutableSet<String> relevantAttributes;
-    private final LabelOption option;
 
-    public static BoundedUnsatCoreDeterminacyFormula create(
-            Schema schema, Collection<Policy> policies,
-            Collection<Query> views, UnmodifiableLinearQueryTrace trace, LabelOption option
-    ) {
-        long startTime = System.currentTimeMillis();
-        CountingBoundEstimator cbe = new CountingBoundEstimator();
-        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
-        Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, trace);
-        Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 1);
-        System.out.println("\t\t| Compute bounds:\t" + (System.currentTimeMillis() - startTime) + "\t" + bounds);
-
-        // FIXME(zhangwen): we can't actually constrain the tables to contain known rows, because then we wouldn't be
-        //  able to tell the difference made by removing a previous query.
-        ListMultimap<String, Map<String, Object>> knownRows = null;
-//        if (option == LabelOption.RETURNED_ROWS_ONLY) {
-//            startTime = System.currentTimeMillis();
-//            knownRows = computeKnownRows(schema, trace);
-//            System.out.println("\t\t| Known rows:\t" + knownRows);
-//        }
-        BoundedUnsatCoreDeterminacyFormula f =
-                new BoundedUnsatCoreDeterminacyFormula(schema, policies, views, trace, slackBounds, knownRows, option);
-        System.out.println("\t\t| Formula constructor:\t" + (System.currentTimeMillis() - startTime));
-        return f;
-    }
+//    public static BoundedUnsatCoreDeterminacyFormula create(
+//            Schema schema, Collection<Policy> policies,
+//            Collection<Query> views, Map<String, Integer> bounds
+//    ) {
+//        long startTime = System.currentTimeMillis();
+//        CountingBoundEstimator cbe = new CountingBoundEstimator();
+//        BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
+//        System.out.println("\t\t| Compute bounds:\t" + (System.currentTimeMillis() - startTime) + "\t" + bounds);
+//
+//        // FIXME(zhangwen): we can't actually constrain the tables to contain known rows, because then we wouldn't be
+//        //  able to tell the difference made by removing a previous query.
+//        ListMultimap<String, Map<String, Object>> knownRows = null;
+////        if (option == LabelOption.FIX_RETURNED_ROWS) {
+////            startTime = System.currentTimeMillis();
+////            knownRows = computeKnownRows(schema, trace);
+////            System.out.println("\t\t| Known rows:\t" + knownRows);
+////        }
+//        BoundedUnsatCoreDeterminacyFormula f =
+//                new BoundedUnsatCoreDeterminacyFormula(schema, policies, views, bounds, knownRows);
+//        System.out.println("\t\t| Formula constructor:\t" + (System.currentTimeMillis() - startTime));
+//        return f;
+//    }
 
     private static class TableColumnPair {
         public final String table;
@@ -168,25 +160,18 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
         return knownRows;
     }
 
-    private BoundedUnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views,
-                                               UnmodifiableLinearQueryTrace trace, Map<String, Integer> bounds,
-                                               ListMultimap<String, Map<String, Object>> table2KnownRows,
-                                               LabelOption option) {
+    public BoundedUnsatCoreDeterminacyFormula(Schema schema, Collection<Policy> policies, Collection<Query> views,
+                                               Map<String, Integer> bounds,
+                                               ListMultimap<String, Map<String, Object>> table2KnownRows) {
         super(schema, views, bounds, true, TextOption.NO_TEXT, table2KnownRows);
-        this.trace = trace;
-        if (option == LabelOption.RETURNED_ROWS_ONLY) {
-            this.relevantAttributes = null;
-        } else {
-            // TODO(zhangwen): don't compute this all the time.
-            this.relevantAttributes = Stream.concat(
-                    policies.stream().flatMap(policy -> policy.getNormalizedThetaColumns().stream()),
-                    schema.getDependencies().stream().flatMap(c -> c.getRelevantColumns().stream())
-            ).collect(ImmutableSet.toImmutableSet());
-        }
-        this.option = option;
+        // TODO(zhangwen): don't compute this all the time.
+        this.relevantAttributes = Stream.concat(
+                policies.stream().flatMap(policy -> policy.getNormalizedThetaColumns().stream()),
+                schema.getDependencies().stream().flatMap(c -> c.getRelevantColumns().stream())
+        ).collect(ImmutableSet.toImmutableSet());
     }
 
-    private Map<Label, BoolExpr> makeLabeledExprsRR() {
+    private Map<Label, BoolExpr> makeLabeledExprsRR(UnmodifiableLinearQueryTrace trace) {
         Map<Label, BoolExpr> label2Expr = new HashMap<>();
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
         for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
@@ -196,25 +181,23 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
             }
             Query query = qte.getQuery().getSolverQuery(schema);
             Relation r1 = query.apply(inst1);
-//            Relation r2 = query.apply(inst2);
             List<Tuple> tuples = getTupleObjects(qte, schema);
 
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
                 Tuple tuple = tuples.get(rowIdx);
                 Label l = new ReturnedRowLabel(queryIdx, rowIdx);
-//                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(tuple), r2.doesContainExpr(tuple))));
                 label2Expr.put(l, context.mkAnd(r1.doesContainExpr(tuple)));
             }
         }
         return label2Expr;
     }
 
-    public Map<Label, BoolExpr> makeLabeledExprs() {
+    public Map<Label, BoolExpr> makeLabeledExprs(UnmodifiableLinearQueryTrace trace, LabelOption option) {
         if (option == LabelOption.RETURNED_ROWS_ONLY) {
-            return makeLabeledExprsRR();
+            return makeLabeledExprsRR(trace);
         }
 
-        checkState(option == LabelOption.ALL);
+        checkState(option == LabelOption.PARAM_LABELS_ONLY);
         MyZ3Context context = schema.getContext();
         QueryTraceEntry lastEntry = trace.getCurrentQuery();
         ArrayListMultimap<Object, Expr> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
@@ -259,7 +242,6 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
             }
 
             Relation r1 = q.apply(inst1);
-            Relation r2 = q.apply(inst2);
             List<List<Object>> rows = e.getTuples();
 
             ImmutableSet<String> pkValuedColumns = schema.getRawSchema().getPkValuedColumns();
@@ -291,7 +273,7 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
                 }
 
                 Label l = new ReturnedRowLabel(queryIdx, rowIdx);
-                label2Expr.put(l, context.mkAnd(Iterables.concat(r1.doesContainExpr(head), r2.doesContainExpr(head))));
+                label2Expr.put(l, context.mkAnd(r1.doesContainExpr(head)));
             }
         }
 
@@ -379,14 +361,14 @@ public class BoundedUnsatCoreDeterminacyFormula extends BoundedDeterminacyFormul
     }
 
     // Makes formula that is not under consideration for unsat core.
-    public Iterable<BoolExpr> makeBackgroundFormulas() {
+    public Iterable<BoolExpr> makeBackgroundFormulas(UnmodifiableLinearQueryTrace trace, LabelOption option) {
         ArrayList<BoolExpr> formulas = new ArrayList<>(preamble);
 
         if (option == LabelOption.RETURNED_ROWS_ONLY) {
             Iterables.addAll(formulas, generateConstantCheck(trace));
             Iterables.addAll(formulas, generateNotContains(trace));
         } else {
-            checkState(option == LabelOption.ALL, "illegal option: " + option);
+            checkState(option == LabelOption.PARAM_LABELS_ONLY, "illegal option: " + option);
             Query query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
             Tuple extHeadTup = query.makeFreshHead();
             Iterables.addAll(formulas, query.apply(inst1).doesContainExpr(extHeadTup));

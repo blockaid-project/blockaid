@@ -70,15 +70,25 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
         queryList.add(currentQuery);
     }
 
+    private void removeCurrentQuery() {
+        List<QueryTraceEntry> bucket = queries.get(currentQuery.getParsedSql());
+        bucket.remove(bucket.size() - 1);
+        queryList.remove(queryList.size() - 1);
+    }
+
+    public void endQueryDiscard() {
+        checkState(currentQuery != null);
+        removeCurrentQuery();
+        currentQuery = null;
+    }
+
     public void endQuery(List<List<Object>> tuples) {
         checkState(currentQuery != null);
         currentQuery.setTuples(tuples);
 
         if (!entrySet.add(currentQuery)) {
             // The current query is a duplicate.  Remove!
-            List<QueryTraceEntry> bucket = queries.get(currentQuery.getParsedSql());
-            bucket.remove(bucket.size() - 1);
-            queryList.remove(queryList.size() - 1);
+            removeCurrentQuery();
         }
 
         currentQuery = null;

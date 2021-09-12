@@ -112,4 +112,10 @@ class MapSolver<L> {
             }
         }
     }
+
+    public void mustContainAll(Collection<L> subset) {
+        for (L l : subset) {
+            solver.add(label2Var.get(l));
+        }
+    }
 }

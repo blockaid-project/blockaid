@@ -1,6 +1,7 @@
 package cache.trace;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import solver.Schema;
 import solver.Tuple;
@@ -18,7 +19,10 @@ public class QueryTraceEntry {
     private final List<Object> parameters;
     private ImmutableList<List<Object>> tuples; // Nullable.
 
-    private Integer pkColIdxForCutting = null; // If ineligible, -1.  If not computed, null.
+    private List<Integer> pkValuedColIndices = null;
+
+    private boolean computedColIndicesForPruning = false;
+    private Collection<Integer> colIndicesForPruning = null;
 
     public QueryTraceEntry(PrivacyQuery query, List<Object> parameters) {
         this(checkNotNull(query), checkNotNull(parameters), null);
@@ -84,67 +88,76 @@ public class QueryTraceEntry {
         return tuples != null && !tuples.isEmpty();
     }
 
-    /**
-     * Identifies whether this QTE qualifies for cutting and, if so, identifies PK column.
-     * @param schema The schema.  TODO(zhangwen): should really be a member of this class.
-     * @return If QTE qualifies for culling, the ID of column whose value to look for in the query being checked; empty
-     * otherwise.
-     */
-    public Optional<Integer> isEligibleForCutting(Schema schema) {
-        if (pkColIdxForCutting != null) {
-            if (pkColIdxForCutting < 0) {
-                return Optional.empty();
+    // Can only be called if tuples are returned.
+    public List<Integer> getPkValuedColIndices(Schema schema) {
+        if (pkValuedColIndices == null) {
+            PrivacyQuery q = getQuery();
+            checkState(hasTuples());
+            int numColumns = getTuples().get(0).size();
+
+            pkValuedColIndices = new ArrayList<>();
+            ImmutableSet<String> pkValuedColumns = schema.getRawSchema().getPkValuedColumns();
+            for (int colIdx = 0; colIdx < numColumns; ++colIdx) {
+                for (String col : q.getNormalizedProjectColumnsByIdx(colIdx)) {
+                    if (pkValuedColumns.contains(col)) {
+                        pkValuedColIndices.add(colIdx);
+                        break;
+                    }
+                }
             }
-            return Optional.of(pkColIdxForCutting);
+        }
+        return pkValuedColIndices;
+    }
+
+    // Assumes that PK columns are integer.
+    public Set<Integer> getReturnedPkValues(Schema schema) {
+        if (!hasTuples()) {
+            return Collections.emptySet();
+        }
+        Set<Integer> res = new HashSet<>();
+        for (List<Object> tup : getTuples()) {
+            for (Integer colIdx : getPkValuedColIndices(schema)) {
+                res.add((Integer) tup.get(colIdx));
+            }
+        }
+        return res;
+    }
+
+    public Optional<Collection<Integer>> isEligibleForPruning(Schema schema) {
+        if (computedColIndicesForPruning) {
+            return Optional.ofNullable(colIndicesForPruning);
         }
 
-        pkColIdxForCutting = -1;
-
+        computedColIndicesForPruning = true;
         List<List<Object>> tuples = getTuples();
-        if (tuples.size() <= 3) {
+        if (tuples.size() <= 3) { // Don't prune unless many rows are returned.
+            colIndicesForPruning = null;
             return Optional.empty();
         }
 
-        // This query returned lots of tuples.  Cull some of them?
         PrivacyQuery q = getQuery();
-        int numColumns = tuples.get(0).size();
+        int numColumns = getTuples().get(0).size();
 
-        Integer pkColIdx = null;
-        HashMap<String, String> colName2PkCol = new HashMap<>();
-        for (int colIdx = 0; colIdx < numColumns; ++colIdx) {
-            Set<String> projCols = q.getNormalizedProjectColumnsByIdx(colIdx);
-            if (projCols.size() != 1) {
-                // Not supported.
-                return Optional.empty();
-            }
-            String[] parts = Iterables.getOnlyElement(projCols).split("\\.");
-            String pkColName = colName2PkCol.computeIfAbsent(parts[0], tableName -> {
-                Optional<ImmutableList<String>> oPkCols = schema.getRawSchema().getPrimaryKeyColumns(tableName);
-                if (oPkCols.isEmpty()) {
-                    return null;
-                }
-                ImmutableList<String> pkCols = oPkCols.get();
-                if (pkCols.size() != 1) {
-                    return null;
-                }
-                return pkCols.get(0);
-            });
-            if (pkColName == null) {
-                return Optional.empty();
-            }
-            if (parts[1].equals(pkColName)) {
-                if (pkColIdx == null) {
-                    pkColIdx = colIdx;
-                } else {
-                    return Optional.empty(); // Multiple primary key columns selected? Not supported.
+        List<Integer> pkValuedColIndices = getPkValuedColIndices(schema);
+        for (Iterator<Integer> it = pkValuedColIndices.iterator(); it.hasNext(); ) {
+            int colIdx = it.next();
+            Set<Object> values = tuples.stream().map(t -> t.get(colIdx)).collect(Collectors.toSet());
+            if (values.size() == 1) {
+                Object v = Iterables.getOnlyElement(values);
+                if (q.parameters.contains(v)) {
+                    it.remove();
                 }
             }
         }
 
-        if (pkColIdx != null) {
-            this.pkColIdxForCutting = pkColIdx;
+        if (pkValuedColIndices.isEmpty()) {
+            colIndicesForPruning = null; // need at least one column for pruning.
+        } else {
+            colIndicesForPruning = pkValuedColIndices;
         }
-        return Optional.ofNullable(pkColIdx);
+        System.out.println("FOR PRUNE:\t" + getParsedSql());
+        System.out.println("\t" + colIndicesForPruning);
+        return Optional.ofNullable(colIndicesForPruning);
     }
 
     @Override

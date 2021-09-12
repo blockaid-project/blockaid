@@ -36,6 +36,8 @@ public class ReturnedRowUnsatCoreEnumerator {
     private final Collection<Query> views;
     private final MyUnsatCoreDeterminacyFormula myFormula;
 
+    private BoundedUnsatCoreDeterminacyFormula boundedFormula = null;
+
     public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
                                           Collection<Query> views) {
         this.checker = checker;
@@ -47,7 +49,6 @@ public class ReturnedRowUnsatCoreEnumerator {
 
     // Returns empty if formula is not determined UNSAT.
     public Optional<Set<ReturnedRowLabel>> getOne(UnmodifiableLinearQueryTrace trace) {
-        UnmodifiableLinearQueryTrace traceToUse = trace;
         boolean shrank = false;
         int maxBound = Collections.max(new CountingBoundEstimator().calculateBounds(schema, trace).values());
         if (maxBound > 0) {
@@ -103,7 +104,7 @@ public class ReturnedRowUnsatCoreEnumerator {
             if (smallestCore == null) {
                 return Optional.empty();
             }
-            traceToUse = trace.getSubTrace(
+            trace = trace.getSubTrace(
                     smallestCore.stream()
                             .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
                             .collect(ImmutableList.toImmutableList())
@@ -111,31 +112,45 @@ public class ReturnedRowUnsatCoreEnumerator {
             shrank = true;
         }
 
-        if (traceToUse.size() == 1) {
-            return Optional.of(Collections.emptySet());
-        }
-
         long startMs = System.currentTimeMillis();
         MyZ3Context context = schema.getContext();
         context.startTrackingConsts();
-        Solver solver = context.mkSolver();
-        BoundedUnsatCoreDeterminacyFormula formula = BoundedUnsatCoreDeterminacyFormula.create(schema, policies,
-                views, traceToUse, BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY);
-        System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
-        solver.add(Iterables.toArray(formula.makeBackgroundFormulas(), BoolExpr.class));
-        Map<ReturnedRowLabel, BoolExpr> labeledExprs = formula.makeLabeledExprs().entrySet().stream()
-                .collect(Collectors.toMap(e -> (ReturnedRowLabel) e.getKey(), Map.Entry::getValue));
-        System.out.println("\t\t| Bounded RRL core 2:\t" + (System.currentTimeMillis() - startMs));
-        UnsatCoreEnumerator<ReturnedRowLabel> uce = new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.ARBITRARY);
-        System.out.println("\t\t| Bounded RRL core 3:\t" + (System.currentTimeMillis() - startMs));
-        Set<ReturnedRowLabel> s = uce.next().get();
-        System.out.println("\t\t| Bounded RRL core 4:\t" + (System.currentTimeMillis() - startMs));
-        if (shrank) {
-            SubQueryTrace sqt = (SubQueryTrace) traceToUse;
-            s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, sqt)).collect(Collectors.toSet());
+        try {
+            Solver solver = context.mkSolver();
+
+            CountingBoundEstimator cbe = new CountingBoundEstimator();
+            BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
+            Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, trace);
+            Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 1);
+            this.boundedFormula = new BoundedUnsatCoreDeterminacyFormula(schema, policies, views, slackBounds, null);
+            System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
+
+            if (trace.size() == 1) { // Only the current query is in the trace.  It doesn't depend on any previous!
+                return Optional.of(Collections.emptySet());
+            }
+
+            solver.add(Iterables.toArray(boundedFormula.makeBackgroundFormulas(trace,
+                    BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY), BoolExpr.class));
+            Map<ReturnedRowLabel, BoolExpr> labeledExprs = boundedFormula.makeLabeledExprs(trace,
+                            BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY).entrySet().stream()
+                    .collect(Collectors.toMap(e -> (ReturnedRowLabel) e.getKey(), Map.Entry::getValue));
+            System.out.println("\t\t| Bounded RRL core 2:\t" + (System.currentTimeMillis() - startMs));
+            UnsatCoreEnumerator<ReturnedRowLabel> uce = new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.ARBITRARY);
+            System.out.println("\t\t| Bounded RRL core 3:\t" + (System.currentTimeMillis() - startMs));
+            Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
+            System.out.println("\t\t| Bounded RRL core 4:\t" + (System.currentTimeMillis() - startMs));
+            if (shrank) {
+                SubQueryTrace sqt = (SubQueryTrace) trace;
+                s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, sqt)).collect(Collectors.toSet());
+            }
+            return Optional.of(s);
+        } finally {
+            context.stopTrackingConsts();
+            System.out.println("\t\t| Bounded RRL core:\t" + (System.currentTimeMillis() - startMs));
         }
-        System.out.println("\t\t| Bounded RRL core:\t" + (System.currentTimeMillis() - startMs));
-        context.stopTrackingConsts();
-        return Optional.of(s);
+    }
+
+    public BoundedUnsatCoreDeterminacyFormula getBoundedFormula() {
+        return boundedFormula;
     }
 }

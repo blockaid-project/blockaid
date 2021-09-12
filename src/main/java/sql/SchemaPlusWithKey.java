@@ -18,6 +18,7 @@ public class SchemaPlusWithKey {
     private final ImmutableMap<String, ImmutableList<String>> primaryKeys;
     private final ImmutableSet<ForeignKeyDependency> foreignKeys;
 
+    private final ImmutableSet<String> fkColumns;
     // Every column that stores values of a primary key type (e.g., a PK column, or a foreign key to a PK column).
     private final ImmutableSet<String> pkValuedColumns;
 
@@ -29,6 +30,7 @@ public class SchemaPlusWithKey {
         this.foreignKeys = checkNotNull(foreignKeys);
 
         HashSet<String> pkValuedColumns = new HashSet<>();
+        ImmutableSet.Builder<String> fkColsBuilder = new ImmutableSet.Builder<>();
         for (Map.Entry<String, ImmutableList<String>> e : primaryKeys.entrySet()) {
             String tableName = e.getKey();
             ImmutableList<String> columnNames = e.getValue();
@@ -43,18 +45,24 @@ public class SchemaPlusWithKey {
                     to = fk.getToRelation() + "." + fk.getToColumn();
             if (pkValuedColumns.contains(to)) {
                 pkValuedColumns.add(from);
+                fkColsBuilder.add(from);
             }
         }
+        this.fkColumns = fkColsBuilder.build();
         this.pkValuedColumns = ImmutableSet.copyOf(pkValuedColumns);
     }
 
     // Returns empty if the relation has no primary key.
     public Optional<ImmutableList<String>> getPrimaryKeyColumns(String relationName) {
-        return Optional.ofNullable(primaryKeys.get(relationName));
+        return Optional.ofNullable(primaryKeys.get(relationName.toUpperCase()));
     }
 
     public ImmutableSet<String> getPkValuedColumns() {
         return pkValuedColumns;
+    }
+
+    public ImmutableSet<String> getFkColumns() {
+        return fkColumns;
     }
 
     public boolean hasForeignKeyConstraint(String fromTable, String fromColumn, String toTable, String toColumn) {

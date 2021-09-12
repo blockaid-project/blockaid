@@ -5,6 +5,7 @@ import cache.trace.QueryTraceEntry;
 import com.google.common.collect.*;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
+import policy_checker.AppCacheSpec;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import solver.ForeignKeyDependency;
@@ -32,6 +33,8 @@ public class PrivacyConnection implements Connection {
   private final SchemaPlusWithKey schema;
   private int queryCount;
 
+  private final ImmutableList<AppCacheSpec> cacheSpecs;
+
   /**
    * Takes ownership of direct_info.
    */
@@ -52,6 +55,7 @@ public class PrivacyConnection implements Connection {
     String deps = direct_info.getProperty("deps");
     String pks = direct_info.getProperty("pk");
     String fks = direct_info.getProperty("fk");
+    String cacheSpec = direct_info.getProperty("cache_spec");
 
     Map<String, ImmutableList<String>> primaryKeys = new HashMap<>();
     pks.lines().map(String::toUpperCase).forEach(line -> {
@@ -74,6 +78,8 @@ public class PrivacyConnection implements Connection {
 
     this.policy_list = new ArrayList<>();
     set_policy(direct_info, ctx);
+
+    this.cacheSpecs = cacheSpec.lines().map(AppCacheSpec::fromSpecString).collect(ImmutableList.toImmutableList());
 
     this.query_checker = QueryChecker.getInstance(
             direct_info,
@@ -140,20 +146,53 @@ public class PrivacyConnection implements Connection {
     queryCount = 0;
   }
 
+  private boolean checkCacheRead(String key) throws SQLException {
+    for (AppCacheSpec spec : cacheSpecs) {
+      Optional<List<String>> o = spec.getQueries(key);
+      if (o.isEmpty()) { // Cache key is not matched by this spec.
+        continue;
+      }
+
+      for (String q : o.get()) {
+        Optional<ParserResult> parserResult = shouldApplyPolicy(q);
+        if (parserResult.isEmpty()) {
+          continue;
+        }
+        boolean pass = connCheckPolicy(parserResult.get());
+        current_trace.endQueryDiscard();
+        if (!pass) {
+          return false;
+        }
+      }
+
+      // All checks passed!
+      return true;
+    }
+
+    // Cache key is not matched by any spec.
+    printStylizedMessage("Unrecognized cache key: " + key, ANSI_RED_BACKGROUND);
+    return false;
+  }
+
+  private boolean connCheckPolicy(ParserResult parserResult) {
+    return connCheckPolicy(parserResult, Collections.emptyList(), Collections.emptyList());
+  }
+
   private boolean connCheckPolicy(ParserResult parserResult, List<String> paramNames, List<Object> paramValues) {
     String message = "[" + (queryCount++) + "] checkPolicy: "
             + parserResult.getParsedSql() + "\t" + paramValues;
-    if (USE_COLORS) {
-      message = ANSI_BLUE_BACKGROUND + ANSI_BLACK + "\n" + message + ANSI_RESET;
-    }
-    System.out.println(message);
+    printStylizedMessage(message, ANSI_BLUE_BACKGROUND + ANSI_BLACK);
 
     PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parserResult, schema, paramValues, paramNames);
 
     current_trace.startQuery(privacy_query, privacy_query.parameters);
     final long startTime = System.currentTimeMillis();
     try {
-      return query_checker.checkPolicy(current_trace);
+      boolean pass = query_checker.checkPolicy(current_trace);
+      if (!pass) {
+        printStylizedMessage("Policy violation!", ANSI_RED_BACKGROUND);
+      }
+      return pass;
     } catch (Exception e) {
       System.out.println("\t| EXCEPTION:\t" + e);
       e.printStackTrace();
@@ -166,7 +205,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public Statement createStatement() throws SQLException {
-    System.out.println("=== createStatement ===");
+//    System.out.println("=== createStatement ===");
     return new PrivacyStatement();
   }
 
@@ -2127,6 +2166,9 @@ public class PrivacyConnection implements Connection {
   }
 
   private class PrivacyStatement implements Statement {
+    private final Pattern SET_PATTERN = Pattern.compile("SET\\s+@(_[A-Za-z0-9_]+)\\s*=\\s*(\\d+)");
+    private final Pattern CHECK_CACHE_PATTERN = Pattern.compile("CHECK\\s+CACHE\\s+READ\\s+(.+)");
+
     private final Statement active_statment;
     private boolean isChecked = false;
 
@@ -2215,7 +2257,7 @@ public class PrivacyConnection implements Connection {
         isChecked = false;
         return active_statment.execute(s);
       }
-      if (!connCheckPolicy(parserResult.get(), Collections.emptyList(), Collections.emptyList())) {
+      if (!connCheckPolicy(parserResult.get())) {
         throw new SQLException("Privacy compliance was not met");
       }
       isChecked = true;
@@ -2320,29 +2362,46 @@ public class PrivacyConnection implements Connection {
      * Detects whether the query is a special query that:
      *   1. resets the trace (`SET @_TRACE = null`), in which case the trace is reset; or,
      *   2. sets the value of a constant (e.g., `SET @_MY_UID = 2`), in which case executes the request by adding the
-     *      (constant name, value) pair to the current sequence; currently, only supports integer values.
+     *      (constant name, value) pair to the current sequence; currently, only supports integer values; or,
+     *   3. checks a cache read (`CHECK CACHE READ key`).
      * @param query the query to check.
      * @return empty if the query is not a special query, otherwise, the return value of execute.
      */
-    private Optional<Boolean> processSpecialQuery(String query) {
+    private Optional<Boolean> processSpecialQuery(String query) throws SQLException {
       if (query.equalsIgnoreCase("SET @TRACE = null")) {
+        printStylizedMessage("End of trace", ANSI_CYAN_BACKGROUND + ANSI_BLACK);
         resetSequence();
         return Optional.of(false);
       }
 
-      Pattern pattern = Pattern.compile("^SET\\s+@(_[A-Za-z0-9_]+)\\s*=\\s*(\\d+)$");
-      Matcher matcher = pattern.matcher(query);
-      if (!matcher.find()) {
-        return Optional.empty();
+      {
+        Matcher matcher = SET_PATTERN.matcher(query);
+        if (matcher.matches()) {
+          String name = matcher.group(1);
+          String value = matcher.group(2);
+          current_trace.setConstValue(name, Integer.valueOf(value));
+
+          printStylizedMessage("Set context: " + name + " = " + value, ANSI_CYAN_BACKGROUND + ANSI_BLACK);
+
+          // TODO(zhangwen): Can I get away with not actually executing this command?
+          return Optional.of(false);
+        }
       }
 
-      String name = matcher.group(1);
-      String value = matcher.group(2);
-//      System.out.println("=== processSetConst: " + name + " = " + value);
-      current_trace.setConstValue(name, Integer.valueOf(value));
+      {
+        Matcher matcher = CHECK_CACHE_PATTERN.matcher(query);
+        if (matcher.matches()) {
+          String key = matcher.group(1);
+          printStylizedMessage("Check cache read: " + key, ANSI_CYAN_BACKGROUND + ANSI_BLACK);
+          if (!checkCacheRead(key)) {
+            throw new SQLException("Privacy compliance was not met");
+          }
+          printStylizedMessage("Check cache read done: " + key, ANSI_CYAN_BACKGROUND + ANSI_BLACK);
+          return Optional.of(false);
+        }
+      }
 
-      // TODO(zhangwen): Can I get away with not actually executing this command?
-      return Optional.of(false);
+      return Optional.empty();
     }
 
     @Override

@@ -11,6 +11,7 @@ public class PrivacyQueryFactory {
             DesugarLeftJoinIntoInner.INSTANCE,
             DesugarLeftJoinIntoUnion.INSTANCE,
             StripSum.INSTANCE,
+            StripCountStar.INSTANCE,
     };
 
     public static PrivacyQuery createPrivacyQuery(ParserResult result, SchemaPlusWithKey schema,

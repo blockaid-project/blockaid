@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.USE_COLORS;
 
 public class QueryChecker {
@@ -317,6 +318,7 @@ public class QueryChecker {
         List<Object> checkedQueryParams = checkedEntry.getParameters();
 
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
+        HashSet<Integer> seenPkValues = new HashSet<>();
         ArrayList<QueryTupleIdxPair> picked = new ArrayList<>();
         for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
             QueryTraceEntry qte = allEntries.get(queryIdx);
@@ -325,27 +327,36 @@ public class QueryChecker {
             }
 
             List<List<Object>> tuples = qte.getTuples();
-            Optional<Integer> oPkColIdxForCutting = qte.isEligibleForCutting(schema);
-            if (oPkColIdxForCutting.isEmpty()) { // Keep them all.
+            Optional<Collection<Integer>> oPkColIdxForPrune = qte.isEligibleForPruning(schema);
+            if (oPkColIdxForPrune.isEmpty()) { // Keep them all.
                 for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
                     picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
                 }
             } else {
-//                System.out.println("=== picking ===");
+//                System.out.println("=== pruning ===");
 //                System.out.println(qte.getParsedSql());
-                int pkColIdx = oPkColIdxForCutting.get();
+                Collection<Integer> pkColIdxForPrune = oPkColIdxForPrune.get();
+                checkState(!pkColIdxForPrune.isEmpty());
                 for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
-                    Object v = tuples.get(tupIdx).get(pkColIdx);
-//                    System.out.println("\tlooking:\t" + v);
-                    if (checkedQueryParams.contains(v)) { // TODO(zhangwen): this is a hack.
-                        picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
+                    boolean kept = false;
+                    List<Object> tup = tuples.get(tupIdx);
+                    for (int colIdx : pkColIdxForPrune) {
+                        Object v = tup.get(colIdx);
+//                        System.out.println("\tlooking:\t" + v);
+                        if (checkedQueryParams.contains(v) && !seenPkValues.contains(v)) { // TODO(zhangwen): this is a hack.
+                            picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
+                            kept = true;
+                            break;
+                        }
                     }
-//                    else {
-//                        System.out.println("\ttossed:\t" + tuples.get(tupIdx));
-//                    }
+                    if (kept) {
+//                        System.out.println("\tkept:\t" + tuples.get(tupIdx));
+                    }
                 }
 //                System.out.println("=== done ===");
             }
+
+            seenPkValues.addAll(qte.getReturnedPkValues(schema));
         }
 
         return trace.getSubTrace(picked);
