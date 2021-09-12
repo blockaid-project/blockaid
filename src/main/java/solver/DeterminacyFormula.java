@@ -13,6 +13,7 @@ import util.UnionFind;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -233,21 +234,21 @@ public abstract class DeterminacyFormula {
                 generateNotContains(queries));
     }
 
-    protected String makeBodyFormulaSMT(UnmodifiableLinearQueryTrace queries) {
-        return Streams.stream(makeBodyFormula(queries))
-                .map(formula -> "(assert " + formula + ")")
-                .collect(Collectors.joining("\n"));
-    }
-
     public Iterable<BoolExpr> makeCompleteFormula(UnmodifiableLinearQueryTrace queries) {
         return Iterables.concat(preamble, makeBodyFormula(queries));
     }
 
     public String generateSMT(UnmodifiableLinearQueryTrace queries) {
+        return generateSMT(() -> makeBodyFormula(queries));
+    }
+
+    protected String generateSMT(Supplier<Iterable<BoolExpr>> mkBody) {
         checkState(textOption == TextOption.USE_TEXT);
 
         context.startTrackingConsts();
-        String bodyFormula = makeBodyFormulaSMT(queries);
+        String bodyFormula = Streams.stream(mkBody.get())
+                .map(formula -> "(assert " + formula + ")")
+                .collect(Collectors.joining("\n"));
         context.stopTrackingConsts();
 
         StringBuilder sb = new StringBuilder();

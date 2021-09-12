@@ -1,4 +1,4 @@
-package cache.unsat_core;
+package solver.unsat_core;
 
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
@@ -9,8 +9,6 @@ import solver.MyZ3Context;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkState;
-import static util.TerminalColor.ANSI_RED;
-import static util.TerminalColor.ANSI_RESET;
 
 // For enumerating minimal unsat cores using the MARCO algorithm.
 // Adapted from https://github.com/Z3Prover/z3/blob/master/examples/python/mus/marco.py.

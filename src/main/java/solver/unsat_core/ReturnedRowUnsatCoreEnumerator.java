@@ -1,10 +1,8 @@
-package cache.unsat_core;
+package solver.unsat_core;
 
-import cache.BoundedUnsatCoreDeterminacyFormula;
-import cache.DecisionTemplateGenerator;
-import cache.MyUnsatCoreDeterminacyFormula;
-import cache.labels.Label;
-import cache.labels.ReturnedRowLabel;
+import solver.DecisionTemplateGenerator;
+import solver.RRLVampireDeterminacyFormula;
+import solver.labels.ReturnedRowLabel;
 import cache.trace.*;
 import com.google.common.collect.*;
 import com.microsoft.z3.BoolExpr;
@@ -13,7 +11,6 @@ import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import solver.*;
-import solver.executor.CVC4Executor;
 import solver.executor.ProcessSMTExecutor;
 import solver.executor.SMTExecutor;
 import solver.executor.VampireProofExecutor;
@@ -24,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkState;
 import static util.TerminalColor.*;
 
 public class ReturnedRowUnsatCoreEnumerator {
@@ -34,9 +30,9 @@ public class ReturnedRowUnsatCoreEnumerator {
     private final Schema schema;
     private final Collection<Policy> policies;
     private final Collection<Query> views;
-    private final MyUnsatCoreDeterminacyFormula myFormula;
+    private final RRLVampireDeterminacyFormula myFormula;
 
-    private BoundedUnsatCoreDeterminacyFormula boundedFormula = null;
+    private UnsatCoreFormulaBuilder formulaBuilder = null;
 
     public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
                                           Collection<Query> views) {
@@ -44,7 +40,7 @@ public class ReturnedRowUnsatCoreEnumerator {
         this.schema = schema;
         this.policies = policies;
         this.views = views;
-        this.myFormula = new MyUnsatCoreDeterminacyFormula(schema, views);
+        this.myFormula = new RRLVampireDeterminacyFormula(schema, views);
     }
 
     // Returns empty if formula is not determined UNSAT.
@@ -122,20 +118,20 @@ public class ReturnedRowUnsatCoreEnumerator {
             BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
             Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, trace);
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + 1);
-            this.boundedFormula = new BoundedUnsatCoreDeterminacyFormula(schema, policies, views, slackBounds, null);
+            BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(schema, views, slackBounds,
+                    true, DeterminacyFormula.TextOption.NO_TEXT, null);
+            this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
             System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
 
             if (trace.size() == 1) { // Only the current query is in the trace.  It doesn't depend on any previous!
                 return Optional.of(Collections.emptySet());
             }
 
-            solver.add(Iterables.toArray(boundedFormula.makeBackgroundFormulas(trace,
-                    BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY), BoolExpr.class));
-            Map<ReturnedRowLabel, BoolExpr> labeledExprs = boundedFormula.makeLabeledExprs(trace,
-                            BoundedUnsatCoreDeterminacyFormula.LabelOption.RETURNED_ROWS_ONLY).entrySet().stream()
-                    .collect(Collectors.toMap(e -> (ReturnedRowLabel) e.getKey(), Map.Entry::getValue));
+            UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(trace);
+            solver.add(fs.getBackground().toArray(new BoolExpr[0]));
             System.out.println("\t\t| Bounded RRL core 2:\t" + (System.currentTimeMillis() - startMs));
-            UnsatCoreEnumerator<ReturnedRowLabel> uce = new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.ARBITRARY);
+            UnsatCoreEnumerator<ReturnedRowLabel> uce = new UnsatCoreEnumerator<>(context, solver, fs.getLabeledExprs(),
+                    Order.ARBITRARY);
             System.out.println("\t\t| Bounded RRL core 3:\t" + (System.currentTimeMillis() - startMs));
             Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
             System.out.println("\t\t| Bounded RRL core 4:\t" + (System.currentTimeMillis() - startMs));
@@ -150,7 +146,7 @@ public class ReturnedRowUnsatCoreEnumerator {
         }
     }
 
-    public BoundedUnsatCoreDeterminacyFormula getBoundedFormula() {
-        return boundedFormula;
+    public UnsatCoreFormulaBuilder getFormulaBuilder() {
+        return formulaBuilder;
     }
 }

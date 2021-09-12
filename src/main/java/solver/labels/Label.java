@@ -1,4 +1,4 @@
-package cache.labels;
+package solver.labels;
 
 import java.util.Collection;
 

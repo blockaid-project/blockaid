@@ -1,13 +1,10 @@
-package cache.unsat_core;
+package solver.unsat_core;
 
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
 import solver.MyZ3Context;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 

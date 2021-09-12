@@ -120,7 +120,7 @@ public class DiasporaTest {
 
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.UNNAMED_EQUALITY = true;
-        QueryChecker.SOLVE_TIMEOUT = 10000;
+        QueryChecker.SOLVE_TIMEOUT_MS = 10000;
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);
@@ -181,7 +181,7 @@ public class DiasporaTest {
 
         QueryChecker.ENABLE_CACHING = false;
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
-        QueryChecker.SOLVE_TIMEOUT = 3000;
+        QueryChecker.SOLVE_TIMEOUT_MS = 3000;
 
         long startTime, endTime;
         startTime = System.nanoTime();
@@ -233,7 +233,7 @@ public class DiasporaTest {
     @Test
     public void runMultipleThread() throws Exception {
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
-        QueryChecker.SOLVE_TIMEOUT = 30000;
+        QueryChecker.SOLVE_TIMEOUT_MS = 30000;
 
         Thread a = new Thread(new Runnable() {
             @Override
@@ -288,7 +288,7 @@ public class DiasporaTest {
 
         QueryChecker.ENABLE_CACHING = true;
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
-        QueryChecker.SOLVE_TIMEOUT = 15000;
+        QueryChecker.SOLVE_TIMEOUT_MS = 15000;
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);
@@ -397,7 +397,7 @@ public class DiasporaTest {
 
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.UNNAMED_EQUALITY = true;
-        QueryChecker.SOLVE_TIMEOUT = 10000;
+        QueryChecker.SOLVE_TIMEOUT_MS = 10000;
 
         Connection conn = DriverManager.getConnection(proxyUrl, dbUsername, dbPassword);
         conn.setAutoCommit(true);

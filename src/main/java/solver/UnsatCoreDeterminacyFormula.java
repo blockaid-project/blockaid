@@ -177,10 +177,4 @@ public class UnsatCoreDeterminacyFormula extends DeterminacyFormula {
     public String generateSMT(UnmodifiableLinearQueryTrace queries) {
         return "(set-option :produce-unsat-cores true)\n" + super.generateSMT(queries) + "(get-unsat-core)";
     }
-
-    @Override
-    protected String makeBodyFormulaSMT(UnmodifiableLinearQueryTrace queries) {
-        String assertions = generateAssertions(queries);
-        return makeMainSMT(queries) + "\n" + assertions;
-    }
 }

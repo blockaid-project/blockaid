@@ -10,7 +10,6 @@ import com.microsoft.z3.*;
 import planner.PrivacyColumn;
 import planner.PrivacyTable;
 import solver.*;
-import solver.executor.*;
 import sql.Parser;
 import sql.PrivacyQuery;
 import sql.SchemaPlusWithKey;
@@ -21,13 +20,11 @@ import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
-import static util.TerminalColor.USE_COLORS;
+import static util.TerminalColor.*;
 
 public class QueryChecker {
     public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
@@ -53,11 +50,13 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT = 2000; // ms
+    public static long SOLVE_TIMEOUT_MS = 2000; // ms
 
     private final Schema schema;
     private final List<Policy> policySet;
     private final List<Query> policyQueries;
+
+    private final SMTPortfolioRunner runner;
     private final DeterminacyFormula fastCheckDeterminacyFormula;
 //    private final DeterminacyFormula determinacyFormula;
 //    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
@@ -117,11 +116,14 @@ public class QueryChecker {
 
         this.schema = new Schema(context, rawSchema, relations, dependencies);
         this.policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
+
+        this.runner = new SMTPortfolioRunner(this, SOLVE_TIMEOUT_MS);
 //        this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
 //        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
 //        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
-        this.dtg = new DecisionTemplateGenerator(this, schema, policySet, policyQueries);
+        this.dtg = new DecisionTemplateGenerator(this, schema, policySet, policyQueries,
+                fastCheckDeterminacyFormula);
 
         // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
         this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
@@ -153,24 +155,6 @@ public class QueryChecker {
         return !policy.checkApplicable(new HashSet<>(query.getAllNormalizedProjectColumns()), new HashSet<>(query.getThetaColumns()));
     }
 
-    private void runExecutors(List<SMTExecutor> executors, CountDownLatch latch) {
-        for (SMTExecutor executor : executors) {
-            executor.start();
-        }
-
-        try {
-            latch.await(SOLVE_TIMEOUT, TimeUnit.MILLISECONDS);
-            for (SMTExecutor executor : executors) {
-                executor.signalShutdown();
-            }
-            for (SMTExecutor executor : executors) {
-                executor.join();
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     /**
      * If the option to print formulas is enabled, prints the formula to a file named `[prefix]_[index].smt2`.
      * @param formula the formula to print.
@@ -196,22 +180,10 @@ public class QueryChecker {
 //        Solver solver = schema.getContext().mkSolver();
 //        return solver.check(Iterables.toArray(bdf.makeCompleteFormula(queries), BoolExpr.class)) == Status.UNSATISFIABLE;
 
-        CountDownLatch latch = new CountDownLatch(1);
-        List<SMTExecutor> executors = new ArrayList<>();
-
         // fast check
         long startTime = System.currentTimeMillis();
         String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
         System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
-        executors.add(new Z3Executor("z3_fast", fastCheckSMT, latch, false, true, false));
-        executors.add(new VampireExecutor("vampire_lrs_fast", "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_10000", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireExecutor("vampire_dis+11_3_fast", "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_10000", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireExecutor("vampire_dis+3_1_fast", "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_10000", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireExecutor("vampire_dis+2_3_fast", "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_10000", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireExecutor("vampire_lrs+1011_fast", "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_10000", fastCheckSMT, latch, false, true, false));
-//        executors.add(new VampireExecutor("vampire_lrs+11_20_fast", "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_10000", fastCheckSMT, latch, false, true, false));
-        executors.add(new VampireExecutor("vampire_lrs+1_7_fast", "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_10000", fastCheckSMT, latch, false, true, false));
-        printFormula(fastCheckSMT, "fast_unsat");
 
         // regular check
 //        startTime = System.currentTimeMillis();
@@ -222,21 +194,7 @@ public class QueryChecker {
 
 //        executors.add(new ProcessBoundedExecutor("z3_bounded_process", latch, schema, policyQueries, queries));
 
-        startTime = System.currentTimeMillis();
-        runExecutors(executors, latch);
-        final long solverDuration = System.currentTimeMillis() - startTime;
-
-        for (SMTExecutor executor : executors) {
-            if (executor.getResult() != Status.UNKNOWN) {
-                String winner = executor.getName();
-                System.out.println("\t| Invoke solvers:\t" + solverDuration + "," + winner);
-                return executor.getResult() == Status.UNSATISFIABLE;
-            }
-        }
-
-        System.err.println("timeout");
-        // all timeout/inconclusive
-        return false;
+        return runner.checkFastUnsatFormula(fastCheckSMT, "fast_unsat");
     }
 
     private static class UnsatCore {

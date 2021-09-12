@@ -23,6 +23,7 @@ public abstract class SMTExecutor extends Thread {
         setName(name);
     }
 
+    @Override
     public void run() {
         try {
             if (this.runCore) {

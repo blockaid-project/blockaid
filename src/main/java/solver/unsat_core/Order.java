@@ -1,4 +1,4 @@
-package cache.unsat_core;
+package solver.unsat_core;
 
 public enum Order {
     INCREASING,

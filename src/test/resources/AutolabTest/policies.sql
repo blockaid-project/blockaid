@@ -98,4 +98,22 @@ SELECT risk_conditions.* FROM risk_conditions, course_user_data WHERE risk_condi
 SELECT watchlist_instances.* FROM watchlist_instances, course_user_data WHERE watchlist_instances.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
 SELECT autograders.* FROM autograders, assessments, course_user_data WHERE autograders.assessment_id = assessments.id AND assessments.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = 1;
 
+SELECT o.* FROM users o, users me WHERE me.id = _MY_UID AND me.administrator = 1;
+SELECT course_user_data.* FROM course_user_data, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT courses.* FROM courses, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT announcements.* FROM announcements, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT assessments.* FROM assessments, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT assessment_user_data.* FROM assessment_user_data, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT `groups`.* FROM `groups`, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT attachments.* FROM attachments, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT submissions.* FROM submissions, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT annotations.* FROM annotations, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT scores.* FROM scores, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT extensions.* FROM extensions, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT scoreboards.* FROM scoreboards, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT problems.* FROM problems, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT risk_conditions.* FROM risk_conditions, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT watchlist_instances.* FROM watchlist_instances, users WHERE users.id = _MY_UID AND users.administrator = 1;
+SELECT autograders.* FROM autograders, users WHERE users.id = _MY_UID AND users.administrator = 1;
+
 -- TODO: administrator has access to everything.
