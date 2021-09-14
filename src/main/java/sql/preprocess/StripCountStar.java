@@ -25,8 +25,6 @@ public class StripCountStar implements Preprocessor {
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
-        if (!result.getParsedSql().toUpperCase().contains("COUNT(*)")) { return Optional.empty(); }
-
         if (result.getKind() != SqlKind.SELECT) { return Optional.empty(); }
 
         SqlSelect sqlSelect = (SqlSelect) result.getSqlNode();
@@ -61,8 +59,7 @@ public class StripCountStar implements Preprocessor {
         }
         newSelect.setSelectList(new SqlNodeList(newSelectList, l.getParserPosition()));
 
-        ParserResult newPR = new ParserResult(newSelect.toString(), newSelect.getKind(), newSelect,
-                false, false) {};
+        ParserResult newPR = new ParserResult(newSelect);
         PrivacyQuery pq = new PrivacyQueryEmptyRBWrapper(
                 PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
         return Optional.of(pq);

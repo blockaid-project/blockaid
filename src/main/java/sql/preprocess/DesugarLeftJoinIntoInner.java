@@ -74,8 +74,7 @@ public class DesugarLeftJoinIntoInner implements Preprocessor {
         SqlSelect newSelect = (SqlSelect) select.clone(select.getParserPosition());
         newSelect.setFrom(newJoin);
 
-        ParserResult newPR = new ParserResult(newSelect.toString(), newSelect.getKind(), newSelect, false,
-                false) {};
+        ParserResult newPR = new ParserResult(newSelect);
         return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
     }
 }

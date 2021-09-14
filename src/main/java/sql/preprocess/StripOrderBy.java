@@ -26,7 +26,7 @@ public class StripOrderBy implements Preprocessor {
 
         SqlOrderBy ob = (SqlOrderBy) result.getSqlNode();
         SqlNode subQuery = ob.query;
-        ParserResult newPR = new ParserResult(subQuery.toString(), subQuery.getKind(), subQuery, false, false) {};
+        ParserResult newPR = new ParserResult(subQuery);
 
         // We might have removed some parameters in the query.  Remove them in `parameters` and `paramNames`, too.
         int numParamsInSubQuery = subQuery.accept(DynParamCounter.INSTANCE);

@@ -5,6 +5,7 @@ import policy_checker.QueryChecker;
 import solver.executor.SMTExecutor;
 import solver.executor.VampireExecutor;
 import solver.executor.Z3Executor;
+import util.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +14,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static util.TerminalColor.ANSI_RED_BACKGROUND;
-import static util.TerminalColor.printStylizedMessage;
 
 public class SMTPortfolioRunner {
     private final QueryChecker checker;
@@ -76,7 +76,7 @@ public class SMTPortfolioRunner {
         }
 
         // all timeout/inconclusive
-        printStylizedMessage("All solvers time out / inconclusive", ANSI_RED_BACKGROUND);
+        Logger.printStylizedMessage("All solvers time out / inconclusive", ANSI_RED_BACKGROUND);
         return false;
     }
 }

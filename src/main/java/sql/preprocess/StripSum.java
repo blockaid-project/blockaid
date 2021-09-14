@@ -16,8 +16,6 @@ public class StripSum implements Preprocessor {
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
-        if (!result.getParsedSql().contains("SUM")) { return Optional.empty(); }
-
         if (result.getKind() != SqlKind.SELECT) { return Optional.empty(); }
 
         SqlSelect sqlSelect = (SqlSelect) result.getSqlNode();
@@ -39,8 +37,7 @@ public class StripSum implements Preprocessor {
 
         SqlSelect newSelect = (SqlSelect) sqlSelect.clone(sqlSelect.getParserPosition());
         newSelect.setSelectList(SqlNodeList.SINGLETON_STAR);
-        ParserResult newPR = new ParserResult(newSelect.toString(), newSelect.getKind(), newSelect,
-                false, false) {};
+        ParserResult newPR = new ParserResult(newSelect);
         PrivacyQuery pq = new PrivacyQueryEmptyRBWrapper(
                 PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
         return Optional.of(pq);

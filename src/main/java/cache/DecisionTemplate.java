@@ -12,7 +12,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.*;
-import static util.TerminalColor.*;
 
 public class DecisionTemplate {
     private final ImmutableList<Entry> entries;
@@ -84,7 +83,7 @@ public class DecisionTemplate {
             int ecIdx = e.getValue();
             Object constValue = constMap.get(constName);
 
-            if (!ec2Value.ensureMapping(ecIdx, constValue)) {
+            if (!ec2Value.ensureMapping(ecIdx, Tuple.normalizeValue(constValue))) {
                 return false;
             }
         }
@@ -139,7 +138,8 @@ public class DecisionTemplate {
         return false;
     }
 
-    public String toString(boolean useColors) {
+    @Override
+    public String toString() {
         ArrayList<String> lines = new ArrayList<>();
 
         for (Map.Entry<String, Integer> e : constName2EC.entrySet()) {
@@ -174,16 +174,7 @@ public class DecisionTemplate {
         lines.add("--------------------------------------------------------------------------------");
         lines.add(currQueryText);
 
-        String result = String.join("\n", lines);
-        if (useColors) {
-            result = ANSI_BLACK + ANSI_YELLOW_BACKGROUND + "\n" + result + ANSI_RESET;
-        }
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return toString(true);
+        return String.join("\n", lines);
     }
 
     // A less-than constraint between equivalence classes.  Value operands not yet supported.
@@ -320,13 +311,14 @@ public class DecisionTemplate {
         private static boolean matchHelper(List<Object> target, Map<Integer, Object> idx2Value,
                                     Map<Integer, Integer> idx2EC, PushPopMap<Integer, Object> ec2Value) {
             for (Map.Entry<Integer, Object> e : idx2Value.entrySet()) {
-                if (!target.get(e.getKey()).equals(e.getValue())) {
+                Object normalizedTarget = Tuple.normalizeValue(target.get(e.getKey()));
+                if (!e.getValue().equals(normalizedTarget)) {
                     return false;
                 }
             }
             for (Map.Entry<Integer, Integer> e : idx2EC.entrySet()) {
                 int idx = e.getKey(), ecIdx = e.getValue();
-                if (!ec2Value.ensureMapping(ecIdx, target.get(idx))) {
+                if (!ec2Value.ensureMapping(ecIdx, Tuple.normalizeValue(target.get(idx)))) {
                     return false;
                 }
             }

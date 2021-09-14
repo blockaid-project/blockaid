@@ -46,7 +46,7 @@ public class DecisionTemplateGenerator {
         System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
-        // Reusing the bounde formula builder to avoid making the bounded formula again.
+        // Reusing the bounded formula builder to avoid making the bounded formula again.
         UnsatCoreFormulaBuilder boundedUcBuilder = rruce.getFormulaBuilder();
 
         MyZ3Context context = schema.getContext();
@@ -100,17 +100,21 @@ public class DecisionTemplateGenerator {
             context.stopTrackingConsts();
             System.out.println("final #labels =\t" + paramsCore.size());
 
-            // Step 3: Validate the unsat core on unbounded formula.
-            System.out.println("\t\t| Validate:");
-            String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
-            checkState(runner.checkFastUnsatFormula(validateSMT, "validate"));
-
-            // Step 4: Make decision tempalte.
+            // Step 4: Make decision template.
             List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt))
                     .collect(Collectors.toList());
             // `rrCore` is with respect to the old (complete) trace, so no need to back map it.
             coreLabelsOld.addAll(rrCore);
             dts.add(buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld));
+
+            // Step 3: Validate the unsat core on unbounded formula.
+            System.out.println("\t\t| Validate:");
+            String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
+            if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
+                System.out.println(dts.get(dts.size() - 1));
+                System.out.println(coreLabelsOld);
+                checkState(false);
+            }
         }
 
         return Optional.of(dts);

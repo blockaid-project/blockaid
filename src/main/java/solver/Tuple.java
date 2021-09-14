@@ -172,4 +172,11 @@ public class Tuple {
         return false;
     }
 
+    // For decision template generation / matching.
+    public static Object normalizeValue(Object v) {
+        if (v instanceof Boolean) {
+            return ((boolean) v) ? 1 : 0;
+        }
+        return v;
+    }
 }

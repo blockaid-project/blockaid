@@ -76,7 +76,7 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
 
         SqlNode union = new SqlBasicCall(SqlStdOperatorTable.UNION, new SqlNode[]{lhs, rhs},
                 select.getParserPosition());
-        ParserResult newPR = new ParserResult(union.toString(), union.getKind(), union, false, false) {};
+        ParserResult newPR = new ParserResult(union);
 
         List<SqlDynamicParam> renumberedParams = r.getRenumberedParams();
         List<Object> newParameters = new ArrayList<>(parameters);

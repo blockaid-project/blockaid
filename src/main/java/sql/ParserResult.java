@@ -9,46 +9,29 @@ import java.util.Objects;
 /**
  * Created by amoghm on 3/4/16.
  */
-public abstract class ParserResult {
-
-    protected String parsedSql;
-    protected SqlKind kind;
-    protected boolean isCheckable;
+public class ParserResult {
     protected final SqlNode sqlNode;
-    protected final boolean parseResult;
 
-    public ParserResult(String parsedSql, SqlKind kind,
-                        SqlNode sqlNode,
-                        boolean isCheckable,
-                        boolean parseResult) {
-        this.parsedSql = parsedSql;
-        this.isCheckable = isCheckable;
-        this.kind = kind;
+    // Lazily computed (`node.toString` can take a while).  Use `getParsedSql()` to access.
+    private String parsedSql = null;
+
+    public ParserResult(SqlNode sqlNode) {
         this.sqlNode = sqlNode;
-        this.parseResult = parseResult;
     }
-
-    public boolean getIsCheckable() {return isCheckable;}
 
     public String getParsedSql() {
-        return parsedSql.replace("\n", " ");
-    }
-
-    // FIXME(zhangwen): HACK-- for replacing unnamed parameters with named parameters in the query string.
-    public void setParsedSql(String s) {
-        parsedSql = s;
+        if (parsedSql == null) {
+            parsedSql = sqlNode.toString().replace("\n", " ");
+        }
+        return parsedSql;
     }
 
     public SqlKind getKind() {
-        return kind;
+        return sqlNode.getKind();
     }
 
     public SqlNode getSqlNode() {
         return sqlNode;
-    }
-
-    public boolean isParseResult() {
-        return parseResult;
     }
 
     @Override
@@ -56,11 +39,11 @@ public abstract class ParserResult {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ParserResult that = (ParserResult) o;
-        return Objects.equals(parsedSql, that.parsedSql);
+        return Objects.equals(getParsedSql(), that.getParsedSql());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(parsedSql);
+        return Objects.hash(getParsedSql());
     }
 }

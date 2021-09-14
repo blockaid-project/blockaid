@@ -24,7 +24,7 @@ public class ExtractParams extends SqlTransformer {
      */
     public static ParserResult perform(ParserResult pr, List<Object> params, List<String> paramNames) {
         SqlNode newNode = pr.getSqlNode().accept(new ExtractParams(params, paramNames));
-        return new ParserResult(newNode.toString(), newNode.getKind(), newNode, false, false) {};
+        return new ParserResult(newNode);
     }
 
     private final List<Object> params;

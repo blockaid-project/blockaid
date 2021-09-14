@@ -22,6 +22,8 @@ import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static util.Logger.printMessage;
+import static util.Logger.printStylizedMessage;
 import static util.TerminalColor.*;
 
 public class PrivacyConnection implements Connection {
@@ -179,9 +181,11 @@ public class PrivacyConnection implements Connection {
   }
 
   private boolean connCheckPolicy(ParserResult parserResult, List<String> paramNames, List<Object> paramValues) {
-    String message = "[" + (queryCount++) + "] checkPolicy: "
-            + parserResult.getParsedSql() + "\t" + paramValues;
-    printStylizedMessage(message, ANSI_BLUE_BACKGROUND + ANSI_BLACK);
+    printStylizedMessage(
+            () -> "[" + queryCount + "] checkPolicy: " + parserResult.getParsedSql() + "\t" + paramValues,
+            ANSI_BLUE_BACKGROUND + ANSI_BLACK
+    );
+    ++queryCount;
 
     PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parserResult, schema, paramValues, paramNames);
 
@@ -194,12 +198,12 @@ public class PrivacyConnection implements Connection {
       }
       return pass;
     } catch (Exception e) {
-      System.out.println("\t| EXCEPTION:\t" + e);
+      printMessage("\t| EXCEPTION:\t" + e);
       e.printStackTrace();
       throw e;
     } finally {
       final long endTime = System.currentTimeMillis();
-      System.out.println("\t+ Policy checking:\t" + (endTime - startTime));
+      printMessage("\t+ Policy checking:\t" + (endTime - startTime));
     }
   }
 

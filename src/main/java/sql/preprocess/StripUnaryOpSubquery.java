@@ -44,8 +44,7 @@ public class StripUnaryOpSubquery implements Preprocessor {
             return Optional.empty();
         };
 
-        ParserResult newPR = new ParserResult(sqlSelect.toString(), sqlSelect.getKind(), sqlSelect,
-                false, false) {};
+        ParserResult newPR = new ParserResult(sqlSelect);
         // After stripping, need to set result bitmap to empty so that the results of this query are not processed.
         PrivacyQuery pq = new PrivacyQueryEmptyRBWrapper(
                 PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));

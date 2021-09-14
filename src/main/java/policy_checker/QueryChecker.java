@@ -13,6 +13,7 @@ import solver.*;
 import sql.Parser;
 import sql.PrivacyQuery;
 import sql.SchemaPlusWithKey;
+import util.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,11 +25,12 @@ import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static util.Logger.printMessage;
 import static util.TerminalColor.*;
 
 public class QueryChecker {
     public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
-    public static boolean PICK_TRACE = true;
+    public static boolean PRUNE_TRACE = true;
     public static boolean UNNAMED_EQUALITY = true;
 
     public enum PrecheckSetting {
@@ -324,9 +326,9 @@ public class QueryChecker {
         queryCount += 1;
 
         PrivacyQuery currQuery = queries.getCurrentQuery().getQuery();
-        System.out.println("transformed: "
-                + currQuery.parsedSql.getParsedSql()
-                + "\t" + currQuery.parameters + "\t" + currQuery.paramNames);
+        printMessage(() -> "transformed: " + currQuery.parsedSql.getParsedSql()
+                + "\t" + currQuery.parameters + "\t" + currQuery.paramNames
+        );
         if (PRECHECK_SETTING != PrecheckSetting.DISABLED) {
             FastCheckDecision precheckResult = doPrecheckPolicy(currQuery);
             if (precheckResult == FastCheckDecision.ALLOW) {
@@ -345,7 +347,7 @@ public class QueryChecker {
         }
 
         // Cache miss.  Check compliance!
-        UnmodifiableLinearQueryTrace pickedTrace = PICK_TRACE ? pickTrace(queries) : queries;
+        UnmodifiableLinearQueryTrace pickedTrace = PRUNE_TRACE ? pickTrace(queries) : queries;
 //        System.out.println(pickedTrace);
         if (ENABLE_CACHING) {
             System.out.println("\t| Generate decision template:");
@@ -354,7 +356,7 @@ public class QueryChecker {
                 return false;
             }
             for (DecisionTemplate dt : oTemplates.get()) {
-                System.out.println(dt.toString(USE_COLORS));
+                Logger.printStylizedMessage(dt.toString(), ANSI_BLACK + ANSI_YELLOW_BACKGROUND);
                 cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
                         currQuery.paramNames, dt);
             }

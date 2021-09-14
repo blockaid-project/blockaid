@@ -31,7 +31,7 @@ public class PrivacyQueryUnion extends PrivacyQuery {
             int paramCount = (" " + operand.toString() + " ").split("\\?").length - 1;
             List<Object> partParameters = parameters.subList(paramOffset, paramOffset + paramCount);
             List<String> partParamNames = paramNames.subList(paramOffset, paramOffset + paramCount);
-            PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new UnionPartParserResult(operand), schema,
+            PrivacyQuery query = PrivacyQueryFactory.createPrivacyQuery(new ParserResult(operand), schema,
                     partParameters, partParamNames);
             queries.add(query);
 
@@ -117,11 +117,5 @@ public class PrivacyQueryUnion extends PrivacyQuery {
             }
         }
         return bitmap;
-    }
-
-    private static class UnionPartParserResult extends ParserResult {
-        private UnionPartParserResult(SqlNode node) {
-            super(node.toString(), node.getKind(), node, false, false);
-        }
     }
 }

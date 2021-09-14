@@ -3,8 +3,6 @@ package util;
 import java.util.Objects;
 
 public class TerminalColor {
-    public static final boolean USE_COLORS = Objects.equals(System.getProperty("privoxy.use_colors"), "true");
-
     public static final String ANSI_RESET = "\u001B[0m";
     public static final String ANSI_BLACK = "\u001B[30m";
     public static final String ANSI_RED = "\u001B[31m";
@@ -23,11 +21,4 @@ public class TerminalColor {
     public static final String ANSI_PURPLE_BACKGROUND = "\u001B[45m";
     public static final String ANSI_CYAN_BACKGROUND = "\u001B[46m";
     public static final String ANSI_WHITE_BACKGROUND = "\u001B[47m";
-
-    public static void printStylizedMessage(String message, String style) {
-        if (USE_COLORS) {
-            message = style + message + ANSI_RESET;
-        }
-        System.out.println(message);
-    }
 }

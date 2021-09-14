@@ -33,19 +33,6 @@ public class PrivacyQueryFactory {
         ArrayList<String> newParamNames = new ArrayList<>(paramNames);
         result = ExtractParams.perform(result, newParams, newParamNames);
 
-        String queryText = result.getParsedSql();
-        StringBuilder sb = new StringBuilder(); // For building the new query string.
-        for (int pi = 0, si = 0; pi < newParams.size(); ++pi) {
-            // FIXME (zhangwen): HACK-- again, string substitution for '?' is not robust...
-            int nextSi = queryText.indexOf("?", si) + 1;
-            if (nextSi == 0) {
-                throw new RuntimeException("parameter-text mismatch??");
-            }
-            sb.append(queryText, si, nextSi);
-            si = nextSi;
-        }
-        result.setParsedSql(sb.toString());
-
         switch(result.getKind()) {
             case SELECT:
             case ORDER_BY:

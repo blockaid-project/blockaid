@@ -9,7 +9,10 @@ import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import solver.labels.*;
+import util.Logger;
+import util.TerminalColor;
 
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -118,9 +121,18 @@ public class UnsatCoreFormulaBuilder {
         return label2Expr.build();
     }
 
+    // Normalize the values.  For example, we treat false and 0 as the same.
+    private ListMultimap<Object, Expr> makeNormalizedECs(Multimap<Object, Expr> ecs) {
+        ListMultimap<Object, Expr> normalized = ArrayListMultimap.create();
+        for (Object v : ecs.keySet()) {
+            normalized.putAll(Tuple.normalizeValue(v), ecs.get(v));
+        }
+        return normalized;
+    }
+
     private Map<Label, BoolExpr> makeLabeledExprsAll(UnmodifiableLinearQueryTrace trace) {
         QueryTraceEntry lastEntry = trace.getCurrentQuery();
-        ArrayListMultimap<Object, Expr> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
+        ListMultimap<Object, Expr> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
 
         Map<Expr, Operand> expr2Operand = new HashMap<>();
         Map<Label, BoolExpr> label2Expr = new HashMap<>();
@@ -140,17 +152,11 @@ public class UnsatCoreFormulaBuilder {
 
             List<Object> paramValues = e.getQuery().parameters;
             int numParams = paramValues.size();
-            Expr[] paramExprs = new Expr[numParams];
-            for (int i = 0; i < numParams; ++i) {
-                paramExprs[i] = context.mkConst(
-                        // TODO(zhangwen): this naming scheme has to match that in `ParsedPSJ`, which is error-prone.
-                        "!" + qPrefix + "!" + i,
-                        Tuple.getSortFromObject(context, paramValues.get(i)));
-            }
-            Tuple paramConstants = new Tuple(schema, paramExprs);
-
             for (int paramIdx = 0; paramIdx < numParams; ++paramIdx) {
-                Expr paramExpr = paramConstants.get(paramIdx);
+                Expr paramExpr = context.mkConst(
+                        // TODO(zhangwen): this naming scheme has to match that in `ParsedPSJ`, which is error-prone.
+                        "!" + qPrefix + "!" + paramIdx,
+                        Tuple.getSortFromObject(context, paramValues.get(paramIdx)));
                 Object v = paramValues.get(paramIdx);
                 checkState(!expr2Operand.containsKey(paramExpr));
                 expr2Operand.put(paramExpr, new QueryParamOperand(queryIdx, isCurrentQuery, paramIdx));
@@ -197,15 +203,6 @@ public class UnsatCoreFormulaBuilder {
             }
         }
 
-        long startTime = System.currentTimeMillis();
-        removeRedundantExprs(
-                ecs,
-                expr2Operand,
-                pkValuedExprs,
-                label2Expr.values() // At this point, `label2Expr` only contains `ReturnedRowLabel`s.
-        );
-        System.out.println("\t\t| removeRedundantExprs:\t" + (System.currentTimeMillis() - startTime));
-
         for (Map.Entry<String, Object> e : trace.getConstMap().entrySet()) {
             // FIXME(zhangwen): currently assumes that the concrete value of constant is irrelevant.
             // TODO(zhangwen): should put const naming scheme in one place.
@@ -216,9 +213,25 @@ public class UnsatCoreFormulaBuilder {
             ecs.put(value, constExpr);
         }
 
+        // `ecs` has been fully constructed.
+        ecs = makeNormalizedECs(ecs);
+
+//        for (Object value : ecs.keySet()) {
+//            List<Expr> variables = ecs.get(value);
+//            System.out.println(value + ":\t" + variables.size() + "\t" + variables);
+//        }
+
+        long startTime = System.currentTimeMillis();
+        removeRedundantExprs(
+                ecs,
+                expr2Operand,
+                pkValuedExprs,
+                Maps.filterKeys(label2Expr, l -> l.getKind() == Label.Kind.RETURNED_ROW).values()
+        );
+        System.out.println("\t\t| removeRedundantExprs:\t" + (System.currentTimeMillis() - startTime));
+
         for (Object value : ecs.keySet()) {
             List<Expr> variables = ecs.get(value);
-//            System.out.println(ANSI_RED + value + ":\t" + variables.size() + "\t" + variables + ANSI_RESET);
 
             // Generate equalities of the form: variable = value.
             Expr vExpr = Tuple.getExprFromObject(context, value);
@@ -282,7 +295,7 @@ public class UnsatCoreFormulaBuilder {
 
     // Optimization: For two operands that are always equal, remove one of them (from `ecs` & `expr2Operand`);
     // if one operand is a pk-valued expr, and add the other to `pkValuedExprs`.
-    private void removeRedundantExprs(ArrayListMultimap<Object, Expr> ecs,
+    private void removeRedundantExprs(Multimap<Object, Expr> ecs,
                                       Map<Expr, Operand> expr2Operand,
                                       Set<Expr> pkValuedExprs,
                                       Collection<BoolExpr> returnedRowExprs) {
@@ -291,7 +304,7 @@ public class UnsatCoreFormulaBuilder {
 
         for (Object v : ecs.keySet()) {
             HashSet<Expr> redundantExprs = new HashSet<>();
-            List<Expr> variables = ecs.get(v);
+            Collection<Expr> variables = ecs.get(v);
             for (Expr p1 : variables) {
                 Operand o1 = expr2Operand.get(p1);
                 // Only look at labels of the form "query param = returned row attribute".
@@ -317,10 +330,15 @@ public class UnsatCoreFormulaBuilder {
 //                    System.out.println("\t\t| removeRedundant check:\t" + (System.currentTimeMillis() - startMs));
                     if (res == Status.UNSATISFIABLE) {
                         // Keep the query param, toss the returned row attribute.
+//                        Logger.printStylizedMessage(o1 + " = " + o2, TerminalColor.ANSI_RED_BACKGROUND);
                         redundantExprs.add(p2);
                         if (pkValuedExprs.contains(p2)) {
                             pkValuedExprs.add(p1);
                         }
+                    } else {
+                        checkState(res == Status.SATISFIABLE,
+                                "removeRedundant solver failure: " + res);
+//                        Logger.printStylizedMessage(o1 + " = " + o2, TerminalColor.ANSI_GREEN_BACKGROUND);
                     }
                 }
             }

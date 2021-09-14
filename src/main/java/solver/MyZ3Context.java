@@ -267,37 +267,28 @@ public class MyZ3Context extends Context {
         return customSorts.getValueForExpr(e);
     }
 
-    @Override
-    public BoolExpr mkBoolConst(String s) {
-        BoolExpr c = super.mkBoolConst(s);
+    private <T extends Expr> T trackConstIfNecessary(T c) {
         if (isTrackingConsts && !untrackedConsts.contains(c)) {
             trackedConsts.add(c);
         } else {
             untrackedConsts.add(c);
         }
         return c;
+    }
+
+    @Override
+    public BoolExpr mkBoolConst(String s) {
+        return trackConstIfNecessary(super.mkBoolConst(s));
     }
 
     @Override
     public Expr mkConst(String s, Sort sort) {
-        Expr c = super.mkConst(s, sort);
-        if (isTrackingConsts && !untrackedConsts.contains(c)) {
-            trackedConsts.add(c);
-        } else {
-            untrackedConsts.add(c);
-        }
-        return c;
+        return trackConstIfNecessary(super.mkConst(s, sort));
     }
 
     @Override
     public Expr mkFreshConst(String s, Sort sort) {
-        Expr c = super.mkFreshConst(s, sort);
-        if (isTrackingConsts && !untrackedConsts.contains(c)) {
-            trackedConsts.add(c);
-        } else {
-            untrackedConsts.add(c);
-        }
-        return c;
+        return trackConstIfNecessary(super.mkFreshConst(s, sort));
     }
 
     @Override
