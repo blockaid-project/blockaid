@@ -1,5 +1,6 @@
 package sql;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import solver.Query;
 import solver.Schema;
@@ -8,8 +9,8 @@ import java.util.*;
 
 public abstract class PrivacyQuery {
     public final ParserResult parsedSql;
-    public final List<Object> parameters;
-    public final List<String> paramNames;
+    public final ImmutableList<Object> parameters;
+    public final ImmutableList<String> paramNames;
 
     /**
      * For making wrapper.  Doesn't copy the privacy query.
@@ -30,8 +31,8 @@ public abstract class PrivacyQuery {
     public PrivacyQuery(ParserResult parsedSql, List<Object> parameters, List<String> paramNames)
     {
         this.parsedSql = parsedSql;
-        this.parameters = parameters;
-        this.paramNames = paramNames;
+        this.parameters = ImmutableList.copyOf(parameters);
+        this.paramNames = ImmutableList.copyOf(paramNames);
     }
 
     @Override
@@ -68,4 +69,3 @@ public abstract class PrivacyQuery {
     abstract public Query getSolverQuery(Schema schema, String paramPrefix, int offset);
     abstract public List<Boolean> getResultBitmap();
 }
-

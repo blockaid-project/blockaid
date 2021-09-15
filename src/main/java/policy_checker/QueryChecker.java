@@ -531,17 +531,10 @@ public class QueryChecker {
 
         public DecisionCache(Schema schema, ArrayList<Policy> policySet) {
             switch (PRECHECK_SETTING) {
-                case DISABLED:
-                    this.preapprovedSets = null;
-                    break;
-                case COARSE:
-                    this.preapprovedSets = buildPreapprovedSetsCoarse(policySet);
-                    break;
-                case FULL:
-                    this.preapprovedSets = buildPreapprovedSetsFull(schema, policySet);
-                    break;
-                default:
-                    throw new IllegalStateException("invalid precheck setting: " + PRECHECK_SETTING);
+                case DISABLED -> this.preapprovedSets = null;
+                case COARSE -> this.preapprovedSets = buildPreapprovedSetsCoarse(policySet);
+                case FULL -> this.preapprovedSets = buildPreapprovedSetsFull(schema, policySet);
+                default -> throw new IllegalStateException("invalid precheck setting: " + PRECHECK_SETTING);
             }
             this.policyDecisionCacheFine = new TraceCache();
         }

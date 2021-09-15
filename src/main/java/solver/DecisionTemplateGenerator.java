@@ -64,7 +64,7 @@ public class DecisionTemplateGenerator {
 
         MyZ3Context context = schema.getContext();
         ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
-                .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
+                .map(rrl -> new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()))
                 .collect(ImmutableList.toImmutableList());
         SubQueryTrace sqt = trace.getSubTrace(toKeep);
 
@@ -141,33 +141,34 @@ public class DecisionTemplateGenerator {
                 if (qpo.isCurrentQuery()) {
                     return qpo;
                 }
-                int oldQueryIdx = sqt.getQueryIdxBackMap().get(qpo.getQueryIdx());
-                return new QueryParamOperand(oldQueryIdx, false, qpo.getParamIdx());
+                int oldQueryIdx = sqt.getQueryIdxBackMap().get(qpo.queryIdx());
+                return new QueryParamOperand(oldQueryIdx, false, qpo.paramIdx());
             case RETURNED_ROW_ATTR:
                 ReturnedRowFieldOperand rrfo = (ReturnedRowFieldOperand) o;
                 QueryTupleIdxPair old = sqt.getBackMap().get(
-                        new QueryTupleIdxPair(rrfo.getQueryIdx(), rrfo.getReturnedRowIdx()));
-                return new ReturnedRowFieldOperand(old.getQueryIdx(), old.getTupleIdx(), rrfo.getColIdx());
+                        new QueryTupleIdxPair(rrfo.queryIdx(), rrfo.returnedRowIdx()));
+                return new ReturnedRowFieldOperand(old.queryIdx(), old.tupleIdx(), rrfo.colIdx());
         }
-        checkArgument(false, "invalid operand kind: " + o.getKind());
-        return null;
+        throw new IllegalArgumentException("invalid operand kind: " + o.getKind());
     }
 
     public static Label backMapLabel(Label l, SubQueryTrace sqt) {
         switch (l.getKind()) {
-            case EQUALITY:
+            case EQUALITY -> {
                 EqualityLabel el = (EqualityLabel) l;
-                return new EqualityLabel(backMapOperand(el.getLhs(), sqt), backMapOperand(el.getRhs(), sqt));
-            case LESS_THAN:
+                return new EqualityLabel(backMapOperand(el.lhs(), sqt), backMapOperand(el.rhs(), sqt));
+            }
+            case LESS_THAN -> {
                 LessThanLabel ltl = (LessThanLabel) l;
-                return new LessThanLabel(backMapOperand(ltl.getLhs(), sqt), backMapOperand(ltl.getRhs(), sqt));
-            case RETURNED_ROW:
+                return new LessThanLabel(backMapOperand(ltl.lhs(), sqt), backMapOperand(ltl.rhs(), sqt));
+            }
+            case RETURNED_ROW -> {
                 ReturnedRowLabel rrl = (ReturnedRowLabel) l;
-                QueryTupleIdxPair old = sqt.getBackMap().get(new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()));
-                return new ReturnedRowLabel(old.getQueryIdx(), old.getTupleIdx());
+                QueryTupleIdxPair old = sqt.getBackMap().get(new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()));
+                return new ReturnedRowLabel(old.queryIdx(), old.tupleIdx());
+            }
         }
-        checkArgument(false, "invalid label kind: " + l.getKind());
-        return null;
+        throw new IllegalArgumentException("invalid label kind: " + l.getKind());
     }
 
     private DecisionTemplate buildDecisionTemplate(UnmodifiableLinearQueryTrace trace,
@@ -182,7 +183,7 @@ public class DecisionTemplateGenerator {
             }
 
             EqualityLabel el = (EqualityLabel) l;
-            uf.union(el.getLhs(), el.getRhs());
+            uf.union(el.lhs(), el.rhs());
         }
 
         // If an equivalence class is equal to a value, attach the value as data in the union-find.
@@ -219,12 +220,12 @@ public class DecisionTemplateGenerator {
                 continue;
             }
             ReturnedRowLabel rrl = (ReturnedRowLabel) l;
-            int queryIdx = rrl.getQueryIdx();
+            int queryIdx = rrl.queryIdx();
 
             Map<Integer, DecisionTemplate.EntryBuilder> rowEBs =
                     queryIdx2rowEBs.computeIfAbsent(queryIdx, k -> new HashMap<>());
 
-            int rowIdx = rrl.getRowIdx();
+            int rowIdx = rrl.rowIdx();
             checkState(!rowEBs.containsKey(rowIdx));
             DecisionTemplate.EntryBuilder eb = new DecisionTemplate.EntryBuilder(allTraceEntries.get(queryIdx), false);
             rowEBs.put(rowIdx, eb);
@@ -249,7 +250,7 @@ public class DecisionTemplateGenerator {
 
             switch (o.getKind()) {
                 case CONTEXT_CONSTANT:
-                    String constName = ((ContextConstantOperand) o).getName();
+                    String constName = ((ContextConstantOperand) o).name();
                     if (datum == null) {
                         constName2ECBuilder.put(constName, rootIndex);
                     } else {
@@ -261,29 +262,29 @@ public class DecisionTemplateGenerator {
                     // Set param for all entry builder(s) for this query.
                     Collection<DecisionTemplate.EntryBuilder> ebs =
                             qpo.isCurrentQuery() ? List.of(currEB) :
-                                    queryIdx2rowEBs.getOrDefault(qpo.getQueryIdx(), Collections.emptyMap())
+                                    queryIdx2rowEBs.getOrDefault(qpo.queryIdx(), Collections.emptyMap())
                                             .values();
                     // If the query index is not in `queryIdx2rowEBs`, the query is irrelevant and so we ignore.
                     ebs.forEach(
                             datum == null ?
-                                    eb -> eb.setParamEC(qpo.getParamIdx(), rootIndex) :
-                                    eb -> eb.setParamValue(qpo.getParamIdx(), datum)
+                                    eb -> eb.setParamEC(qpo.paramIdx(), rootIndex) :
+                                    eb -> eb.setParamValue(qpo.paramIdx(), datum)
                     );
                     break;
                 case RETURNED_ROW_ATTR:
                     ReturnedRowFieldOperand rrfo = (ReturnedRowFieldOperand) o;
-                    Map<Integer, DecisionTemplate.EntryBuilder> rowEBs = queryIdx2rowEBs.get(rrfo.getQueryIdx());
+                    Map<Integer, DecisionTemplate.EntryBuilder> rowEBs = queryIdx2rowEBs.get(rrfo.queryIdx());
                     if (rowEBs == null) { // This query is irrelevant.
                         break;
                     }
-                    DecisionTemplate.EntryBuilder eb = rowEBs.get(rrfo.getReturnedRowIdx());
+                    DecisionTemplate.EntryBuilder eb = rowEBs.get(rrfo.returnedRowIdx());
                     if (eb == null) { // This returned row is irrelevant.
                         break;
                     }
                     if (datum == null) {
-                        eb.setRowAttrEC(rrfo.getColIdx(), rootIndex);
+                        eb.setRowAttrEC(rrfo.colIdx(), rootIndex);
                     } else {
-                        eb.setRowAttrValue(rrfo.getColIdx(), datum);
+                        eb.setRowAttrValue(rrfo.colIdx(), datum);
                     }
                     break;
                 default:
@@ -297,7 +298,7 @@ public class DecisionTemplateGenerator {
                 continue;
             }
             LessThanLabel ltl = (LessThanLabel) l;
-            int lhsIndex = root2Index.get(uf.find(ltl.getLhs())), rhsIndex = root2Index.get(uf.find(ltl.getRhs()));
+            int lhsIndex = root2Index.get(uf.find(ltl.lhs())), rhsIndex = root2Index.get(uf.find(ltl.rhs()));
             lts.add(new DecisionTemplate.LessThan(lhsIndex, rhsIndex));
         }
 

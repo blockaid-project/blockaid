@@ -11,27 +11,9 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TraceCache {
-    private static class CacheKey {
-        private final String sql;
-        private final ImmutableList<String> paramNames;
-
-        public CacheKey(String sql, Iterable<String> paramNames) {
-            this.sql = sql;
-            this.paramNames = ImmutableList.copyOf(paramNames);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            CacheKey cacheKey = (CacheKey) o;
-            return Objects.equals(sql, cacheKey.sql) &&
-                    Objects.equals(paramNames, cacheKey.paramNames);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(sql, paramNames);
+    private record CacheKey(String sql, ImmutableList<String> paramNames) {
+        public CacheKey(String sql, Collection<String> paramNames) {
+            this(sql, ImmutableList.copyOf(paramNames));
         }
     }
 

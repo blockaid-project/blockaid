@@ -100,7 +100,7 @@ public class ReturnedRowUnsatCoreEnumerator {
                                                 Set<ReturnedRowLabel> initialRRCore, int boundSlack) {
         SubQueryTrace subTrace = trace.getSubTrace(
                 initialRRCore.stream()
-                        .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
+                        .map(rrl -> new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()))
                         .collect(ImmutableList.toImmutableList())
         );
 

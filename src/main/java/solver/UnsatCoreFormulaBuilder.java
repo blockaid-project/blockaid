@@ -321,7 +321,7 @@ public class UnsatCoreFormulaBuilder {
                     if (o2.getKind() != Operand.Kind.RETURNED_ROW_ATTR) {
                         continue;
                     }
-                    if (((ReturnedRowFieldOperand) o2).getQueryIdx() != qpo1.getQueryIdx()) {
+                    if (((ReturnedRowFieldOperand) o2).queryIdx() != qpo1.queryIdx()) {
                         continue;
                     }
 

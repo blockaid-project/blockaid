@@ -27,8 +27,8 @@ public class SubQueryTrace extends UnmodifiableLinearQueryTrace {
 
         HashMap<Integer, Integer> queryIdxBackMap = new HashMap<>();
         for (Map.Entry<QueryTupleIdxPair, QueryTupleIdxPair> e : backMap.entrySet()) {
-            int oldQueryIdx = e.getValue().getQueryIdx();
-            Integer original = queryIdxBackMap.putIfAbsent(e.getKey().getQueryIdx(), oldQueryIdx);
+            int oldQueryIdx = e.getValue().queryIdx();
+            Integer original = queryIdxBackMap.putIfAbsent(e.getKey().queryIdx(), oldQueryIdx);
             if (original != null) {
                 checkArgument(original == oldQueryIdx);
             }

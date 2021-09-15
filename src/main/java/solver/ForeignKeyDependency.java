@@ -9,12 +9,8 @@ import java.util.Objects;
 
 import static com.google.common.base.Preconditions.*;
 
-public class ForeignKeyDependency implements Dependency {
-    private final String fromRelation;
-    private final String fromColumn;
-    private final String toRelation;
-    private final String toColumn;
-
+public record ForeignKeyDependency(String fromRelation, String fromColumn,
+                                   String toRelation, String toColumn) implements Dependency {
     public ForeignKeyDependency(String fromRelation, String fromColumn, String toRelation, String toColumn) {
         this.fromRelation = checkNotNull(fromRelation);
         this.fromColumn = checkNotNull(fromColumn);
@@ -34,9 +30,10 @@ public class ForeignKeyDependency implements Dependency {
             protected Tuple headSelector(Tuple... tuples) {
                 return new Tuple(getSchema(), tuples[0].get(fromIndex));
             }
+
             @Override
             protected Sort[] headTypeSelector(Sort[]... types) {
-                return new Sort[] { types[0][fromIndex] };
+                return new Sort[]{types[0][fromIndex]};
             }
         };
         PSJ selectToQuery = new PSJ(schema, Collections.singletonList(toRelation)) {
@@ -44,9 +41,10 @@ public class ForeignKeyDependency implements Dependency {
             protected Tuple headSelector(Tuple... tuples) {
                 return new Tuple(getSchema(), tuples[0].get(toIndex));
             }
+
             @Override
             protected Sort[] headTypeSelector(Sort[]... types) {
-                return new Sort[] { types[0][toIndex] };
+                return new Sort[]{types[0][toIndex]};
             }
         };
         return selectFromQuery.apply(instance).isContainedInExpr(selectToQuery.apply(instance));
@@ -60,52 +58,12 @@ public class ForeignKeyDependency implements Dependency {
         );
     }
 
-    public String getFromRelation() {
-        return fromRelation;
-    }
-
     @Override
     public List<String> getFromRelations() {
         return Collections.singletonList(fromRelation);
     }
-
-    public String getFromColumn() {
-        return fromColumn;
-    }
-
-    public String getToRelation() {
-        return toRelation;
-    }
-
     @Override
     public List<String> getToRelations() {
         return Collections.singletonList(toRelation);
-    }
-
-    public String getToColumn() {
-        return toColumn;
-    }
-
-    @Override
-    public String toString() {
-        return "ForeignKeyDependency{" +
-                "fromRelation='" + fromRelation + '\'' +
-                ", fromColumn='" + fromColumn + '\'' +
-                ", toRelation='" + toRelation + '\'' +
-                ", toColumn='" + toColumn + '\'' +
-                '}';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ForeignKeyDependency that = (ForeignKeyDependency) o;
-        return fromRelation.equals(that.fromRelation) && fromColumn.equals(that.fromColumn) && toRelation.equals(that.toRelation) && toColumn.equals(that.toColumn);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(fromRelation, fromColumn, toRelation, toColumn);
     }
 }

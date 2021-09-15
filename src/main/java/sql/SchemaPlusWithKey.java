@@ -53,8 +53,8 @@ public class SchemaPlusWithKey {
         }
         // Only goes one level deep -- doesn't add columns that are foreign key to foreign key to PK, etc.
         for (ForeignKeyDependency fk : foreignKeys) {
-            String from = fk.getFromRelation() + "." + fk.getFromColumn(),
-                    to = fk.getToRelation() + "." + fk.getToColumn();
+            String from = fk.fromRelation() + "." + fk.fromColumn(),
+                    to = fk.toRelation() + "." + fk.toColumn();
             if (pkValuedColumns.contains(to)) {
                 pkValuedColumns.add(from);
                 fkColsBuilder.add(from);

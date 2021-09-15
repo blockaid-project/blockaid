@@ -30,8 +30,8 @@ public abstract class UnmodifiableLinearQueryTrace {
         // Maps query index to tuple indices.
         Multimap<Integer, Integer> picked = pickedQueryTuples.stream().collect(
                 ImmutableSetMultimap.toImmutableSetMultimap(
-                        QueryTupleIdxPair::getQueryIdx,
-                        QueryTupleIdxPair::getTupleIdx
+                        QueryTupleIdxPair::queryIdx,
+                        QueryTupleIdxPair::tupleIdx
                 )
         );
         return getSubTrace(picked);
@@ -91,10 +91,9 @@ public abstract class UnmodifiableLinearQueryTrace {
             int numColumns = tuples.get(0).size();
 
             PrivacyQuery pq = qte.getQuery();
-            if (!(pq instanceof PrivacyQuerySelect)) {
+            if (!(pq instanceof PrivacyQuerySelect pqs)) {
                 continue;
             }
-            PrivacyQuerySelect pqs = (PrivacyQuerySelect) pq;
 
             // Maps table name to the column index of its primary key, if returned by the query.
             List<String[]> columns = new ArrayList<>();
@@ -152,28 +151,7 @@ public abstract class UnmodifiableLinearQueryTrace {
         return knownRows;
     }
 
-    private static class TableColumnPair {
-        public final String table;
-        public final Object value;
-
-        public TableColumnPair(String table, Object value) {
-            this.table = table;
-            this.value = value;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TableColumnPair that = (TableColumnPair) o;
-            return table.equals(that.table) && value.equals(that.value);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(table, value);
-        }
-    }
+    private record TableColumnPair(String table, Object value) {}
 
     @Override
     public String toString() {
