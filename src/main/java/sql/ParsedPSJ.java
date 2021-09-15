@@ -2,6 +2,7 @@ package sql;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
 import planner.PrivacyColumn;
@@ -119,16 +120,16 @@ public class ParsedPSJ {
                         throw new RuntimeException("not supported: relation alias");
                     }
                     for (String relation : relations) {
-                        for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
-                            addProjectColumn((relation + "." + column.name).toUpperCase());
-                        }
+                        schema.getColumnNames(relation).forEach(col -> {
+                            addProjectColumn((relation + "." + col).toUpperCase());
+                        });
                     }
                 } else { // SELECT table.* FROM ...
                     String quantifier = identifier.names.get(identifier.names.size() - 2).toUpperCase();
                     String relation = relations.get(relAliasToIdx.get(quantifier));
-                    for (PrivacyColumn column : ((PrivacyTable) schema.schema.getTable(relation.toLowerCase())).getColumns()) {
-                        addProjectColumn((quantifier + "." + column.name).toUpperCase());
-                    }
+                    schema.getColumnNames(relation).forEach(col -> {
+                        addProjectColumn((quantifier + "." + col).toUpperCase());
+                    });
                 }
             } else {
                 addProjectColumn(quantifyName(identifier));

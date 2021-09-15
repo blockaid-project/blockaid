@@ -17,8 +17,6 @@
         <calcite.version>1.27.0</calcite.version>
         <avatica.version>1.10.0</avatica.version>
         <assertj.version>2.3.0</assertj.version>
-        <!-- check if there is a better way -->
-        <project.rootdir>${basedir}</project.rootdir>
 
         <!-- platform encoding override -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -117,23 +115,11 @@
             <artifactId>avatica</artifactId>
             <version>1.18.0</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.calcite/calcite-avatica -->
-        <dependency>
-            <groupId>org.apache.calcite</groupId>
-            <artifactId>calcite-avatica</artifactId>
-            <version>1.6.0</version>
-        </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.calcite.avatica/avatica-server -->
         <dependency>
             <groupId>org.apache.calcite.avatica</groupId>
             <artifactId>avatica-server</artifactId>
             <version>1.18.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.sat4j/org.sat4j.core -->
-        <dependency>
-            <groupId>org.sat4j</groupId>
-            <artifactId>org.sat4j.core</artifactId>
-            <version>2.3.1</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/commons-logging/commons-logging -->
         <dependency>

@@ -3,12 +3,20 @@ package sql;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Table;
+import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import solver.ForeignKeyDependency;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -22,12 +30,16 @@ public class SchemaPlusWithKey {
     // Every column that stores values of a primary key type (e.g., a PK column, or a foreign key to a PK column).
     private final ImmutableSet<String> pkValuedColumns;
 
+    private static final SqlTypeFactoryImpl SQL_TYPE_FACTORY = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
+    private final Map<String, RelDataType> table2Type;
+
     public SchemaPlusWithKey(SchemaPlus schema,
                              ImmutableMap<String, ImmutableList<String>> primaryKeys,
                              ImmutableSet<ForeignKeyDependency> foreignKeys) {
         this.schema = checkNotNull(schema);
         this.primaryKeys = checkNotNull(primaryKeys);
         this.foreignKeys = checkNotNull(foreignKeys);
+        this.table2Type = new HashMap<>();
 
         HashSet<String> pkValuedColumns = new HashSet<>();
         ImmutableSet.Builder<String> fkColsBuilder = new ImmutableSet.Builder<>();
@@ -70,5 +82,17 @@ public class SchemaPlusWithKey {
         return foreignKeys.contains(new ForeignKeyDependency(
                 fromTable.toUpperCase(), fromColumn.toUpperCase(), toTable.toUpperCase(), toColumn.toUpperCase()
         ));
+    }
+
+    public RelDataType getTypeForTable(String tableName) {
+        // FIXME(zhangwen): maybe fix the upper- and lower-case.
+        return table2Type.computeIfAbsent(tableName.toLowerCase(), t -> {
+            Table table = Objects.requireNonNull(schema.getTable(t));
+            return table.getRowType(SQL_TYPE_FACTORY);
+        });
+    }
+
+    public Stream<String> getColumnNames(String tableName) {
+        return getTypeForTable(tableName).getFieldList().stream().map(RelDataTypeField::getName);
     }
 }

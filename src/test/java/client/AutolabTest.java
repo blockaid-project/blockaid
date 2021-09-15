@@ -1,15 +1,32 @@
 package client;
 
 import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.rel.rules.CalcMergeRule;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.parser.SqlAbstractParserImpl;
+import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.parser.SqlParserImplFactory;
+import org.apache.calcite.sql.parser.impl.SqlParserImpl;
+import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
+import org.apache.calcite.util.SourceStringReader;
 import org.apache.commons.io.FileUtils;
 import org.flywaydb.core.Flyway;
+import org.h2.command.Prepared;
 import org.junit.Before;
 import org.junit.Test;
+import org.apache.calcite.adapter.jdbc.JdbcSchema;
 
 import java.io.File;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Properties;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -21,37 +38,12 @@ public class AutolabTest {
     private static final String dbPassword = "12345678";
     private static final String resourcePath = "src/test/resources/AutolabTest";
 
-    private static final String setupDbDir = checkNotNull(System.getenv("AUTOLAB_SETUP_PATH"));
-    private static final String setupDbPath = setupDbDir + "/db";
-    private static final String setupDbUrl = "jdbc:h2:" + setupDbPath;
-
     private String proxyUrl;
 
     @Before
     public void setupDb() throws Exception {
-        {
-            File dir = new File(setupDbDir);
-            FileUtils.forceDelete(dir);
-            FileUtils.forceMkdir(dir);
-        }
-
-        Flyway flyway = new Flyway();
-        flyway.setDataSource(setupDbUrl, dbUsername, dbPassword);
-        flyway.migrate();
-
-        Class.forName("org.h2.Driver");
-        try (Connection conn = DriverManager.getConnection(setupDbUrl, dbUsername, dbPassword)) {
-            try (Statement stmt = conn.createStatement()) {
-                String sql = "INSERT INTO data_sources VALUES(1, 'MYSQL', '" + dbUrl + "',1,0,'CANONICAL','JDBC',NULL,NULL,NULL);\n" +
-                        "INSERT INTO jdbc_sources VALUES(1, '" + dbUsername + "','" + dbPassword + "');\n" +
-                        "UPDATE ds_sets SET default_datasource_id = 1 WHERE id = 1;\n";
-                stmt.execute(sql);
-            }
-        }
-
-        proxyUrl = String.format("jdbc:privacy:thin:%s,%s,%s,%s",
+        proxyUrl = String.format("jdbc:privacy:thin:%s,%s,%s",
                 resourcePath,
-                setupDbUrl,
                 dbUrl,
                 dbDatabaseName
         );
@@ -61,6 +53,7 @@ public class AutolabTest {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
             while (numRounds-- > 0) {
+//                long startMs = System.currentTimeMillis();
                 try (Statement stmt = conn.createStatement()) {
                     stmt.execute("SET @_MY_UID = " + userId);
                 }
@@ -87,6 +80,7 @@ public class AutolabTest {
                 try (Statement stmt = conn.createStatement()) {
                     stmt.execute("SET @TRACE = null");
                 }
+//                System.out.println(System.currentTimeMillis() - startMs);
             }
         }
     }
@@ -359,7 +353,54 @@ public class AutolabTest {
     }
 
     @Test
-    public void testProductionShowQuiz() throws ClassNotFoundException, SQLException {
+    public void testProductionAllCourses() throws ClassNotFoundException, SQLException {
+        String[] queries = new String[]{
+                "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  1 AS one FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = 27000000 LIMIT 1",
+                "SELECT `courses`.`id`, `courses`.`name`, `courses`.`display_name`, `courses`.`start_date`, `courses`.`end_date`, `courses`.`disabled`, `courses`.`semester` FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = 27000000 ORDER BY display_name ASC",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000000 LIMIT 1",
+                "SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
+                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000000 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000001 LIMIT 1",
+                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000001 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000002 LIMIT 1",
+                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000002 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+        };
+        testQueries(queries, 27000000, 10000);
+    }
+
+    @Test
+    public void testProductionShowQuizPartial() throws ClassNotFoundException, SQLException {
+        String[] queries = new String[]{
+                "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '2021-09-12 23:14:07'",
+                "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'Course0' LIMIT 1",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000000 LIMIT 1",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 10000000 AND `courses`.`disabled` = 0 LIMIT 1",
+                "SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
+                "SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000000 AND `assessments`.`name` = 'quiz4' LIMIT 1",
+                "SELECT COUNT(`submissions`.`id`) FROM `submissions` WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000",
+                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`id` = 5000016",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`id` = 9000000 LIMIT 1",
+                "SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`id` = 5000016 LIMIT 1",
+                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 10000000 LIMIT 1",
+                "SELECT  `extensions`.* FROM `extensions` WHERE `extensions`.`course_user_datum_id` = 9000000 AND `extensions`.`assessment_id` = 5000016 LIMIT 1",
+                "SELECT  `extensions`.* FROM `extensions` WHERE `extensions`.`assessment_id` = 5000016 AND `extensions`.`course_user_datum_id` = 9000000 LIMIT 1",
+                "SELECT `submissions`.`id`, `submissions`.`version`, `submissions`.`course_user_datum_id`, `submissions`.`assessment_id`, `submissions`.`filename`, `submissions`.`created_at`, `submissions`.`updated_at`, `submissions`.`notes`, `submissions`.`mime_type`, `submissions`.`special_type`, `submissions`.`submitted_by_id`, `submissions`.`autoresult`, `submissions`.`detected_mime_type`, `submissions`.`submitter_ip`, `submissions`.`tweak_id`, `submissions`.`ignored`, `submissions`.`dave`, `submissions`.`settings`, `submissions`.`embedded_quiz_form_answer`, `submissions`.`submitted_by_app_id`, submissions.id AS submission_id, problems.id AS problem_id, scores.id AS score_id, scores.* FROM `submissions` JOIN problems ON submissions.assessment_id = problems.assessment_id JOIN scores ON (submissions.id = scores.submission_id AND problems.id = scores.problem_id AND scores.released = 1) WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000 ORDER BY version DESC",
+                "SELECT  `scoreboards`.* FROM `scoreboards` WHERE `scoreboards`.`assessment_id` = 5000016 LIMIT 1",
+                "SELECT COUNT(*) FROM `submissions` WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000",
+                "SELECT `attachments`.* FROM `attachments` WHERE `attachments`.`assessment_id` = 5000016",
+                "SELECT  `submissions`.`id`, `submissions`.`version`, `submissions`.`course_user_datum_id`, `submissions`.`assessment_id`, `submissions`.`filename`, `submissions`.`created_at`, `submissions`.`updated_at`, `submissions`.`notes`, `submissions`.`mime_type`, `submissions`.`special_type`, `submissions`.`submitted_by_id`, `submissions`.`autoresult`, `submissions`.`detected_mime_type`, `submissions`.`submitter_ip`, `submissions`.`tweak_id`, `submissions`.`ignored`, `submissions`.`dave`, `submissions`.`settings`, `submissions`.`embedded_quiz_form_answer`, `submissions`.`submitted_by_app_id` FROM `submissions` WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000 ORDER BY version DESC LIMIT 3",
+                "SELECT `problems`.* FROM `problems` WHERE `problems`.`assessment_id` = 5000016",
+                "SELECT `announcements`.* FROM `announcements` WHERE `announcements`.`persistent` = 1 AND (`announcements`.`course_id` = 10000000 OR `announcements`.`system` = 1)",
+        };
+        testQueries(queries, 27000000, 1);
+    }
+
+    @Test
+    public void testProductionShowGradebook() throws ClassNotFoundException, SQLException {
         String[] queries = new String[]{
                 "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",
                 "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'Course0' LIMIT 1",
@@ -372,8 +413,59 @@ public class AutolabTest {
                 "SELECT `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`course_id` = 10000000",
                 "SELECT `assessment_user_data`.* FROM `assessment_user_data` INNER JOIN `assessments` ON `assessment_user_data`.`assessment_id` = `assessments`.`id` WHERE `assessments`.`course_id` = 10000000",
                 "SELECT `submissions`.* FROM `submissions` INNER JOIN `assessment_user_data` ON `assessment_user_data`.`latest_submission_id` = `submissions`.`id` INNER JOIN `course_user_data` ON `course_user_data`.`id` = `submissions`.`course_user_datum_id` INNER JOIN `assessments` ON `submissions`.`assessment_id` = `assessments`.`id` WHERE `assessments`.`course_id` = 10000000 AND `submissions`.`assessment_id` = 5000016",
-                "CHECK CACHE READ foo"
         };
         testQueries(queries, 27000050, 1);
+    }
+
+    @Test
+    public void testFetchSchema() throws SQLException, SqlParseException {
+        Properties info = new Properties();
+        info.put("model",
+                "inline:"
+                        + "{\n"
+                        + "  version: '1.0',\n"
+                        + "  defaultSchema: 'MAIN',\n"
+                        + "  schemas: [\n"
+                        + "     {\n"
+                        + "       type: 'jdbc',\n"
+                        + "       name: 'MAIN',\n"
+                        + "       jdbcDriver: 'com.mysql.jdbc.Driver',\n"
+                        + "       jdbcUrl: '" + dbUrl + "',\n"
+                        + "       jdbcUser: '" + dbUsername + "',\n"
+                        + "       jdbcPassword: '" + dbPassword + "',\n"
+                        + "       jdbcCatalog: null,\n"
+                        + "       jdbcSchema: null\n"
+                        + "     }\n"
+                        + "  ]\n"
+                        + "}");
+        try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
+            CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
+//            SqlParserImplFactory factory = calciteConn.config().parserFactory(SqlParserImplFactory.class, null);
+//            SqlParser parser = SqlParser.create("SELECT * FROM users",
+//                    SqlParser.config().withParserFactory(calciteConn.config().parserFactory(SqlParserImplFactory.class, null)));
+//            System.out.println(parser.parseQuery());
+//            SqlAbstractParserImpl parser = factory.getParser(new SourceStringReader("SELECT * FROM users"));
+//            parser.parse
+//            SchemaPlus rootSchema = calciteConn.getRootSchema();
+//            JdbcSchema dbSchema = rootSchema.getSubSchema("MAIN").unwrap(JdbcSchema.class);
+//            RelDataType rdt = rootSchema.getSubSchema("MAIN").getTable("watchlist_instances").getRowType(
+//                    new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT)
+//            );
+//            List<RelDataTypeField> fields = rdt.getFieldList();
+//            System.out.println(fields);
+
+//            SqlParser.Config parserConfig = SqlParser.config();
+//            dbSchema.dialect.configureParser(parserConfig);
+//            SqlParser parser = SqlParser.create("SELECT 1 AS ONE FROM users", parserConfig);
+//            System.out.println(parser.parseQuery());
+            try (PreparedStatement stmt = calciteConn.prepareStatement("SELECT `users`.* FROM `users`")) {
+                stmt.execute();
+                try (ResultSet rs = stmt.getResultSet()) {
+                    while (rs.next()) {
+                        System.out.println(rs.getInt(0));
+                    }
+                }
+            }
+        }
     }
 }

@@ -4,7 +4,6 @@ import com.google.common.collect.ListMultimap;
 import com.microsoft.z3.*;
 import sql.SchemaPlusWithKey;
 
-import java.sql.Types;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -153,31 +152,6 @@ public class Schema {
         List<Column> columns = relations.get(relationName.toUpperCase());
         return new Tuple(this, columns.stream().map(column ->
                 context.mkConst(prefix + "_" + relationName + "!" + column.name, column.type)));
-    }
-
-    public static Sort getSortFromSqlType(MyZ3Context context, int type) {
-        switch (type) {
-            case Types.INTEGER:
-            case Types.BIGINT:
-            case Types.TINYINT:
-                return context.getCustomIntSort();
-            case Types.REAL:
-            case Types.DOUBLE:
-                return context.getCustomRealSort();
-            case Types.BOOLEAN:
-                return context.getBoolSort();
-            case Types.VARCHAR:
-            case Types.LONGVARCHAR:
-            case Types.CLOB:
-            case Types.LONGVARBINARY:
-                return context.getCustomStringSort();
-            case Types.TIMESTAMP:
-                return context.getTimestampSort();
-            case Types.DATE:
-                return context.getDateSort();
-            default:
-                throw new UnsupportedOperationException("bad column type: " + type);
-        }
     }
 
     public SchemaPlusWithKey getRawSchema() {

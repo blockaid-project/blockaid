@@ -12,6 +12,7 @@ import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
+import util.Logger;
 import util.UnionFind;
 
 import java.util.*;
@@ -38,86 +39,96 @@ public class DecisionTemplateGenerator {
     // Returns empty if formula is not determined UNSAT.
     public Optional<Collection<DecisionTemplate>> generate(UnmodifiableLinearQueryTrace trace) {
         // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
-        Optional<Set<ReturnedRowLabel>> oCore = rruce.getOne(trace);
+        Optional<Set<ReturnedRowLabel>> oCore = rruce.getInitialRRCore(trace);
         if (oCore.isEmpty()) {
             return Optional.empty();
         }
-        Collection<Collection<ReturnedRowLabel>> rrCores = List.of(oCore.get());
-        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCores + ANSI_RESET);
+
+        for (int slack = 1; ; ++slack) {
+            Optional<DecisionTemplate> odt = generate(trace, oCore.get(), slack);
+            if (odt.isPresent()) {
+                return Optional.of(List.of(odt.get()));
+            }
+        }
+    }
+
+    private Optional<DecisionTemplate> generate(UnmodifiableLinearQueryTrace trace,
+                                                            Set<ReturnedRowLabel> initialRRCore,
+                                                            int boundSlack) {
+        Set<ReturnedRowLabel> rrCore = rruce.minimizeRRCore(trace, initialRRCore, boundSlack);
+        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + initialRRCore + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         // Reusing the bounded formula builder to avoid making the bounded formula again.
         UnsatCoreFormulaBuilder boundedUcBuilder = rruce.getFormulaBuilder();
 
         MyZ3Context context = schema.getContext();
-        ArrayList<DecisionTemplate> dts = new ArrayList<>();
-        for (Collection<ReturnedRowLabel> rrCore : rrCores) {
-            ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
-                    .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
-                    .collect(ImmutableList.toImmutableList());
-            SubQueryTrace sqt = trace.getSubTrace(toKeep);
+        ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
+                .map(rrl -> new QueryTupleIdxPair(rrl.getQueryIdx(), rrl.getRowIdx()))
+                .collect(ImmutableList.toImmutableList());
+        SubQueryTrace sqt = trace.getSubTrace(toKeep);
 
-            // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
-            context.startTrackingConsts();
-            UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
-            ImmutableSet<Operand> allOperandsOld =
-                    fs.getLabeledExprs().keySet().stream() // Get all labels.
-                            .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
-                            .map(o -> backMapOperand(o, sqt))
-                            .collect(ImmutableSet.toImmutableSet());
+        // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
+        context.startTrackingConsts();
+        UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
+        ImmutableSet<Operand> allOperandsOld =
+                fs.getLabeledExprs().keySet().stream() // Get all labels.
+                        .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
+                        .map(o -> backMapOperand(o, sqt))
+                        .collect(ImmutableSet.toImmutableSet());
 
-            Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
-            solver.add(fs.getBackground().toArray(new BoolExpr[0]));
+        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+        solver.add(fs.getBackground().toArray(new BoolExpr[0]));
 
-            Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
-            Set<Label> paramsCore;
-            try (UnsatCoreEnumerator<Label> uce =
-                         new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.INCREASING)) {
-                System.out.println("total    #labels =\t" + labeledExprs.size());
-                Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
-                System.out.println("starting #labels =\t" + startingUnsatCore.size());
+        Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
+        Set<Label> paramsCore;
+        try (UnsatCoreEnumerator<Label> uce =
+                     new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.INCREASING)) {
+            System.out.println("total    #labels =\t" + labeledExprs.size());
+            Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
+            System.out.println("starting #labels =\t" + startingUnsatCore.size());
 
-                long startMs = System.currentTimeMillis();
-                Solver thisSolver = context.mkSolver();
-                for (Label l : startingUnsatCore) {
-                    thisSolver.add(labeledExprs.get(l));
+            long startMs = System.currentTimeMillis();
+            Solver thisSolver = context.mkSolver();
+            for (Label l : startingUnsatCore) {
+                thisSolver.add(labeledExprs.get(l));
+            }
+            Set<Label> consequence = new HashSet<>();
+            for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
+                Label l = entry.getKey();
+                if (startingUnsatCore.contains(l)
+                        || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
+                    consequence.add(l);
                 }
-                Set<Label> consequence = new HashSet<>();
-                for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
-                    Label l = entry.getKey();
-                    if (startingUnsatCore.contains(l)
-                            || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
-                        consequence.add(l);
-                    }
-                }
-                System.out.println("conseq   #labels =\t" + consequence.size());
-                uce.restrictTo(consequence);
+            }
+            System.out.println("conseq   #labels =\t" + consequence.size());
+            uce.restrictTo(consequence);
 //                    uce.optimizeCritical();
-                System.out.println("\t\t| Find conseq:\t" + (System.currentTimeMillis() - startMs));
+            System.out.println("\t\t| Find conseq:\t" + (System.currentTimeMillis() - startMs));
 
-                paramsCore = uce.next().get();
-            }
-            context.stopTrackingConsts();
-            System.out.println("final #labels =\t" + paramsCore.size());
+            paramsCore = uce.next().get();
+        }
+        context.stopTrackingConsts();
+        System.out.println("final #labels =\t" + paramsCore.size());
 
-            // Step 4: Make decision template.
-            List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt))
-                    .collect(Collectors.toList());
-            // `rrCore` is with respect to the old (complete) trace, so no need to back map it.
-            coreLabelsOld.addAll(rrCore);
-            dts.add(buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld));
+        // Step 4: Make decision template.
+        List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt))
+                .collect(Collectors.toList());
+        // `rrCore` is with respect to the old (complete) trace, so no need to back map it.
+        coreLabelsOld.addAll(rrCore);
+        DecisionTemplate dt = buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld);
 
-            // Step 3: Validate the unsat core on unbounded formula.
-            System.out.println("\t\t| Validate:");
-            String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
-            if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
-                System.out.println(dts.get(dts.size() - 1));
-                System.out.println(coreLabelsOld);
-                checkState(false);
-            }
+        // Step 3: Validate the unsat core on unbounded formula.
+        System.out.println("\t\t| Validate:");
+        String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
+        if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
+            Logger.printStylizedMessage("validation failed (slack = " + boundSlack + ")", ANSI_RED_BACKGROUND);
+//            System.out.println(dt);
+//            System.out.println(coreLabelsOld);
+            return Optional.empty();
         }
 
-        return Optional.of(dts);
+        return Optional.of(dt);
     }
 
     public static Operand backMapOperand(Operand o, SubQueryTrace sqt) {

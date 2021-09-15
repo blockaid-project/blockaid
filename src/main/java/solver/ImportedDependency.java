@@ -2,6 +2,7 @@ package solver;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
+import org.apache.calcite.sql.SqlNode;
 import sql.*;
 
 import java.sql.SQLException;
@@ -12,10 +13,10 @@ public class ImportedDependency implements Dependency {
     private final PrivacyQuery q2;
     private final ImmutableList<String> relevantColumns;
 
-    public ImportedDependency(String dependency, SchemaPlusWithKey schema, Parser parser) throws SQLException {
-        String[] parts = dependency.split(";", 2);
-        q1 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[0]), schema, Collections.emptyList(), Collections.emptyList());
-        q2 = PrivacyQueryFactory.createPrivacyQuery(parser.parse(parts[1]), schema, Collections.emptyList(), Collections.emptyList());
+    // Cosntraint: lhs is subset of rhs.
+    public ImportedDependency(SchemaPlusWithKey schema, ParserResult lhs, ParserResult rhs) {
+        q1 = PrivacyQueryFactory.createPrivacyQuery(lhs, schema, Collections.emptyList(), Collections.emptyList());
+        q2 = PrivacyQueryFactory.createPrivacyQuery(rhs, schema, Collections.emptyList(), Collections.emptyList());
 
         relevantColumns = new ImmutableList.Builder<String>()
                 .addAll(q1.getAllNormalizedProjectColumns())

@@ -1,47 +1,27 @@
 package policy_checker;
 
 import com.microsoft.z3.*;
-import org.apache.calcite.config.CalciteConnectionConfig;
-import org.apache.calcite.config.Lex;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlNode;
 import solver.Query;
 import solver.Schema;
 import sql.ParsedPSJ;
-import sql.PrivacyException;
-import sql.QueryContext;
+import sql.ParserResult;
 import sql.SchemaPlusWithKey;
 
 import java.util.*;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class Policy {
     private final ParsedPSJ parsedPSJ;
     private final boolean useSuperset;
 
-    public Policy(QueryContext context, SchemaPlusWithKey schema, String sqlPolicy) {
-        parsedPSJ = new ParsedPSJ(parseSql(context, sqlPolicy), schema, Collections.emptyList(), Collections.emptyList());
+    public Policy(SchemaPlusWithKey schema, ParserResult result) {
+        SqlNode node = result.getSqlNode();
+        checkArgument(node.getKind() == SqlKind.SELECT, "a view must be a SELECT, instead got: " + node.getKind());
+        parsedPSJ = new ParsedPSJ(node, schema, Collections.emptyList(), Collections.emptyList());
         useSuperset = false;
-    }
-
-    private SqlNode parseSql(QueryContext context, String sql){
-        final CalciteConnectionConfig config = context.getCfg();
-        SqlParser parser = SqlParser.create(sql,
-                SqlParser.configBuilder()
-                        .setQuotedCasing(config.quotedCasing())
-                        .setUnquotedCasing(config.unquotedCasing())
-                        .setQuoting(config.quoting())
-                        .setLex(Lex.MYSQL)
-                        .build());
-        SqlNode sqlNode;
-        try {
-            sqlNode = parser.parseStmt();
-        } catch (SqlParseException e) {
-            throw new RuntimeException("parse failed: " + e.getMessage() + " for query " + sql, e);
-        }
-
-        return sqlNode;
     }
 
     public Set<String> getProjectColumns() {

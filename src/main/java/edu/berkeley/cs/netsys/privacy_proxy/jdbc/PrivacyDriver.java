@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
@@ -66,27 +67,31 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
 
         // hack to read in primary/foreign keys from files, TODO read from schema instead
         checkArgument(url.startsWith(CONNECT_STRING_PREFIX));
-        String[] urls = url.substring(CONNECT_STRING_PREFIX.length()).split(",", 4);
-        String policy_dir = urls[0];
-        String direct_schema_url = urls[1];
-        String direct_access_url = urls[2];
-        String database_name = urls.length >= 4 ? urls[3] : null;
+        ArrayList<String> urls = new ArrayList<>(
+                Arrays.asList(url.substring(CONNECT_STRING_PREFIX.length()).split(",")));
+        String policy_dir = urls.remove(0);
+        String direct_access_url = urls.remove(0);
+        String database_name = urls.isEmpty() ? null : urls.remove(0);
+
+        String driver;
+        if (direct_access_url.startsWith("jdbc:mysql:")) {
+            driver = "com.mysql.jdbc.Driver";
+        } else if (direct_access_url.startsWith("jdbc:h2:")) {
+            driver = "org.h2.Driver";
+        } else {
+            throw new IllegalArgumentException("unsupported direct connection: " + direct_access_url);
+        }
 
         try {
-            if (direct_access_url.startsWith("jdbc:mysql:")) {
-                Class.forName("com.mysql.jdbc.Driver");
-            } else if (direct_access_url.startsWith("jdbc:h2:")) {
-                Class.forName("org.h2.Driver");
-            } else {
-                throw new RuntimeException("unsupported direct connection: " + direct_access_url);
-            }
+            Class.forName(driver);
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
 
         Connection direct_connection = DriverManager.getConnection(direct_access_url, info.getProperty("user"), info.getProperty("password"));
         Properties info_ = new Properties(info);
-        info_.setProperty("url", direct_schema_url);
+        info_.setProperty("url", direct_access_url);
+        info_.setProperty("driver", driver);
         if (database_name != null) {
             info_.setProperty("database_name", database_name);
         }

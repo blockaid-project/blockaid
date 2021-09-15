@@ -7,10 +7,9 @@ import cache.trace.QueryTupleIdxPair;
 import cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
 import com.microsoft.z3.*;
-import planner.PrivacyColumn;
-import planner.PrivacyTable;
+import org.apache.calcite.rel.type.*;
+import org.apache.calcite.sql.type.SqlTypeFamily;
 import solver.*;
-import sql.Parser;
 import sql.PrivacyQuery;
 import sql.SchemaPlusWithKey;
 import util.Logger;
@@ -18,7 +17,6 @@ import util.Logger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -73,47 +71,21 @@ public class QueryChecker {
      */
     private static final ConcurrentHashMap<Properties, DecisionCache> decisionCaches = new ConcurrentHashMap<>();
 
-    public static QueryChecker getInstance(Properties info, Parser parser, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
-                                           String[] deps, String[] uks, String[] fks) throws SQLException {
-        return new QueryChecker(info, parser, policySet, rawSchema, deps, uks, fks);
-    }
-
-    private QueryChecker(Properties info, Parser parser, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
-                         String[] deps, String[] uks, String[] fks) throws SQLException
-    {
+    public QueryChecker(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
+                        List<Constraint> dependencies) {
         this.policySet = policySet;
         MyZ3Context context = new MyZ3Context();
 
         Map<String, List<Column>> relations = new HashMap<>();
         for (String tableName : rawSchema.schema.getTableNames()) {
-            PrivacyTable table = (PrivacyTable) rawSchema.schema.getTable(tableName);
             List<Column> columns = new ArrayList<>();
-            for (PrivacyColumn column : table.getColumns()) {
-                Sort type = Schema.getSortFromSqlType(context, column.type);
+            for (RelDataTypeField field : rawSchema.getTypeForTable(tableName).getFieldList()) {
+                Sort type = getSortFromSqlType(context, field.getType());
                 // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
                 //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
-                columns.add(new Column(column.name.toUpperCase(), type));
+                columns.add(new Column(field.getName().toUpperCase(), type));
             }
             relations.put(tableName.toUpperCase(), columns);
-        }
-
-        List<Constraint> dependencies = new ArrayList<>();
-        for (String uk : uks) {
-            uk = uk.toUpperCase();
-            String[] parts = uk.split(":", 2);
-            String[] columns = parts[1].split(",");
-            dependencies.add(new UniqueConstraint(parts[0], Arrays.asList(columns)));
-        }
-        for (String fk : fks) {
-            fk = fk.toUpperCase();
-            String[] parts = fk.split(":", 2);
-            String[] from = parts[0].split("\\.", 2);
-            String[] to = parts[1].split("\\.", 2);
-            dependencies.add(new ForeignKeyDependency(from[0], from[1], to[0], to[1]));
-        }
-
-        for (String dep : deps) {
-            dependencies.add(new ImportedDependency(dep, rawSchema, parser));
         }
 
         this.schema = new Schema(context, rawSchema, relations, dependencies);
@@ -132,6 +104,38 @@ public class QueryChecker {
 
         // Start custom sort value tracking for first query
         context.customSortsPush();
+    }
+
+    private static Sort getSortFromSqlType(MyZ3Context context, RelDataType type) {
+        RelDataTypeFamily family = type.getFamily();
+        if (family == SqlTypeFamily.NUMERIC) {
+            // TODO(zhangwen): treating decimal also as int.
+            switch (type.getSqlTypeName()) {
+                case TINYINT:
+                case SMALLINT:
+                case INTEGER:
+                case BIGINT:
+                    return context.getCustomIntSort();
+                case FLOAT:
+                case REAL:
+                case DOUBLE:
+                    return context.getCustomRealSort();
+            }
+            throw new IllegalArgumentException("Unsupported numeric type: " + type);
+        } else if (family == SqlTypeFamily.CHARACTER || family == SqlTypeFamily.BINARY) {
+            return context.getCustomStringSort();
+        } else if (family == SqlTypeFamily.TIMESTAMP) {
+            return context.getTimestampSort();
+        } else if (family == SqlTypeFamily.DATE) {
+            return context.getDateSort();
+        } else if (family == SqlTypeFamily.BOOLEAN) {
+            return context.getCustomIntSort();
+//            return context.mkBoolSort();
+        } else if (family == SqlTypeFamily.ANY) {
+            // FIXME(zhangwen): I think text belongs in here.
+            return context.getCustomStringSort();
+        }
+        throw new IllegalArgumentException("unrecognized family: " + family);
     }
 
     public void resetSequence() {
