@@ -2,11 +2,8 @@ package sql;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
-import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
-import planner.PrivacyColumn;
-import planner.PrivacyTable;
 import solver.*;
 import util.UnionFind;
 
