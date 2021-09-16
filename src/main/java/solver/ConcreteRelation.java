@@ -3,6 +3,7 @@ package solver;
 import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
+import solver.context.MyZ3Context;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,11 +71,7 @@ public class ConcreteRelation implements Relation {
             Tuple syms = makeFreshHead();
             BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
             BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
-            if (syms.isEmpty()) {
-                return List.of(context.mkImplies(lhs, rhs));
-            }
-            return List.of(context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
-                    null, null, null, null));
+            return List.of(context.myMkForall(syms.toExprArray(), context.mkImplies(lhs, rhs)));
         } else {
             ArrayList<BoolExpr> exprs = new ArrayList<>();
             for (int i = 0; i < exists.length; ++i) {

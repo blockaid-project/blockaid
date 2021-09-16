@@ -2,6 +2,7 @@ package solver;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import solver.context.MyZ3Context;
 import solver.labels.ConstraintLabel;
 import solver.labels.PreambleLabel;
 import solver.labels.ReturnedRowLabel;

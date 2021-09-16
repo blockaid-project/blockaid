@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
-import solver.MyZ3Context;
+import solver.context.MyZ3Context;
 
 import java.util.*;
 
@@ -49,7 +49,7 @@ class MapSolver<L> {
         boolean found = false;
         if (order == Order.INCREASING) {
             while (bound <= allLabels.size()) {
-                Status status = solver.check(context.mkAtMost(var2Label.keySet().toArray(new BoolExpr[0]), bound));
+                Status status = solver.check(context.mkAtMost(var2Label.keySet(), bound));
                 if (status == Status.SATISFIABLE) {
                     found = true;
                     break;
@@ -59,7 +59,7 @@ class MapSolver<L> {
             }
         } else if (order == Order.DECREASING) {
             while (bound >= 0) {
-                Status status = solver.check(context.mkAtLeast(var2Label.keySet().toArray(new BoolExpr[0]), bound));
+                Status status = solver.check(context.mkAtLeast(var2Label.keySet(), bound));
                 if (status == Status.SATISFIABLE) {
                     found = true;
                     break;

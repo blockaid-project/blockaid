@@ -7,13 +7,13 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Params;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
+import solver.context.MyZ3Context;
 import sql.PrivacyQuery;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkState;
 

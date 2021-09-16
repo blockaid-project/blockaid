@@ -5,6 +5,7 @@ import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import solver.*;
+import solver.context.MyZ3Context;
 
 import java.util.Collection;
 import java.util.Map;

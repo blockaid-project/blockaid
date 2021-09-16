@@ -2,9 +2,9 @@ package solver;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
+import solver.context.MyZ3Context;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -65,7 +65,7 @@ public class UniqueConstraint implements Constraint {
         BoolExpr rhs = tup1.equalsExpr(tup2);
 
         Expr[] allVars = Stream.concat(tup1.stream(), tup2.stream()).toArray(Expr[]::new);
-        return List.of(context.mkForall(allVars, context.mkImplies(lhs, rhs), 1, null, null, null, null));
+        return List.of(context.myMkForall(allVars, context.mkImplies(lhs, rhs)));
     }
 
     private Iterable<BoolExpr> applyConcrete(Instance instance) {

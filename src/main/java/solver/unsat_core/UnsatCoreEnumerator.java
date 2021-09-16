@@ -3,7 +3,7 @@ package solver.unsat_core;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
-import solver.MyZ3Context;
+import solver.context.MyZ3Context;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -109,7 +109,8 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
         long startMs = System.currentTimeMillis();
         checkArgument(atLeast >= labels.size());
         List<BoolExpr> clauses = labels.stream().map(label2BoolConst::get).collect(Collectors.toList());
-        clauses.add(context.mkAtLeast(getLabels().stream().map(label2BoolConst::get).toArray(BoolExpr[]::new), atLeast));
+        clauses.add(context.mkAtLeast(getLabels().stream().map(label2BoolConst::get).collect(Collectors.toList()),
+                atLeast));
 
         Status status = solver.check(clauses.toArray(new BoolExpr[0]));
         if (status == Status.SATISFIABLE) {
@@ -133,7 +134,8 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
         long startMs = System.currentTimeMillis();
         checkArgument(atLeast >= labels.size());
         List<BoolExpr> clauses = labels.stream().map(label2BoolConst::get).collect(Collectors.toList());
-        clauses.add(context.mkAtLeast(getLabels().stream().map(label2BoolConst::get).toArray(BoolExpr[]::new), atLeast));
+        clauses.add(context.mkAtLeast(getLabels().stream().map(label2BoolConst::get).collect(Collectors.toList()),
+                atLeast));
         Status status = solver.check(clauses.toArray(new BoolExpr[0]));
 //        System.out.println("\t\t\t| isSubsetSatExists (" + atLeast + "):\t" + status + "\t" + (System.currentTimeMillis() - startMs));
         if (status == Status.SATISFIABLE) {

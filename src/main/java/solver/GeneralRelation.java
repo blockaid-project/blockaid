@@ -1,13 +1,10 @@
 package solver;
 
-import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
+import solver.context.MyZ3Context;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -38,7 +35,7 @@ public class GeneralRelation implements Relation {
     @Override
     public BoolExpr isEmptyExpr() {
         Tuple tup = makeFreshHead();
-        return context.mkForall(tup.toExprArray(), context.mkNot(context.mkAnd(doesContainExpr(tup))), 1, null, null, null, null);
+        return context.myMkForall(tup.toExprArray(), context.mkNot(context.mkAnd(doesContainExpr(tup))));
     }
 
     @Override
@@ -46,11 +43,9 @@ public class GeneralRelation implements Relation {
         Tuple syms = makeFreshHead();
         BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
         BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
-        if (syms.isEmpty()) {
-            return List.of(context.mkImplies(lhs, rhs));
-        }
-        return List.of(context.mkForall(syms.toExprArray(), context.mkImplies(lhs, rhs), 1,
-                null, null, null, null));
+        return List.of(
+                context.myMkForall(syms.toExprArray(), context.mkImplies(lhs, rhs))
+        );
     }
 
     private Tuple makeFreshHead() {
@@ -64,9 +59,8 @@ public class GeneralRelation implements Relation {
         Tuple syms = makeFreshHead();
         BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
         BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
-        if (syms.isEmpty()) {
-            return List.of(context.mkEq(lhs, rhs));
-        }
-        return List.of(context.mkForall(syms.toExprArray(), context.mkEq(lhs, rhs), 1, null, null, null, null));
+        return List.of(
+                context.myMkForall(syms.toExprArray(), context.mkEq(lhs, rhs))
+        );
     }
 }

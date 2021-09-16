@@ -2,6 +2,7 @@ package solver.unsat_core;
 
 import solver.DecisionTemplateGenerator;
 import solver.RRLVampireDeterminacyFormula;
+import solver.context.MyZ3Context;
 import solver.labels.PreambleLabel;
 import solver.labels.ReturnedRowLabel;
 import cache.trace.*;
@@ -19,7 +20,6 @@ import solver.executor.VampireProofExecutor;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static util.TerminalColor.*;

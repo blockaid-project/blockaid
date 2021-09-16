@@ -8,6 +8,7 @@ import com.microsoft.z3.Expr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import policy_checker.Policy;
+import solver.context.MyZ3Context;
 import solver.labels.*;
 
 import java.util.*;

@@ -1,6 +1,6 @@
 package solver.unsat_core;
 
-import solver.MyZ3Context;
+import solver.context.MyZ3Context;
 
 import java.util.*;
 

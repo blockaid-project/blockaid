@@ -1,15 +1,12 @@
 package solver;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import com.microsoft.z3.*;
-import util.UnionFind;
+import solver.context.MyZ3Context;
 
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -78,7 +75,7 @@ public abstract class PSJ extends Query {
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
         // Returns a formula stating that tuple is in the output of this query on the instance.
-        Tuple[] symbolicTups = relations.stream().map(schema::makeFreshTuple).toArray(Tuple[]::new);
+        Tuple[] symbolicTups = relations.stream().map(schema::makeFreshExistentialTuple).toArray(Tuple[]::new);
         BoolExpr predicate = predicateGenerator(symbolicTups);
         Tuple headSymTup = headSelector(symbolicTups);
         checkArgument(headSymTup.size() == tuple.size());
@@ -311,31 +308,6 @@ public abstract class PSJ extends Query {
         visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
             exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)));
         });
-        return exprs.toArray(new BoolExpr[0]);
-    }
-
-    @Override
-    public BoolExpr[] generateExists(Instance instance, Solver solver) {
-        checkArgument(instance.isConcrete);
-
-        final MyZ3Context context = instance.getContext();
-        final List<BoolExpr> exprs = new ArrayList<>();
-        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> {
-            exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)));
-        });
-
-        if (solver != null) {
-            int numRemoved = 0;
-            ListIterator<BoolExpr> it = exprs.listIterator();
-            while (it.hasNext()) {
-                BoolExpr e = it.next();
-                if (solver.check(e) == Status.UNSATISFIABLE) {
-                    it.set(context.mkFalse());
-                    ++numRemoved;
-                }
-            }
-            System.out.println(numRemoved + " / " + exprs.size());
-        }
         return exprs.toArray(new BoolExpr[0]);
     }
 }

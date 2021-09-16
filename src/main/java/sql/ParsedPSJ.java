@@ -5,6 +5,7 @@ import com.microsoft.z3.*;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
 import solver.*;
+import solver.context.MyZ3Context;
 import util.UnionFind;
 
 import java.text.ParseException;
@@ -303,7 +304,7 @@ public class ParsedPSJ {
                 List<Column> columns = schema.getColumns(relationName);
                 for (Column column : columns) {
                     if (column.name.toUpperCase().equals(parts[1])) {
-                        return context.mkConst(context.mkSymbol(name), column.type);
+                        return context.mkConst(name, column.type);
                     }
                 }
 
@@ -383,7 +384,7 @@ public class ParsedPSJ {
                 if (symbolMap.containsKey(name)) {
                     return symbolMap.get(name);
                 } else {
-                    return context.mkConst(context.mkSymbol(name), Tuple.getSortFromObject(context, param));
+                    return context.mkConst(name, Tuple.getSortFromObject(context, param));
                 }
             }
         }

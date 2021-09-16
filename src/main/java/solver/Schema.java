@@ -2,6 +2,7 @@ package solver;
 
 import com.google.common.collect.ListMultimap;
 import com.microsoft.z3.*;
+import solver.context.MyZ3Context;
 import sql.SchemaPlusWithKey;
 
 import java.util.*;
@@ -141,6 +142,16 @@ public class Schema {
 
     public Tuple makeFreshTuple(String relationName) {
         return makeFreshTuple(relationName, "v");
+    }
+
+    public Tuple makeFreshExistentialTuple(String relationName) {
+        return makeFreshExistentialTuple(relationName, "e");
+    }
+
+    public Tuple makeFreshExistentialTuple(String relationName, String prefix) {
+        List<Column> columns = relations.get(relationName.toUpperCase());
+        return new Tuple(this, columns.stream()
+                .map(column -> context.mkFreshExistentialConst(prefix, column.type)));
     }
 
     public Tuple makeFreshTuple(String relationName, String prefix) {

@@ -2,6 +2,7 @@ package solver;
 
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
+import solver.context.MyZ3Context;
 
 import java.util.Arrays;
 import java.util.List;

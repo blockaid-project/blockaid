@@ -3,14 +3,11 @@ package solver;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Solver;
-import solver.labels.ConstraintLabel;
+import solver.context.MyZ3Context;
 import solver.labels.PreambleLabel;
 import solver.labels.SubPreamble;
-import solver.labels.ViewLabel;
 
 import java.util.*;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -36,9 +33,6 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                 Iterables.addAll(clauses, inst2.getConstraints().get(c));
             }
 
-            Solver solver = context.mkSolver();
-            solver.add(clauses.toArray(new BoolExpr[0]));
-
             if (splitProducts) {
                 for (Query v : sub.views()) {
                     // (equal under each part) || (empty on one+ part per instance)
@@ -62,7 +56,7 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                 }
             } else {
                 for (Query v : sub.views()) {
-                    Iterables.addAll(clauses, v.apply(inst1, solver).equalsExpr(v.apply(inst2, solver)));
+                    Iterables.addAll(clauses, v.apply(inst1).equalsExpr(v.apply(inst2)));
                 }
             }
             return clauses;

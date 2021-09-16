@@ -8,6 +8,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
 import com.microsoft.z3.enumerations.Z3_decl_kind;
+import solver.context.MyZ3Context;
 import util.UnionFind;
 
 import java.util.*;
@@ -206,10 +207,9 @@ public abstract class DeterminacyFormula {
         List<BoolExpr> exprs = new ArrayList<>();
         // Constrain constant values.
         for (Map.Entry<String, Object> entry : queries.getConstMap().entrySet()) {
-            StringSymbol nameSymbol = context.mkSymbol("!" + entry.getKey());
             Object value = entry.getValue();
             exprs.add(context.mkEq(
-                    context.mkConst(nameSymbol, Tuple.getSortFromObject(context, value)),
+                    context.mkConst("!" + entry.getKey(), Tuple.getSortFromObject(context, value)),
                     context.mkCustom(entry.getValue())
             ));
         }

@@ -2,6 +2,7 @@ package solver;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
+import solver.context.MyZ3Context;
 
 import java.sql.Date;
 import java.sql.Timestamp;

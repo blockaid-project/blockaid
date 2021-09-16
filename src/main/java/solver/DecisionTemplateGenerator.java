@@ -1,6 +1,7 @@
 package solver;
 
 import cache.DecisionTemplate;
+import solver.context.MyZ3Context;
 import solver.labels.*;
 import cache.trace.*;
 import solver.unsat_core.Order;

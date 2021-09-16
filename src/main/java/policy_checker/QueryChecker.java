@@ -10,6 +10,7 @@ import com.microsoft.z3.*;
 import org.apache.calcite.rel.type.*;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import solver.*;
+import solver.context.MyZ3Context;
 import sql.PrivacyQuery;
 import sql.SchemaPlusWithKey;
 import util.Logger;
@@ -571,7 +572,7 @@ public class QueryChecker {
             ImmutableList.Builder<ImmutableSet<String>> preapprovedSetsBuilder = ImmutableList.builder();
 
             Map<Set<Integer>, Entry> previousPass = new HashMap<>();
-            previousPass.put(Collections.emptySet(), new Entry(ctx.mkBool(false), getAllColumns(policySet)));
+            previousPass.put(Collections.emptySet(), new Entry(ctx.mkFalse(), getAllColumns(policySet)));
 
             Map<Set<Integer>, Entry> currentPass;
 
