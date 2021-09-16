@@ -28,10 +28,11 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     private SqlSelect getSelectNode(ParserResult result) {
-        if (result.getSqlNode() instanceof SqlOrderBy) {
-            return (SqlSelect) ((SqlOrderBy) result.getSqlNode()).query;
+        SqlNode node = result.getSqlNode();
+        if (node instanceof SqlOrderBy orderByNode) {
+            return (SqlSelect) orderByNode.query;
         } else {
-            return (SqlSelect) result.getSqlNode();
+            return (SqlSelect) node;
         }
     }
 

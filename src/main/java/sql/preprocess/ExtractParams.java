@@ -38,23 +38,13 @@ public class ExtractParams extends SqlTransformer {
 
     @Override
     public SqlNode visit(SqlLiteral sqlLiteral) {
-        Object v;
-        switch (sqlLiteral.getTypeName()) {
-            case BOOLEAN:
-                v = sqlLiteral.booleanValue();
-                break;
-            case INTEGER:
-            case DECIMAL:
-                v = sqlLiteral.intValue(true);
-                break;
-            case CHAR:
-                v = sqlLiteral.getValueAs(String.class);
-                break;
-            case SYMBOL:
-                return sqlLiteral;
-            default:
-                throw new RuntimeException("unhandled literal type: " + sqlLiteral.getTypeName());
-        }
+        Object v = switch (sqlLiteral.getTypeName()) {
+            case BOOLEAN -> sqlLiteral.booleanValue();
+            case INTEGER, DECIMAL -> sqlLiteral.intValue(true);
+            case CHAR -> sqlLiteral.getValueAs(String.class);
+            case SYMBOL -> sqlLiteral;
+            default -> throw new RuntimeException("unhandled literal type: " + sqlLiteral.getTypeName());
+        };
 
         params.add(i, v);
         paramNames.add(i, "?");
@@ -62,11 +52,10 @@ public class ExtractParams extends SqlTransformer {
     }
 
     private boolean isCloseToDateTimeNow(Object v) {
-        if (!(v instanceof String)) {
+        if (!(v instanceof String s)) {
             return false;
         }
 
-        String s = (String) v;
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime ldt;
         // We expect the datetime to look like '2021-08-13 03:04:40.605143'.
@@ -98,16 +87,17 @@ public class ExtractParams extends SqlTransformer {
 
     @Override
     public SqlNode visit(SqlCall sqlCall) {
-        switch (sqlCall.getKind()) {
-            case SELECT:
+        return switch (sqlCall.getKind()) {
+            case SELECT -> {
                 SqlSelect newSelect = (SqlSelect) sqlCall.clone(sqlCall.getParserPosition());
                 newSelect.setFrom(newSelect.getFrom().accept(this));
                 SqlNode where = newSelect.getWhere();
                 if (where != null) {
                     newSelect.setWhere(where.accept(this));
                 }
-                return newSelect;
-            case JOIN:
+                yield newSelect;
+            }
+            case JOIN -> {
                 SqlJoin join = (SqlJoin) sqlCall;
                 SqlNode newLeft = join.getLeft().accept(this);
                 SqlNode newRight = join.getRight().accept(this);
@@ -116,10 +106,10 @@ public class ExtractParams extends SqlTransformer {
                 if (condition != null) {
                     newCondition = condition.accept(this);
                 }
-                return new SqlJoin(join.getParserPosition(), newLeft, join.isNaturalNode(), join.getJoinTypeNode(),
+                yield new SqlJoin(join.getParserPosition(), newLeft, join.isNaturalNode(), join.getJoinTypeNode(),
                         newRight, join.getConditionTypeNode(), newCondition);
-        }
-
-        return super.visit(sqlCall);
+            }
+            default -> super.visit(sqlCall);
+        };
     }
 }

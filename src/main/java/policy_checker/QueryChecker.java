@@ -28,6 +28,7 @@ import static util.TerminalColor.*;
 
 public class QueryChecker {
     public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
+    public static boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("privoxy.cache_no_retain"), "true");
     public static boolean PRUNE_TRACE = true;
     public static boolean UNNAMED_EQUALITY = true;
 
@@ -361,8 +362,10 @@ public class QueryChecker {
             }
             for (DecisionTemplate dt : oTemplates.get()) {
                 Logger.printStylizedMessage(dt.toString(), ANSI_BLACK + ANSI_YELLOW_BACKGROUND);
-                cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
-                        currQuery.paramNames, dt);
+                if (!CACHE_NO_RETAIN) {
+                    cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
+                            currQuery.paramNames, dt);
+                }
             }
 //            cacheDecision(queries, policyResult);
             // FIXME(zhangwen): in case of noncompliance, find model.

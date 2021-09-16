@@ -234,10 +234,6 @@ public abstract class DeterminacyFormula {
                 generateNotContains(queries));
     }
 
-    public Iterable<BoolExpr> makeCompleteFormula(UnmodifiableLinearQueryTrace queries) {
-        return Iterables.concat(preamble, makeBodyFormula(queries));
-    }
-
     public String generateSMT(UnmodifiableLinearQueryTrace queries) {
         return generateSMT(() -> makeBodyFormula(queries));
     }

@@ -5,8 +5,6 @@ import com.microsoft.z3.*;
 
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -116,7 +114,7 @@ public class Tuple {
             return context.getDateSort();
         } else if (value instanceof Timestamp) {
             return context.getTimestampSort();
-        }else if (value instanceof Expr) {
+        } else if (value instanceof Expr) {
             return ((Expr) value).getSort();
         } else if (value == null) {
             throw new UnsupportedOperationException("null value unhandled");

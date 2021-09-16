@@ -77,165 +77,198 @@ public abstract class PSJ extends Query {
 
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
-        Tuple[] symbolicTups = new Tuple[relations.size()];
-        for (int i = 0; i < relations.size(); ++i) {
-            String relationName = relations.get(i);
-            // We'll look for the identifier string `mdct!` later on.
-            symbolicTups[i] = schema.makeNamedTuple(relationName, "mdct!" + i);
-        }
-
-//        Tuple[] symbolicTups = relations.stream().map(r -> schema.makeFreshTuple(r, "mdct")).toArray(Tuple[]::new);
+        // Returns a formula stating that tuple is in the output of this query on the instance.
+        Tuple[] symbolicTups = relations.stream().map(schema::makeFreshTuple).toArray(Tuple[]::new);
         BoolExpr predicate = predicateGenerator(symbolicTups);
         Tuple headSymTup = headSelector(symbolicTups);
+        checkArgument(headSymTup.size() == tuple.size());
 
         MyZ3Context context = schema.getContext();
-        ImmutableSet<Expr> allVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream)
-                .collect(ImmutableSet.toImmutableSet());
-        Set<Expr> existentialVars = new HashSet<>(allVars);
-        headSymTup.stream().forEach(existentialVars::remove);
-
-        Substitutions<Expr> subs = new Substitutions<>(allVars);
-        //region Compute substitution for each tuple variable that is always equal to another expr
-        List<Equality> eqs = extractEqFromConj(predicate).collect(Collectors.toList());
-        {
-            Set<Expr> exprs = eqs.stream().flatMap(eq -> Stream.of(eq.lhs, eq.rhs)).collect(Collectors.toSet());
-            exprs.addAll(allVars);
-            exprs.addAll(Arrays.asList(tuple.toExprArray()));
-            UnionFind<Expr> uf = new UnionFind<>(exprs);
-
-            for (int i = 0; i < tuple.size(); ++i) {
-//                System.out.println("UNION\t" + headSymTup.get(i) + "\t" + tuple.get(i));
-                uf.union(headSymTup.get(i), tuple.get(i));
-            }
-            for (Equality eq : eqs) {
-//                System.out.println("UNION\t" + eq.lhs + "\t" + eq.rhs);
-                uf.union(eq.lhs, eq.rhs);
-            }
-            for (Expr e : exprs) {
-                UnionFind<Expr>.EquivalenceClass ec = uf.findComplete(e);
-                if (ec.getDatum() == null && !allVars.contains(e)) {
-//                    System.out.println("DATA " + e);
-                    uf.attachData(e, e);
-                }
-            }
-
-            Set<Expr> replaced = new HashSet<>();
-            for (Expr e : allVars) {
-                UnionFind<Expr>.EquivalenceClass ec = uf.findComplete(e);
-                Expr replaceWith = (Expr) ec.getDatum();
-                if (replaceWith == null) {
-                    replaceWith = ec.getRoot();
-                    checkState(existentialVars.contains(replaceWith));
-                }
-                if (!replaceWith.equals(e)) {
-                    subs.set(e, replaceWith);
-                    replaced.add(e);
-                }
-            }
-            existentialVars.removeAll(replaced);
-        }
-        //endregion
-
-        //region Substitute variables in the predicate
-        {
-            List<Expr> subFrom = new ArrayList<>(), subTo = new ArrayList<>();
-            for (Map.Entry<Expr, Expr> entry: subs.entrySet()) {
-                if (!entry.getValue().equals(entry.getKey())) {
-                    subFrom.add(entry.getKey());
-                    subTo.add(entry.getValue());
-                }
-            }
-            predicate = (BoolExpr) predicate.substitute(subFrom.toArray(new Expr[0]), subTo.toArray(new Expr[0]))
-                    .simplify(); // Get rid of equalities like `x = x`.
-        }
-        //endregion
-
-        //region Substitute variables in the symbolic tuples and head sym
-        for (int i = 0; i < symbolicTups.length; ++i) {
-            Tuple newTup = new Tuple(schema, symbolicTups[i].stream().map(subs::get));
-            symbolicTups[i] = newTup;
-        }
-//        headSymTup = new Tuple(schema, headSymTup.stream().map(subs::get));
-        //endregion
-
-        BoolExpr[] bodyClauses = new BoolExpr[relations.size()];
+        BoolExpr[] bodyExprs = new BoolExpr[relations.size()];
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
             Tuple tup = symbolicTups[i];
-            bodyClauses[i] = context.mkAnd(instance.get(relationName).doesContainExpr(tup));
+            bodyExprs[i] = context.mkAnd(instance.get(relationName).doesContainExpr(tup));
         }
 
-//        BoolExpr naive =
-//                context.myMkExists(existentialVars,
-//                        context.mkAnd(context.mkAnd(bodyClauses), predicate));
+        BoolExpr bodyFormula = context.mkAnd(bodyExprs);
+        Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
+        headSymTup.stream().forEach(existentialVars::remove);
 
-        List<BoolExpr> body = new ArrayList<>();
-
-        if (predicate.getSExpr().contains("mdct!")) {
-            // TODO(zhangwen): implement the case where predicate uses existential?
-//            System.out.println("Naive:");
-//            System.out.println(naive);
-//            System.out.println("eqs = " + eqs);
-//            System.out.println("subs = " + subs);
-//            System.out.println("***");
-            body.add(context.myMkExists(existentialVars,
-                    context.mkAnd(context.mkAnd(bodyClauses), predicate)));
-        } else {
-            List<Set<Expr>> usedEvs = new ArrayList<>();
-            for (int i = 0; i < symbolicTups.length; ++i) {
-                Set<Expr> vs = symbolicTups[i].stream().collect(Collectors.toSet());
-                vs.retainAll(existentialVars);
-                usedEvs.add(i, vs);
-            }
-
-            UnionFind<Integer> uf = new UnionFind<>(IntStream.range(0, symbolicTups.length).boxed());
-            for (int i = 0; i < symbolicTups.length; ++i) {
-                for (int j = i + 1; j < symbolicTups.length; ++j) {
-                    if (!Sets.intersection(usedEvs.get(i), usedEvs.get(j)).isEmpty()) {
-                        uf.union(i, j);
-                    }
-                }
-            }
-
-            for (Integer thisRoot : uf.getRoots()) {
-                List<BoolExpr> thisPart = new ArrayList<>();
-                Set<Expr> thisPartEvs = new HashSet<>();
-                for (int i = 0; i < symbolicTups.length; ++i) {
-                    if (uf.find(i).equals(thisRoot)) {
-                        thisPart.add(bodyClauses[i]);
-                        thisPartEvs.addAll(usedEvs.get(i));
-                    }
-                }
-
-                BoolExpr thisPartConjunction = context.mkAnd(thisPart.toArray(new BoolExpr[0]));
-                if (thisPartEvs.isEmpty()) {
-                    body.add(thisPartConjunction);
-                } else {
-                    body.add(context.mkExists(thisPartEvs.toArray(new Expr[0]), thisPartConjunction, 1, null,
-                            null, null, null));
-                }
-            }
-
-            if (!predicate.isTrue()) {
-                body.add(predicate);
-            }
-
-//            if (body.size() >= 2) {
-//                System.out.println("Naive:");
-//                System.out.println(naive);
-//                System.out.println("Split:");
-//                for (BoolExpr b : body) {
-//                    System.out.println(b);
-//                }
-//                System.out.println("***");
-//            }
+        for (int i = 0; i < tuple.size(); ++i) {
+            bodyFormula = (BoolExpr) bodyFormula.substitute(headSymTup.get(i), tuple.get(i));
+            predicate = (BoolExpr) predicate.substitute(headSymTup.get(i), tuple.get(i));
         }
 
-        return body;
-//        Expr[] headSymTupArr = headSymTup.toExprArray();
-//        return context.mkAnd(body.stream().map(e -> (BoolExpr) e.substitute(headSymTupArr, tuple.toExprArray()))
-//                .toArray(BoolExpr[]::new));
+        if (existentialVars.isEmpty()) {
+            return List.of(bodyFormula, predicate);
+        }
+
+        return List.of(context.myMkExists(existentialVars, context.mkAnd(bodyFormula, predicate)));
     }
+
+    // FIXME(zhangwen): these optimizations seem to break something. (e.g., if the same column is projected twice)
+//    @Override
+//    public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
+//        Tuple[] symbolicTups = new Tuple[relations.size()];
+//        for (int i = 0; i < relations.size(); ++i) {
+//            String relationName = relations.get(i);
+//            // We'll look for the identifier string `mdct!` later on.
+//            symbolicTups[i] = schema.makeNamedTuple(relationName, "mdct!" + i);
+//        }
+//
+////        Tuple[] symbolicTups = relations.stream().map(r -> schema.makeFreshTuple(r, "mdct")).toArray(Tuple[]::new);
+//        BoolExpr predicate = predicateGenerator(symbolicTups);
+//        Tuple headSymTup = headSelector(symbolicTups);
+//
+//        MyZ3Context context = schema.getContext();
+//        ImmutableSet<Expr> allVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream)
+//                .collect(ImmutableSet.toImmutableSet());
+//        Set<Expr> existentialVars = new HashSet<>(allVars);
+//        headSymTup.stream().forEach(existentialVars::remove);
+//
+//        Substitutions<Expr> subs = new Substitutions<>(allVars);
+//        //region Compute substitution for each tuple variable that is always equal to another expr
+//        List<Equality> eqs = extractEqFromConj(predicate).collect(Collectors.toList());
+//        {
+//            Set<Expr> exprs = eqs.stream().flatMap(eq -> Stream.of(eq.lhs, eq.rhs)).collect(Collectors.toSet());
+//            exprs.addAll(allVars);
+//            exprs.addAll(Arrays.asList(tuple.toExprArray()));
+//            UnionFind<Expr> uf = new UnionFind<>(exprs);
+//
+//            for (int i = 0; i < tuple.size(); ++i) {
+////                System.out.println("UNION\t" + headSymTup.get(i) + "\t" + tuple.get(i));
+//                uf.union(headSymTup.get(i), tuple.get(i));
+//            }
+//            for (Equality eq : eqs) {
+////                System.out.println("UNION\t" + eq.lhs + "\t" + eq.rhs);
+//                uf.union(eq.lhs, eq.rhs);
+//            }
+//            for (Expr e : exprs) {
+//                UnionFind<Expr>.EquivalenceClass ec = uf.findComplete(e);
+//                if (ec.getDatum() == null && !allVars.contains(e)) {
+////                    System.out.println("DATA " + e);
+//                    uf.attachData(e, e);
+//                }
+//            }
+//
+//            Set<Expr> replaced = new HashSet<>();
+//            for (Expr e : allVars) {
+//                UnionFind<Expr>.EquivalenceClass ec = uf.findComplete(e);
+//                Expr replaceWith = (Expr) ec.getDatum();
+//                if (replaceWith == null) {
+//                    replaceWith = ec.getRoot();
+//                    checkState(existentialVars.contains(replaceWith));
+//                }
+//                if (!replaceWith.equals(e)) {
+//                    subs.set(e, replaceWith);
+//                    replaced.add(e);
+//                }
+//            }
+//            existentialVars.removeAll(replaced);
+//        }
+//        //endregion
+//
+//        //region Substitute variables in the predicate
+//        {
+//            List<Expr> subFrom = new ArrayList<>(), subTo = new ArrayList<>();
+//            for (Map.Entry<Expr, Expr> entry: subs.entrySet()) {
+//                if (!entry.getValue().equals(entry.getKey())) {
+//                    subFrom.add(entry.getKey());
+//                    subTo.add(entry.getValue());
+//                }
+//            }
+//            predicate = (BoolExpr) predicate.substitute(subFrom.toArray(new Expr[0]), subTo.toArray(new Expr[0]))
+//                    .simplify(); // Get rid of equalities like `x = x`.
+//        }
+//        //endregion
+//
+//        //region Substitute variables in the symbolic tuples and head sym
+//        for (int i = 0; i < symbolicTups.length; ++i) {
+//            Tuple newTup = new Tuple(schema, symbolicTups[i].stream().map(subs::get));
+//            symbolicTups[i] = newTup;
+//        }
+////        headSymTup = new Tuple(schema, headSymTup.stream().map(subs::get));
+//        //endregion
+//
+//        BoolExpr[] bodyClauses = new BoolExpr[relations.size()];
+//        for (int i = 0; i < relations.size(); ++i) {
+//            String relationName = relations.get(i);
+//            Tuple tup = symbolicTups[i];
+//            bodyClauses[i] = context.mkAnd(instance.get(relationName).doesContainExpr(tup));
+//        }
+//
+////        BoolExpr naive =
+////                context.myMkExists(existentialVars,
+////                        context.mkAnd(context.mkAnd(bodyClauses), predicate));
+//
+//        List<BoolExpr> body = new ArrayList<>();
+//
+//        if (predicate.getSExpr().contains("mdct!")) {
+//            // TODO(zhangwen): implement the case where predicate uses existential?
+////            System.out.println("Naive:");
+////            System.out.println(naive);
+////            System.out.println("eqs = " + eqs);
+////            System.out.println("subs = " + subs);
+////            System.out.println("***");
+//            body.add(context.myMkExists(existentialVars,
+//                    context.mkAnd(context.mkAnd(bodyClauses), predicate)));
+//        } else {
+//            List<Set<Expr>> usedEvs = new ArrayList<>();
+//            for (int i = 0; i < symbolicTups.length; ++i) {
+//                Set<Expr> vs = symbolicTups[i].stream().collect(Collectors.toSet());
+//                vs.retainAll(existentialVars);
+//                usedEvs.add(i, vs);
+//            }
+//
+//            UnionFind<Integer> uf = new UnionFind<>(IntStream.range(0, symbolicTups.length).boxed());
+//            for (int i = 0; i < symbolicTups.length; ++i) {
+//                for (int j = i + 1; j < symbolicTups.length; ++j) {
+//                    if (!Sets.intersection(usedEvs.get(i), usedEvs.get(j)).isEmpty()) {
+//                        uf.union(i, j);
+//                    }
+//                }
+//            }
+//
+//            for (Integer thisRoot : uf.getRoots()) {
+//                List<BoolExpr> thisPart = new ArrayList<>();
+//                Set<Expr> thisPartEvs = new HashSet<>();
+//                for (int i = 0; i < symbolicTups.length; ++i) {
+//                    if (uf.find(i).equals(thisRoot)) {
+//                        thisPart.add(bodyClauses[i]);
+//                        thisPartEvs.addAll(usedEvs.get(i));
+//                    }
+//                }
+//
+//                BoolExpr thisPartConjunction = context.mkAnd(thisPart.toArray(new BoolExpr[0]));
+//                if (thisPartEvs.isEmpty()) {
+//                    body.add(thisPartConjunction);
+//                } else {
+//                    body.add(context.mkExists(thisPartEvs.toArray(new Expr[0]), thisPartConjunction, 1, null,
+//                            null, null, null));
+//                }
+//            }
+//
+//            if (!predicate.isTrue()) {
+//                body.add(predicate);
+//            }
+//
+////            if (body.size() >= 2) {
+////                System.out.println("Naive:");
+////                System.out.println(naive);
+////                System.out.println("Split:");
+////                for (BoolExpr b : body) {
+////                    System.out.println(b);
+////                }
+////                System.out.println("***");
+////            }
+//        }
+//
+//        return body;
+////        Expr[] headSymTupArr = headSymTup.toExprArray();
+////        return context.mkAnd(body.stream().map(e -> (BoolExpr) e.substitute(headSymTupArr, tuple.toExprArray()))
+////                .toArray(BoolExpr[]::new));
+//    }
 
     private void visitJoins(Instance instance, BiConsumer<Tuple[], BoolExpr[]> consumer) {
         visitJoins(instance, consumer, new ArrayList<>(), new ArrayList<>(), 0);

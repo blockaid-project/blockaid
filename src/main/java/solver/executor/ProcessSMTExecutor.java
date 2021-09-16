@@ -116,13 +116,10 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     }
 
     private Status getResult(String output) {
-        switch (output.split("\n", 2)[0].trim()) {
-            case "sat":
-                return Status.SATISFIABLE;
-            case "unsat":
-                return Status.UNSATISFIABLE;
-            default:
-                return Status.UNKNOWN;
-        }
+        return switch (output.split("\n", 2)[0].trim()) {
+            case "sat" -> Status.SATISFIABLE;
+            case "unsat" -> Status.UNSATISFIABLE;
+            default -> Status.UNKNOWN;
+        };
     }
 }

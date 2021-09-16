@@ -2,6 +2,7 @@ package solver.unsat_core;
 
 import solver.DecisionTemplateGenerator;
 import solver.RRLVampireDeterminacyFormula;
+import solver.labels.PreambleLabel;
 import solver.labels.ReturnedRowLabel;
 import cache.trace.*;
 import com.google.common.collect.*;
@@ -35,7 +36,7 @@ public class ReturnedRowUnsatCoreEnumerator {
     private UnsatCoreFormulaBuilder formulaBuilder = null;
 
     public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
-                                          Collection<Query> views) {
+                                          List<Query> views) {
         this.checker = checker;
         this.schema = schema;
         this.policies = policies;
@@ -43,7 +44,9 @@ public class ReturnedRowUnsatCoreEnumerator {
         this.myFormula = new RRLVampireDeterminacyFormula(schema, views);
     }
 
-    public Optional<Set<ReturnedRowLabel>> getInitialRRCore(UnmodifiableLinearQueryTrace trace) {
+    public record Core(Set<ReturnedRowLabel> rrCore, Set<PreambleLabel> preambleCore) {}
+
+    public Optional<Core> getInitialRRCore(UnmodifiableLinearQueryTrace trace) {
         long startMs = System.currentTimeMillis();
         String smtVampire = myFormula.generateSMT(trace);
         System.out.println("\t\t| Prepare Vampire:\t" + (System.currentTimeMillis() - startMs));
@@ -75,29 +78,37 @@ public class ReturnedRowUnsatCoreEnumerator {
             throw new RuntimeException(e);
         }
 
-        Set<ReturnedRowLabel> smallestCore = null;
+        Set<ReturnedRowLabel> smallestRRCore = null;
+        Set<PreambleLabel> preambleCore = null;
         for (ProcessSMTExecutor e : executors) {
             if (e.getResult() != Status.UNSATISFIABLE) {
                 continue;
             }
             System.out.println(e.getName());
-            Set<ReturnedRowLabel> core = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)").matcher(e.getOutput())
-                    .results()
-                    .map(r -> new ReturnedRowLabel(Integer.parseInt(r.group(1)), Integer.parseInt(r.group(2))))
-                    .collect(Collectors.toSet());
+
+            String output = e.getOutput();
+            Set<ReturnedRowLabel> core = myFormula.extractRRLabels(output);
             System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + core + ANSI_RESET);
-            if (smallestCore == null || smallestCore.size() > core.size()) {
-                smallestCore = core;
+            System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + myFormula.extractPreambleLabels(output) + ANSI_RESET);
+            if (smallestRRCore == null || smallestRRCore.size() > core.size()) {
+                smallestRRCore = core;
+                preambleCore = myFormula.extractPreambleLabels(output);
             }
         }
         System.out.println("\t\t| Vampire:\t" + (System.currentTimeMillis() - startMs));
         checker.printFormula(smtVampire, "rr_unsat_core");
-        return Optional.ofNullable(smallestCore);
+
+        if (smallestRRCore == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new Core(smallestRRCore, preambleCore));
     }
 
     // Returns empty if formula is not determined UNSAT.
     public Set<ReturnedRowLabel> minimizeRRCore(UnmodifiableLinearQueryTrace trace,
-                                                Set<ReturnedRowLabel> initialRRCore, int boundSlack) {
+                                                Set<ReturnedRowLabel> initialRRCore,
+                                                Set<PreambleLabel> preambleCore,
+                                                int boundSlack) {
         SubQueryTrace subTrace = trace.getSubTrace(
                 initialRRCore.stream()
                         .map(rrl -> new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()))
@@ -115,7 +126,7 @@ public class ReturnedRowUnsatCoreEnumerator {
             Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, subTrace);
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + boundSlack);
             BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(schema, views, slackBounds,
-                    true, DeterminacyFormula.TextOption.USE_TEXT, null);
+                    true, DeterminacyFormula.TextOption.NO_TEXT, null, preambleCore);
             this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
             System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
 
@@ -140,6 +151,6 @@ public class ReturnedRowUnsatCoreEnumerator {
     }
 
     public UnsatCoreFormulaBuilder getFormulaBuilder() {
-        return formulaBuilder;
+        return Objects.requireNonNull(formulaBuilder);
     }
 }

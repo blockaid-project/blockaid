@@ -68,8 +68,7 @@ public class ParsedPSJ {
         for (SqlNode sn : sqlSelect.getSelectList()) {
             // ignore unary function calls and use whatever they're called with instead
             boolean addPrimaryKey = false;
-            while (sn instanceof SqlBasicCall) {
-                SqlBasicCall call = (SqlBasicCall) sn;
+            while (sn instanceof SqlBasicCall call) {
                 if (call.getOperator() instanceof SqlAsOperator) {
                     SqlNode op0 = call.operand(0);
                     if (!(op0.getKind() == SqlKind.LITERAL || op0.getKind() == SqlKind.IDENTIFIER)) {
@@ -293,8 +292,8 @@ public class ParsedPSJ {
 
     private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
         MyZ3Context context = schema.getContext();
-        if (theta instanceof SqlIdentifier) {
-            String name = quantifyName((SqlIdentifier) theta);
+        if (theta instanceof SqlIdentifier identifier) {
+            String name = quantifyName(identifier);
             if (symbolMap.containsKey(name)) {
                 return symbolMap.get(name);
             } else if (!name.startsWith("!")) {
@@ -312,8 +311,7 @@ public class ParsedPSJ {
             } else {
                 return context.mkConst(name, context.getCustomIntSort());
             }
-        } else if (theta instanceof SqlLiteral) {
-            SqlLiteral literal = (SqlLiteral) theta;
+        } else if (theta instanceof SqlLiteral literal) {
             if (literal.getTypeName() == SqlTypeName.BOOLEAN) {
                 return context.mkBool(literal.booleanValue());
             } else if (literal.getTypeName() == SqlTypeName.INTEGER || literal.getTypeName() == SqlTypeName.DECIMAL) {
@@ -322,12 +320,12 @@ public class ParsedPSJ {
                 return context.mkCustomString(literal.getValueAs(String.class));
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
-        } else if (theta instanceof SqlBasicCall) {
-            Expr left = getPredicate(((SqlBasicCall) theta).operand(0), symbolMap, params, paramNames, schema);
+        } else if (theta instanceof SqlBasicCall call) {
+            Expr left = getPredicate(call.operand(0), symbolMap, params, paramNames, schema);
 
             if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
                 final Expr left1 = left;
-                SqlNodeList values = ((SqlBasicCall) theta).operand(1);
+                SqlNodeList values = call.operand(1);
                 BoolExpr[] exprs = values.getList().stream()
                         .map(n -> context.mkEq(left1, getPredicate(n, symbolMap, params, paramNames, schema)))
                         .toArray(BoolExpr[]::new);

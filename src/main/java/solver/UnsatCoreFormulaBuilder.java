@@ -9,14 +9,10 @@ import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import solver.labels.*;
-import util.Logger;
-import util.TerminalColor;
 
-import java.lang.reflect.Array;
 import java.util.*;
 import java.util.stream.Stream;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class UnsatCoreFormulaBuilder {
@@ -66,12 +62,18 @@ public class UnsatCoreFormulaBuilder {
         return new Formulas<>(labeledExprs, bgBuilder.build());
     }
 
-    // Assumes the entire trace is present, i.e., returned-row labels count as background.
     public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace) {
+        return buildParamRelationsOnly(trace, true);
+    }
+
+    // Assumes the entire trace is present, i.e., returned-row labels count as background.
+    public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace, boolean includePreamble) {
         Map<Label, BoolExpr> allLabeledExprs = makeLabeledExprsAll(trace);
         ImmutableList.Builder<BoolExpr> bgBuilder = new ImmutableList.Builder<>();
 
-        bgBuilder.addAll(baseFormula.preamble);
+        if (includePreamble) {
+            bgBuilder.addAll(baseFormula.preamble);
+        }
         Query query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
         Tuple extHeadTup = query.makeFreshHead();
         bgBuilder.addAll(query.apply(baseFormula.inst1).doesContainExpr(extHeadTup));
@@ -92,7 +94,8 @@ public class UnsatCoreFormulaBuilder {
     // Once again, assumes the entire trace is present.
     public String buildValidateParamRelationsOnlySMT(UnmodifiableLinearQueryTrace trace, Set<Label> labels) {
         return baseFormula.generateSMT(() -> {
-            Formulas<Label> fs = buildParamRelationsOnly(trace);
+            // Don't include the preamble -- the `generateSMT` automatically.
+            Formulas<Label> fs = buildParamRelationsOnly(trace, false);
             return Iterables.concat(
                     fs.getBackground(),
                     Maps.filterKeys(fs.getLabeledExprs(), labels::contains).values()

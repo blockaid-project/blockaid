@@ -2,35 +2,45 @@ package solver;
 
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
-import com.google.common.collect.SetMultimap;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
+import solver.labels.ConstraintLabel;
+import solver.labels.PreambleLabel;
+import solver.labels.SubPreamble;
+import solver.labels.ViewLabel;
 
 import java.util.*;
+import java.util.stream.Stream;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds, boolean splitProducts) {
-        this(schema, views, bounds, splitProducts, TextOption.USE_TEXT, null);
+        this(schema, views, bounds, splitProducts, TextOption.USE_TEXT, null, null);
     }
 
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds,
                                      boolean splitProducts, TextOption text,
-                                     ListMultimap<String, Map<String, Object>> table2KnownRows) {
+                                     ListMultimap<String, Map<String, Object>> table2KnownRows,
+                                     Collection<PreambleLabel> selectedPreamble) {
         super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds, table2KnownRows), (Instance inst1, Instance inst2) -> {
             MyZ3Context context = schema.getContext();
             List<BoolExpr> clauses = new ArrayList<>();
-            for (Iterable<BoolExpr> bs : inst1.getConstraints().values()) {
-                Iterables.addAll(clauses, bs);
-            }
-            for (Iterable<BoolExpr> bs : inst2.getConstraints().values()) {
-                Iterables.addAll(clauses, bs);
+
+            checkArgument(inst1.getConstraints().keySet().equals(inst2.getConstraints().keySet()));
+            SubPreamble sub = selectedPreamble == null ? SubPreamble.all(inst1, inst2, views)
+                    : SubPreamble.fromLabels(selectedPreamble);
+
+            for (Constraint c : sub.constraints()) {
+                Iterables.addAll(clauses, inst1.getConstraints().get(c));
+                Iterables.addAll(clauses, inst2.getConstraints().get(c));
             }
 
             Solver solver = context.mkSolver();
             solver.add(clauses.toArray(new BoolExpr[0]));
 
             if (splitProducts) {
-                for (Query v : views) {
+                for (Query v : sub.views()) {
                     // (equal under each part) || (empty on one+ part per instance)
                     List<BoolExpr> equalityParts = new ArrayList<>();
                     List<BoolExpr> empty1Parts = new ArrayList<>();
@@ -51,7 +61,7 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
                     );
                 }
             } else {
-                for (Query v : views) {
+                for (Query v : sub.views()) {
                     Iterables.addAll(clauses, v.apply(inst1, solver).equalsExpr(v.apply(inst2, solver)));
                 }
             }

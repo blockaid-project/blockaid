@@ -29,7 +29,7 @@ public class DecisionTemplateGenerator {
     private final SMTPortfolioRunner runner;
 
     public DecisionTemplateGenerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
-                                     Collection<Query> views, DeterminacyFormula unboundedFormula) {
+                                     List<Query> views, DeterminacyFormula unboundedFormula) {
         this.schema = schema;
         this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, schema, policies, views);
         this.unboundedUcBuilder = new UnsatCoreFormulaBuilder(unboundedFormula, policies);
@@ -39,13 +39,14 @@ public class DecisionTemplateGenerator {
     // Returns empty if formula is not determined UNSAT.
     public Optional<Collection<DecisionTemplate>> generate(UnmodifiableLinearQueryTrace trace) {
         // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
-        Optional<Set<ReturnedRowLabel>> oCore = rruce.getInitialRRCore(trace);
+        Optional<ReturnedRowUnsatCoreEnumerator.Core> oCore = rruce.getInitialRRCore(trace);
         if (oCore.isEmpty()) {
             return Optional.empty();
         }
 
         for (int slack = 1; ; ++slack) {
-            Optional<DecisionTemplate> odt = generate(trace, oCore.get(), slack);
+            ReturnedRowUnsatCoreEnumerator.Core core = oCore.get();
+            Optional<DecisionTemplate> odt = generate(trace, core.rrCore(), core.preambleCore(), slack);
             if (odt.isPresent()) {
                 return Optional.of(List.of(odt.get()));
             }
@@ -53,10 +54,11 @@ public class DecisionTemplateGenerator {
     }
 
     private Optional<DecisionTemplate> generate(UnmodifiableLinearQueryTrace trace,
-                                                            Set<ReturnedRowLabel> initialRRCore,
-                                                            int boundSlack) {
-        Set<ReturnedRowLabel> rrCore = rruce.minimizeRRCore(trace, initialRRCore, boundSlack);
-        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + initialRRCore + ANSI_RESET);
+                                                Set<ReturnedRowLabel> initialRRCore,
+                                                Set<PreambleLabel> preambleCore,
+                                                int boundSlack) {
+        Set<ReturnedRowLabel> rrCore = rruce.minimizeRRCore(trace, initialRRCore, preambleCore, boundSlack);
+//        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + initialRRCore + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         // Reusing the bounded formula builder to avoid making the bounded formula again.
@@ -123,8 +125,8 @@ public class DecisionTemplateGenerator {
         String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
         if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
             Logger.printStylizedMessage("validation failed (slack = " + boundSlack + ")", ANSI_RED_BACKGROUND);
-//            System.out.println(dt);
-//            System.out.println(coreLabelsOld);
+            System.out.println(dt);
+            System.out.println(coreLabelsOld);
             return Optional.empty();
         }
 
@@ -132,43 +134,41 @@ public class DecisionTemplateGenerator {
     }
 
     public static Operand backMapOperand(Operand o, SubQueryTrace sqt) {
-        switch (o.getKind()) {
+        return switch (o.getKind()) {
             case CONTEXT_CONSTANT:
             case VALUE:
-                return o;
+                yield o;
             case QUERY_PARAM:
                 QueryParamOperand qpo = (QueryParamOperand) o;
                 if (qpo.isCurrentQuery()) {
-                    return qpo;
+                    yield qpo;
                 }
                 int oldQueryIdx = sqt.getQueryIdxBackMap().get(qpo.queryIdx());
-                return new QueryParamOperand(oldQueryIdx, false, qpo.paramIdx());
+                yield new QueryParamOperand(oldQueryIdx, false, qpo.paramIdx());
             case RETURNED_ROW_ATTR:
                 ReturnedRowFieldOperand rrfo = (ReturnedRowFieldOperand) o;
                 QueryTupleIdxPair old = sqt.getBackMap().get(
                         new QueryTupleIdxPair(rrfo.queryIdx(), rrfo.returnedRowIdx()));
-                return new ReturnedRowFieldOperand(old.queryIdx(), old.tupleIdx(), rrfo.colIdx());
-        }
-        throw new IllegalArgumentException("invalid operand kind: " + o.getKind());
+                yield new ReturnedRowFieldOperand(old.queryIdx(), old.tupleIdx(), rrfo.colIdx());
+        };
     }
 
     public static Label backMapLabel(Label l, SubQueryTrace sqt) {
-        switch (l.getKind()) {
+        return switch (l.getKind()) {
             case EQUALITY -> {
                 EqualityLabel el = (EqualityLabel) l;
-                return new EqualityLabel(backMapOperand(el.lhs(), sqt), backMapOperand(el.rhs(), sqt));
+                yield new EqualityLabel(backMapOperand(el.lhs(), sqt), backMapOperand(el.rhs(), sqt));
             }
             case LESS_THAN -> {
                 LessThanLabel ltl = (LessThanLabel) l;
-                return new LessThanLabel(backMapOperand(ltl.lhs(), sqt), backMapOperand(ltl.rhs(), sqt));
+                yield new LessThanLabel(backMapOperand(ltl.lhs(), sqt), backMapOperand(ltl.rhs(), sqt));
             }
             case RETURNED_ROW -> {
                 ReturnedRowLabel rrl = (ReturnedRowLabel) l;
                 QueryTupleIdxPair old = sqt.getBackMap().get(new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()));
-                return new ReturnedRowLabel(old.queryIdx(), old.tupleIdx());
+                yield new ReturnedRowLabel(old.queryIdx(), old.tupleIdx());
             }
-        }
-        throw new IllegalArgumentException("invalid label kind: " + l.getKind());
+        };
     }
 
     private DecisionTemplate buildDecisionTemplate(UnmodifiableLinearQueryTrace trace,
@@ -249,15 +249,15 @@ public class DecisionTemplateGenerator {
             }
 
             switch (o.getKind()) {
-                case CONTEXT_CONSTANT:
+                case CONTEXT_CONSTANT -> {
                     String constName = ((ContextConstantOperand) o).name();
                     if (datum == null) {
                         constName2ECBuilder.put(constName, rootIndex);
                     } else {
                         constName2ValueBuilder.put(constName, datum);
                     }
-                    break;
-                case QUERY_PARAM:
+                }
+                case QUERY_PARAM -> {
                     QueryParamOperand qpo = (QueryParamOperand) o;
                     // Set param for all entry builder(s) for this query.
                     Collection<DecisionTemplate.EntryBuilder> ebs =
@@ -270,8 +270,8 @@ public class DecisionTemplateGenerator {
                                     eb -> eb.setParamEC(qpo.paramIdx(), rootIndex) :
                                     eb -> eb.setParamValue(qpo.paramIdx(), datum)
                     );
-                    break;
-                case RETURNED_ROW_ATTR:
+                }
+                case RETURNED_ROW_ATTR -> {
                     ReturnedRowFieldOperand rrfo = (ReturnedRowFieldOperand) o;
                     Map<Integer, DecisionTemplate.EntryBuilder> rowEBs = queryIdx2rowEBs.get(rrfo.queryIdx());
                     if (rowEBs == null) { // This query is irrelevant.
@@ -286,9 +286,8 @@ public class DecisionTemplateGenerator {
                     } else {
                         eb.setRowAttrValue(rrfo.colIdx(), datum);
                     }
-                    break;
-                default:
-                    checkState(false, "unexpected operand: " + o);
+                }
+                default -> checkState(false, "unexpected operand: " + o);
             }
         }
 
