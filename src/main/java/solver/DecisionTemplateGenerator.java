@@ -1,6 +1,7 @@
 package solver;
 
 import cache.DecisionTemplate;
+import com.microsoft.z3.*;
 import solver.context.MyZ3Context;
 import solver.labels.*;
 import cache.trace.*;
@@ -8,9 +9,6 @@ import solver.unsat_core.Order;
 import solver.unsat_core.ReturnedRowUnsatCoreEnumerator;
 import solver.unsat_core.UnsatCoreEnumerator;
 import com.google.common.collect.*;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Solver;
-import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
 import util.Logger;
@@ -80,7 +78,13 @@ public class DecisionTemplateGenerator {
                         .map(o -> backMapOperand(o, sqt))
                         .collect(ImmutableSet.toImmutableSet());
 
-        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+        Solver solver = rruce.getSolver();
+
+//        try (FindMinimalSat fms = new FindMinimalSat(context, solver)) {
+//            fms.compute(fs);
+//        }
+//        return Optional.empty();
+
         solver.add(fs.getBackground().toArray(new BoolExpr[0]));
 
         Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
@@ -92,7 +96,7 @@ public class DecisionTemplateGenerator {
             System.out.println("starting #labels =\t" + startingUnsatCore.size());
 
             long startMs = System.currentTimeMillis();
-            Solver thisSolver = context.mkSolver();
+            Solver thisSolver = context.mkRawSolver();
             for (Label l : startingUnsatCore) {
                 thisSolver.add(labeledExprs.get(l));
             }
@@ -115,8 +119,7 @@ public class DecisionTemplateGenerator {
         System.out.println("final #labels =\t" + paramsCore.size());
 
         // Step 4: Make decision template.
-        List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt))
-                .collect(Collectors.toList());
+        List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
         // `rrCore` is with respect to the old (complete) trace, so no need to back map it.
         coreLabelsOld.addAll(rrCore);
         DecisionTemplate dt = buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld);

@@ -218,15 +218,21 @@ public abstract class DeterminacyFormula {
     }
 
     protected Iterable<BoolExpr> generateNotContains(UnmodifiableLinearQueryTrace queries) {
+        return generateNotContains(queries.getCurrentQuery().getQuery().getSolverQuery(schema));
+    }
+
+    protected Iterable<BoolExpr> generateNotContains(Query query) {
         /* Both regular and fast unsat share this formula form -- by symmetry, we can write Q(D1) != Q(D2) using
         "not contained in". */
-        Query query = queries.getCurrentQuery().getQuery().getSolverQuery(schema);
-        Tuple extHeadTup = query.makeFreshHead();
-        List<BoolExpr> res = Lists.newArrayList(query.apply(inst1).doesContainExpr(extHeadTup));
-        res.add(context.mkNot(
+        Tuple extHeadTup = query.makeFreshExistentialHead();
+        List<BoolExpr> body = Lists.newArrayList(query.apply(inst1).doesContainExpr(extHeadTup));
+        body.add(context.mkNot(
                 context.mkAnd(query.apply(inst2).doesContainExpr(extHeadTup))
         ));
-        return res;
+        return List.of(context.myMkExists(
+                extHeadTup.toExprList(),
+                context.mkAnd(body)
+        ));
     }
 
     public Iterable<BoolExpr> makeBodyFormula(UnmodifiableLinearQueryTrace queries) {

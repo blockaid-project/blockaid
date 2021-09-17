@@ -34,6 +34,7 @@ public class ReturnedRowUnsatCoreEnumerator {
     private final RRLVampireDeterminacyFormula myFormula;
 
     private UnsatCoreFormulaBuilder formulaBuilder = null;
+    private Solver solver = null;
 
     public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
                                           List<Query> views) {
@@ -105,6 +106,7 @@ public class ReturnedRowUnsatCoreEnumerator {
     }
 
     // Returns empty if formula is not determined UNSAT.
+    // MUST be called after calling `getInitialRRCore`, which would have "registered" all constants with the context.
     public Set<ReturnedRowLabel> minimizeRRCore(UnmodifiableLinearQueryTrace trace,
                                                 Set<ReturnedRowLabel> initialRRCore,
                                                 Set<PreambleLabel> preambleCore,
@@ -118,11 +120,10 @@ public class ReturnedRowUnsatCoreEnumerator {
         long startMs = System.currentTimeMillis();
         MyZ3Context context = schema.getContext();
         context.startTrackingConsts();
+        this.solver = context.mkSolver(context.mkSymbol("QF_UF"));
         try {
-            Solver solver = context.mkSolver();
-
             CountingBoundEstimator cbe = new CountingBoundEstimator();
-            BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
+            BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe, solver);
             Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, subTrace);
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + boundSlack);
             BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(schema, views, slackBounds,
@@ -135,22 +136,32 @@ public class ReturnedRowUnsatCoreEnumerator {
             }
 
             UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
+            solver.push();
             solver.add(fs.getBackground().toArray(new BoolExpr[0]));
             System.out.println("\t\t| Bounded RRL core 2:\t" + (System.currentTimeMillis() - startMs));
-            UnsatCoreEnumerator<ReturnedRowLabel> uce = new UnsatCoreEnumerator<>(context, solver, fs.getLabeledExprs(),
-                    Order.ARBITRARY);
-            System.out.println("\t\t| Bounded RRL core 3:\t" + (System.currentTimeMillis() - startMs));
-            Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
-            System.out.println("\t\t| Bounded RRL core 4:\t" + (System.currentTimeMillis() - startMs));
-            s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, subTrace)).collect(Collectors.toSet());
-            return s;
+            try (UnsatCoreEnumerator<ReturnedRowLabel> uce
+                         = new UnsatCoreEnumerator<>(context, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
+                System.out.println("\t\t| Bounded RRL core 3:\t" + (System.currentTimeMillis() - startMs));
+                Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
+                System.out.println("\t\t| Bounded RRL core 4:\t" + (System.currentTimeMillis() - startMs));
+                s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, subTrace)).collect(Collectors.toSet());
+                return s;
+            } finally {
+                solver.pop();
+            }
         } finally {
             context.stopTrackingConsts();
             System.out.println("\t\t| Bounded RRL core:\t" + (System.currentTimeMillis() - startMs));
         }
     }
 
+    // MUST be called only after `minimizeRRCore`.
     public UnsatCoreFormulaBuilder getFormulaBuilder() {
         return Objects.requireNonNull(formulaBuilder);
+    }
+
+    // MUST be called only after `minimizeRRCore`.
+    public Solver getSolver() {
+        return Objects.requireNonNull(solver);
     }
 }

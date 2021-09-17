@@ -24,6 +24,12 @@ public class UnsatCoreFormulaBuilder {
     private final Schema schema;
     private final MyZ3Context context;
 
+    public enum Option {
+        NORMAL,
+        NO_PREAMBLE,
+        POSITIVE // preamble ==> forall tuple in Q, tuple is in Q'
+    }
+
     public UnsatCoreFormulaBuilder(DeterminacyFormula baseFormula, Collection<Policy> policies) {
         this.baseFormula = baseFormula;
         this.schema = baseFormula.schema;
@@ -64,31 +70,43 @@ public class UnsatCoreFormulaBuilder {
     }
 
     public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace) {
-        return buildParamRelationsOnly(trace, true);
+        return buildParamRelationsOnly(trace, Option.NORMAL);
     }
 
     // Assumes the entire trace is present, i.e., returned-row labels count as background.
-    public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace, boolean includePreamble) {
+    public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace, Option option) {
         Map<Label, BoolExpr> allLabeledExprs = makeLabeledExprsAll(trace);
         ImmutableList.Builder<BoolExpr> bgBuilder = new ImmutableList.Builder<>();
 
-        if (includePreamble) {
-            bgBuilder.addAll(baseFormula.preamble);
+        ArrayList<BoolExpr> antecedent = new ArrayList<>();
+        if (option != Option.NO_PREAMBLE) {
+            antecedent.addAll(baseFormula.preamble);
         }
         Query query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
-        Tuple extHeadTup = query.makeFreshHead();
-        bgBuilder.addAll(query.apply(baseFormula.inst1).doesContainExpr(extHeadTup));
-        bgBuilder.add(context.mkNot(context.mkAnd(query.apply(baseFormula.inst2).doesContainExpr(extHeadTup))));
+        Iterable<BoolExpr> negatedConsequence = baseFormula.generateNotContains(query);
 
         // Since we're param labels-only, add returned-row labels to background and exclude them from `labeledExprs`.
         ImmutableMap.Builder<Label, BoolExpr> labeledExprsBuilder = new ImmutableMap.Builder<>();
         for (Map.Entry<Label, BoolExpr> entry : allLabeledExprs.entrySet()) {
             if (entry.getKey().getKind() == Label.Kind.RETURNED_ROW) {
-                bgBuilder.add(entry.getValue());
+                antecedent.add(entry.getValue());
             } else {
                 labeledExprsBuilder.put(entry);
             }
         }
+
+        switch (option) {
+            case NORMAL, NO_PREAMBLE -> {
+                bgBuilder.addAll(antecedent);
+                bgBuilder.addAll(negatedConsequence);
+            }
+            case POSITIVE -> bgBuilder.add(context.mkImplies(
+                    context.mkAnd(antecedent),
+                    context.mkNot(context.mkAnd(negatedConsequence))
+            ));
+            default -> throw new IllegalArgumentException("unrecognized option" + option);
+        }
+
         return new Formulas<>(labeledExprsBuilder.build(), bgBuilder.build());
     }
 
@@ -96,7 +114,7 @@ public class UnsatCoreFormulaBuilder {
     public String buildValidateParamRelationsOnlySMT(UnmodifiableLinearQueryTrace trace, Set<Label> labels) {
         return baseFormula.generateSMT(() -> {
             // Don't include the preamble -- the `generateSMT` automatically.
-            Formulas<Label> fs = buildParamRelationsOnly(trace, false);
+            Formulas<Label> fs = buildParamRelationsOnly(trace, Option.NO_PREAMBLE);
             return Iterables.concat(
                     fs.getBackground(),
                     Maps.filterKeys(fs.getLabeledExprs(), labels::contains).values()

@@ -53,4 +53,10 @@ public abstract class Query {
         MyZ3Context context = schema.getContext();
         return new Tuple(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshConst("z", t)));
     }
+
+    public Tuple makeFreshExistentialHead() {
+        Schema schema = getSchema();
+        MyZ3Context context = schema.getContext();
+        return new Tuple(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshExistentialConst("e", t)));
+    }
 }

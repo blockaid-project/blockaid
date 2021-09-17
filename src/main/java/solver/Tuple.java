@@ -7,7 +7,9 @@ import solver.context.MyZ3Context;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -67,6 +69,10 @@ public class Tuple {
             exprs[i] = context.mkEq(get(i), other.get(i));
         }
         return context.mkAnd(exprs);
+    }
+
+    public List<Expr> toExprList() {
+        return stream().collect(Collectors.toList());
     }
 
     public Expr[] toExprArray() {

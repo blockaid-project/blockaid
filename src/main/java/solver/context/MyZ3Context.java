@@ -42,11 +42,14 @@ public class MyZ3Context {
     }
 
     public BoolExpr mkDistinct(Expr... exprs) {
+        if (exprs.length <= 1) {
+            return mkTrue();
+        }
         return rawContext.mkDistinct(exprs);
     }
 
     public BoolExpr mkDistinct(Collection<Expr> exprs) {
-        return rawContext.mkDistinct(exprs.toArray(new Expr[0]));
+        return mkDistinct(exprs.toArray(new Expr[0]));
     }
 
     public BoolExpr mkBoolConst(String s) {
@@ -91,6 +94,10 @@ public class MyZ3Context {
 
     public BoolExpr mkOr(BoolExpr... boolExprs) {
         return rawContext.mkOr(boolExprs);
+    }
+
+    public BoolExpr myMkForall(Collection<Expr> quantifiers, BoolExpr body) {
+        return myMkForall(quantifiers.toArray(new Expr[0]), body);
     }
 
     public BoolExpr myMkForall(Expr[] quantifiers, BoolExpr body) {
