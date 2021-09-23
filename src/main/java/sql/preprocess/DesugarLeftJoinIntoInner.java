@@ -5,6 +5,7 @@ import sql.ParserResult;
 import sql.PrivacyQuery;
 import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
+import util.SqlNodes;
 
 import java.util.List;
 import java.util.Optional;
@@ -71,7 +72,7 @@ public class DesugarLeftJoinIntoInner implements Preprocessor {
         SqlJoin newJoin = new SqlJoin(join.getParserPosition(), joinLeft, join.isNaturalNode(),
                 SqlLiteral.createSymbol(JoinType.INNER, join.getJoinTypeNode().getParserPosition()),
                 joinRight, join.getConditionTypeNode(), join.getCondition());
-        SqlSelect newSelect = (SqlSelect) select.clone(select.getParserPosition());
+        SqlSelect newSelect = SqlNodes.shallowCopy(select);
         newSelect.setFrom(newJoin);
 
         ParserResult newPR = new ParserResult(newSelect);

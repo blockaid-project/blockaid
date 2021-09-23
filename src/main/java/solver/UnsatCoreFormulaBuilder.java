@@ -10,6 +10,8 @@ import com.microsoft.z3.Status;
 import policy_checker.Policy;
 import solver.context.MyZ3Context;
 import solver.labels.*;
+import util.Logger;
+import util.TerminalColor;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -238,11 +240,6 @@ public class UnsatCoreFormulaBuilder {
         // `ecs` has been fully constructed.
         ecs = makeNormalizedECs(ecs);
 
-//        for (Object value : ecs.keySet()) {
-//            List<Expr> variables = ecs.get(value);
-//            System.out.println(value + ":\t" + variables.size() + "\t" + variables);
-//        }
-
         long startTime = System.currentTimeMillis();
         removeRedundantExprs(
                 ecs,
@@ -251,6 +248,11 @@ public class UnsatCoreFormulaBuilder {
                 Maps.filterKeys(label2Expr, l -> l.getKind() == Label.Kind.RETURNED_ROW).values()
         );
         System.out.println("\t\t| removeRedundantExprs:\t" + (System.currentTimeMillis() - startTime));
+
+//        for (Object value : ecs.keySet()) {
+//            List<Expr> variables = ecs.get(value);
+//            System.out.println(value + ":\t" + variables.size() + "\t" + variables);
+//        }
 
         for (Object value : ecs.keySet()) {
             List<Expr> variables = ecs.get(value);

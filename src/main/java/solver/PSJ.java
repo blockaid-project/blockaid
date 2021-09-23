@@ -1,5 +1,6 @@
 package solver;
 
+import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
 import solver.context.MyZ3Context;
 
@@ -72,36 +73,30 @@ public abstract class PSJ extends Query {
         return Arrays.stream(predicate.getArgs()).flatMap(PSJ::extractEqFromConj);
     }
 
+    // Returns a formula stating that tuple is in the output of this query on the instance.
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
-        // Returns a formula stating that tuple is in the output of this query on the instance.
+        List<BoolExpr> body = new ArrayList<>();
         Tuple[] symbolicTups = relations.stream().map(schema::makeFreshExistentialTuple).toArray(Tuple[]::new);
-        BoolExpr predicate = predicateGenerator(symbolicTups);
         Tuple headSymTup = headSelector(symbolicTups);
         checkArgument(headSymTup.size() == tuple.size());
 
         MyZ3Context context = schema.getContext();
-        BoolExpr[] bodyExprs = new BoolExpr[relations.size()];
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
             Tuple tup = symbolicTups[i];
-            bodyExprs[i] = context.mkAnd(instance.get(relationName).doesContainExpr(tup));
+            Iterables.addAll(body, instance.get(relationName).doesContainExpr(tup));
         }
 
-        BoolExpr bodyFormula = context.mkAnd(bodyExprs);
-        Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
-        headSymTup.stream().forEach(existentialVars::remove);
+        body.add(predicateGenerator(symbolicTups)); // The WHERE clause.
 
+        // Symbolic head = actual head.
         for (int i = 0; i < tuple.size(); ++i) {
-            bodyFormula = (BoolExpr) bodyFormula.substitute(headSymTup.get(i), tuple.get(i));
-            predicate = (BoolExpr) predicate.substitute(headSymTup.get(i), tuple.get(i));
+            body.add(context.mkEq(headSymTup.get(i), tuple.get(i)));
         }
 
-        if (existentialVars.isEmpty()) {
-            return List.of(bodyFormula, predicate);
-        }
-
-        return List.of(context.myMkExists(existentialVars, context.mkAnd(bodyFormula, predicate)));
+        List<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toList());
+        return List.of(context.myMkExists(existentialVars, context.mkAnd(body)));
     }
 
     // FIXME(zhangwen): these optimizations seem to break something. (e.g., if the same column is projected twice)

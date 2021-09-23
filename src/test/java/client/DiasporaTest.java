@@ -8,6 +8,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import policy_checker.QueryChecker;
 import server.EndToEndTest;
+import util.Options;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -179,7 +180,7 @@ public class DiasporaTest {
         Class.forName("jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
-        QueryChecker.ENABLE_CACHING = false;
+        Options.ENABLE_CACHING = false;
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.SOLVE_TIMEOUT_MS = 3000;
 
@@ -286,7 +287,7 @@ public class DiasporaTest {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         Class.forName("org.h2.Driver");
 
-        QueryChecker.ENABLE_CACHING = true;
+        Options.ENABLE_CACHING = true;
         QueryChecker.PRECHECK_SETTING = QueryChecker.PrecheckSetting.DISABLED;
         QueryChecker.SOLVE_TIMEOUT_MS = 15000;
 

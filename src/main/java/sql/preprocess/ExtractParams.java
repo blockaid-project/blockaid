@@ -2,6 +2,7 @@ package sql.preprocess;
 
 import org.apache.calcite.sql.*;
 import sql.ParserResult;
+import util.SqlNodes;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -42,7 +43,7 @@ public class ExtractParams extends SqlTransformer {
             case BOOLEAN -> sqlLiteral.booleanValue();
             case INTEGER, DECIMAL -> sqlLiteral.intValue(true);
             case CHAR -> sqlLiteral.getValueAs(String.class);
-            case SYMBOL -> sqlLiteral;
+//            case SYMBOL -> sqlLiteral;
             default -> throw new RuntimeException("unhandled literal type: " + sqlLiteral.getTypeName());
         };
 
@@ -89,7 +90,7 @@ public class ExtractParams extends SqlTransformer {
     public SqlNode visit(SqlCall sqlCall) {
         return switch (sqlCall.getKind()) {
             case SELECT -> {
-                SqlSelect newSelect = (SqlSelect) sqlCall.clone(sqlCall.getParserPosition());
+                SqlSelect newSelect = (SqlSelect) SqlNodes.shallowCopy(sqlCall);
                 newSelect.setFrom(newSelect.getFrom().accept(this));
                 SqlNode where = newSelect.getWhere();
                 if (where != null) {

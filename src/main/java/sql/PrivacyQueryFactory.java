@@ -33,14 +33,10 @@ public class PrivacyQueryFactory {
         ArrayList<String> newParamNames = new ArrayList<>(paramNames);
         result = ExtractParams.perform(result, newParams, newParamNames);
 
-        switch(result.getKind()) {
-            case SELECT:
-            case ORDER_BY:
-                return new PrivacyQuerySelect(result, schema, newParams, newParamNames);
-            case UNION:
-                return new PrivacyQueryUnion(result, schema, newParams, newParamNames);
-            default:
-                throw new AssertionError("unexpected");
-        }
+        return switch (result.getKind()) {
+            case SELECT, ORDER_BY -> new PrivacyQuerySelect(result, schema, newParams, newParamNames);
+            case UNION -> new PrivacyQueryUnion(result, schema, newParams, newParamNames);
+            default -> throw new AssertionError("unexpected");
+        };
     }
 }

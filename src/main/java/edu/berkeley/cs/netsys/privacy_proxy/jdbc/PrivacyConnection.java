@@ -2,11 +2,15 @@ package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
 import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.*;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import policy_checker.AppCacheSpec;
@@ -25,6 +29,7 @@ import java.net.URL;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -37,7 +42,6 @@ import static util.TerminalColor.*;
 public class PrivacyConnection implements Connection {
   private final Connection direct_connection;
   private final CalciteConnection calcite_connection;
-  private final SqlParser.Config parserConfig;
   private final QueryChecker query_checker;
   private final ArrayList<Policy> policy_list;
   private QueryTrace current_trace;
@@ -45,6 +49,7 @@ public class PrivacyConnection implements Connection {
   private int queryCount;
 
   private final ImmutableList<AppCacheSpec> cacheSpecs;
+  private final LoadingCache<String, ParserResult> parserResults;
 
   /**
    * Takes ownership of direct_info.
@@ -80,7 +85,15 @@ public class PrivacyConnection implements Connection {
 
     {
       JdbcSchema jdbcSchema = Objects.requireNonNull(schemaPlus.unwrap(JdbcSchema.class));
-      this.parserConfig = jdbcSchema.dialect.configureParser(SqlParser.config());
+      SqlParser.Config parserConfig = jdbcSchema.dialect.configureParser(SqlParser.config());
+      this.parserResults = CacheBuilder.newBuilder().maximumSize(1000).build(
+              new CacheLoader<>() {
+                @Override
+                public ParserResult load(String s) throws SqlParseException {
+                  return new ParserResult(SqlParser.create(s, parserConfig).parseQuery());
+                }
+              }
+      );
     }
 
     String deps = direct_info.getProperty("deps");
@@ -108,10 +121,8 @@ public class PrivacyConnection implements Connection {
     schema = new SchemaPlusWithKey(schemaPlus, ImmutableMap.copyOf(primaryKeys), foreignKeys);
 
     this.policy_list = new ArrayList<>();
-    try {
-      set_policy(direct_info);
-    } catch (SqlParseException e) {
-      throw new SQLException("Error parsing policy: " + e);
+    for (String sql : direct_info.getProperty("policy").split("\n")) {
+      this.policy_list.add(new Policy(this.schema, parseQuery(sql)));
     }
 
     this.cacheSpecs = cacheSpec.lines().map(AppCacheSpec::fromSpecString).collect(ImmutableList.toImmutableList());
@@ -120,11 +131,7 @@ public class PrivacyConnection implements Connection {
     pks.lines().map(this::parsePk).forEach(dependencies::add);
     fks.lines().map(this::parseFk).forEach(dependencies::add);
     for (String line : deps.lines().collect(Collectors.toList())) {
-      try {
-        dependencies.add(parseImp(line));
-      } catch (SqlParseException e) {
-        throw new SQLException("Error parsing imported dependency: " + e);
-      }
+      dependencies.add(parseImp(line));
     }
 
     this.query_checker = new QueryChecker(
@@ -150,28 +157,27 @@ public class PrivacyConnection implements Connection {
     return new ForeignKeyDependency(from[0], from[1], to[0], to[1]);
   }
 
-  private ImportedDependency parseImp(String s) throws SqlParseException {
+  private ImportedDependency parseImp(String s) throws SQLException {
     String[] parts = s.split(";", 2);
     return new ImportedDependency(schema, parseQuery(parts[0]), parseQuery(parts[1]));
   }
 
-  private ParserResult parseQuery(String s) throws SqlParseException {
-    return new ParserResult(SqlParser.create(s, parserConfig).parseQuery());
-  }
-
-  private void set_policy(Properties info) throws SqlParseException {
-    for (String sql : info.getProperty("policy").split("\n")) {
-      this.policy_list.add(new Policy(this.schema, parseQuery(sql)));
+  private ParserResult parseQuery(String s) throws SQLException {
+    try {
+      return parserResults.get(s);
+    } catch (ExecutionException e) {
+      throw new SQLException(e.getCause());
     }
+//    return new ParserResult(SqlParser.create(s, parserConfig).parseQuery());
   }
 
   /**
    * Parses SQL query and determines whether to apply policies to it.
    * @param query the query to parse.
    * @return parsed query if policies are applicable, empty otherwise.
-   * @throws SqlParseException if parsing fails.
+   * @throws SQLException if parsing fails.
    */
-  private Optional<ParserResult> shouldApplyPolicy(String query) throws SqlParseException {
+  private Optional<ParserResult> shouldApplyPolicy(String query) throws SQLException {
     String queryUpper = query.toUpperCase();
     if (queryUpper.startsWith("UPDATE")) {
       // The Calcite parser doesn't like our updates--
@@ -211,7 +217,7 @@ public class PrivacyConnection implements Connection {
     queryCount = 0;
   }
 
-  private boolean checkCacheRead(String key) throws SqlParseException {
+  private boolean checkCacheRead(String key) throws SQLException {
     for (AppCacheSpec spec : cacheSpecs) {
       Optional<List<String>> o = spec.getQueries(key);
       if (o.isEmpty()) { // Cache key is not matched by this spec.
@@ -253,7 +259,7 @@ public class PrivacyConnection implements Connection {
     PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parserResult, schema, paramValues, paramNames);
 
     current_trace.startQuery(privacy_query, privacy_query.parameters);
-    final long startTime = System.currentTimeMillis();
+    final long startNs = System.nanoTime();
     try {
       boolean pass = query_checker.checkPolicy(current_trace);
       if (!pass) {
@@ -265,8 +271,9 @@ public class PrivacyConnection implements Connection {
       e.printStackTrace();
       throw e;
     } finally {
-      final long endTime = System.currentTimeMillis();
-      printMessage("\t+ Policy checking:\t" + (endTime - startTime));
+      final long endNs = System.nanoTime();
+      printStylizedMessage("\t+ Policy checking:\t" + (endNs - startNs) / 1000000,
+              ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
     }
   }
 
@@ -290,12 +297,7 @@ public class PrivacyConnection implements Connection {
     }
     s = matcher.replaceAll("?");
 
-    Optional<ParserResult> parserResult;
-    try {
-      parserResult = shouldApplyPolicy(s);
-    } catch (SqlParseException e) {
-      throw new SQLException("parse error: " + e);
-    }
+    Optional<ParserResult> parserResult = shouldApplyPolicy(s);
     if (parserResult.isEmpty()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
     }
@@ -605,37 +607,16 @@ public class PrivacyConnection implements Connection {
       while (resultSet.next()) {
         List<Object> row = new ArrayList<>();
         for (int i = 1; i <= columnTypes.size(); ++i) {
-          Object value;
-          switch (columnTypes.get(i - 1)) {
-            case Types.INTEGER:
-            case Types.BIGINT:
-            case Types.TINYINT:
-            case Types.BIT: // TODO(zhangwen): turn into a Boolean?
-              value = resultSet.getInt(i);
-              break;
-            case Types.VARCHAR:
-            case Types.LONGVARCHAR:
-            case Types.CLOB:
-            case Types.LONGVARBINARY:
-              value = resultSet.getString(i);
-              break;
-            case Types.DECIMAL:
-            case Types.DOUBLE:
-            case Types.REAL:
-              value = resultSet.getDouble(i);
-              break;
-            case Types.BOOLEAN:
-              value = resultSet.getBoolean(i);
-              break;
-            case Types.DATE:
-              value = resultSet.getDate(i);
-              break;
-            case Types.TIMESTAMP:
-              value = resultSet.getTimestamp(i);
-              break;
-            default:
-              throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
-          }
+          Object value = switch (columnTypes.get(i - 1)) {
+            case Types.INTEGER, Types.BIGINT, Types.TINYINT, Types.BIT -> // TODO(zhangwen): turn into a Boolean?
+                    resultSet.getInt(i);
+            case Types.VARCHAR, Types.LONGVARCHAR, Types.CLOB, Types.LONGVARBINARY -> resultSet.getString(i);
+            case Types.DECIMAL, Types.DOUBLE, Types.REAL -> resultSet.getDouble(i);
+            case Types.BOOLEAN -> resultSet.getBoolean(i);
+            case Types.DATE -> resultSet.getDate(i);
+            case Types.TIMESTAMP -> resultSet.getTimestamp(i);
+            default -> throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
+          };
           if (resultSet.wasNull()) {
             value = null;
           }
@@ -2326,12 +2307,7 @@ public class PrivacyConnection implements Connection {
         return r.get();
       }
 
-      Optional<ParserResult> parserResult;
-      try {
-        parserResult = shouldApplyPolicy(s);
-      } catch (SqlParseException e) {
-        throw new SQLException("parse error: " + e);
-      }
+      Optional<ParserResult> parserResult = shouldApplyPolicy(s);
       if (parserResult.isEmpty()) {  // We let this query go through directly.
         isChecked = false;
         return active_statment.execute(s);
@@ -2472,12 +2448,7 @@ public class PrivacyConnection implements Connection {
         if (matcher.matches()) {
           String key = matcher.group(1);
           printStylizedMessage("Check cache read: " + key, ANSI_CYAN_BACKGROUND + ANSI_BLACK);
-          boolean isCompliant;
-          try {
-            isCompliant = checkCacheRead(key);
-          } catch (SqlParseException e) {
-            throw new SQLException("parse error in cache spec: " + e);
-          }
+          boolean isCompliant = checkCacheRead(key);
 
           if (!isCompliant) {
             throw new SQLException("Privacy compliance was not met");

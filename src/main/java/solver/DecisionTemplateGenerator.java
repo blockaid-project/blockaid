@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static util.Logger.printMessage;
 import static util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
@@ -43,13 +44,15 @@ public class DecisionTemplateGenerator {
             return Optional.empty();
         }
 
-        for (int slack = 1; ; ++slack) {
+        for (int slack = 1; slack <= 3; ++slack) {
             ReturnedRowUnsatCoreEnumerator.Core core = oCore.get();
             Optional<DecisionTemplate> odt = generate(trace, core.rrCore(), core.preambleCore(), slack);
             if (odt.isPresent()) {
                 return Optional.of(List.of(odt.get()));
             }
         }
+
+        return Optional.empty();
     }
 
     private Optional<DecisionTemplate> generate(UnmodifiableLinearQueryTrace trace,
@@ -72,6 +75,7 @@ public class DecisionTemplateGenerator {
         // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
         context.startTrackingConsts();
         UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
+//                UnsatCoreFormulaBuilder.Option.POSITIVE);
         ImmutableSet<Operand> allOperandsOld =
                 fs.getLabeledExprs().keySet().stream() // Get all labels.
                         .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
@@ -80,10 +84,10 @@ public class DecisionTemplateGenerator {
 
         Solver solver = rruce.getSolver();
 
+//        Set<Label> paramsCore;
 //        try (FindMinimalSat fms = new FindMinimalSat(context, solver)) {
-//            fms.compute(fs);
+//            paramsCore = fms.compute(fs);
 //        }
-//        return Optional.empty();
 
         solver.add(fs.getBackground().toArray(new BoolExpr[0]));
 
@@ -91,32 +95,34 @@ public class DecisionTemplateGenerator {
         Set<Label> paramsCore;
         try (UnsatCoreEnumerator<Label> uce =
                      new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.INCREASING)) {
-            System.out.println("total    #labels =\t" + labeledExprs.size());
+            printMessage("total    #labels =\t" + labeledExprs.size());
             Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
-            System.out.println("starting #labels =\t" + startingUnsatCore.size());
+            printMessage("starting #labels =\t" + startingUnsatCore.size() + "\t" + startingUnsatCore);
 
-            long startMs = System.currentTimeMillis();
-            Solver thisSolver = context.mkRawSolver();
+            long startNs = System.nanoTime();
+            // Seems sketchy to mess with the solver when it's being "owned" by `uce`.
+            solver.push();
             for (Label l : startingUnsatCore) {
-                thisSolver.add(labeledExprs.get(l));
+                solver.add(labeledExprs.get(l));
             }
             Set<Label> consequence = new HashSet<>();
             for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
                 Label l = entry.getKey();
                 if (startingUnsatCore.contains(l)
-                        || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
+                        || solver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
                     consequence.add(l);
                 }
             }
-            System.out.println("conseq   #labels =\t" + consequence.size());
+            solver.pop();
+            printMessage("conseq   #labels =\t" + consequence.size()); // + "\t" + consequence);
             uce.restrictTo(consequence);
 //                    uce.optimizeCritical();
-            System.out.println("\t\t| Find conseq:\t" + (System.currentTimeMillis() - startMs));
+            printMessage("\t\t| Find conseq:\t" + (System.nanoTime() - startNs) / 1e6);
 
             paramsCore = uce.next().get();
         }
         context.stopTrackingConsts();
-        System.out.println("final #labels =\t" + paramsCore.size());
+        printMessage("final #labels =\t" + paramsCore.size() + "\t" + paramsCore);
 
         // Step 4: Make decision template.
         List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
@@ -291,7 +297,7 @@ public class DecisionTemplateGenerator {
                         eb.setRowAttrValue(rrfo.colIdx(), datum);
                     }
                 }
-                default -> checkState(false, "unexpected operand: " + o);
+                default -> throw new IllegalArgumentException("unexpected operand: " + o);
             }
         }
 

@@ -1,6 +1,5 @@
 package sql;
 
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 
@@ -10,7 +9,7 @@ import java.util.Objects;
  * Created by amoghm on 3/4/16.
  */
 public class ParserResult {
-    protected final SqlNode sqlNode;
+    private final SqlNode sqlNode;
 
     // Lazily computed (`node.toString` can take a while).  Use `getParsedSql()` to access.
     private String parsedSql = null;

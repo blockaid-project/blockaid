@@ -11,6 +11,7 @@ import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static util.Options.CONTAINMENT_USE_QUANTIFIER_THRESHOLD;
 
 public class ConcreteRelation implements Relation {
     private final Schema schema;
@@ -18,9 +19,6 @@ public class ConcreteRelation implements Relation {
     private final Sort[] signature;
     private final Tuple[] tuples;
     private final BoolExpr[] exists;
-
-    /* If relation size is greater than this threshold, containment uses quantifiers. */
-    private static final int CONTAINMENT_USE_QUANTIFIER_THRESHOLD = Integer.parseInt(System.getProperty("privoxy.containment_use_quantifier_threshold", Integer.toString(Integer.MAX_VALUE)));
 
     public ConcreteRelation(Schema schema, Sort[] signature, Tuple[] tuples, BoolExpr[] exists) {
         checkArgument(tuples.length == exists.length, "tuples and exists differ in length");

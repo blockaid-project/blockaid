@@ -1,14 +1,12 @@
 package util;
 
-import java.util.Objects;
 import java.util.function.Supplier;
 
+import static util.Options.QUIET;
+import static util.Options.USE_COLORS;
 import static util.TerminalColor.ANSI_RESET;
 
 public class Logger {
-    public static final boolean USE_COLORS = Objects.equals(System.getProperty("privoxy.use_colors"), "true");
-    public static final boolean QUIET = Objects.equals(System.getProperty("privoxy.quiet"), "true");
-
     public static void printMessage(String message) {
         if (!QUIET) {
             System.out.println(message);

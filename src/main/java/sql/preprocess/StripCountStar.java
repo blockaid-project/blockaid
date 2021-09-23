@@ -6,6 +6,7 @@ import sql.ParserResult;
 import sql.PrivacyQuery;
 import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
+import util.SqlNodes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,7 +52,7 @@ public class StripCountStar implements Preprocessor {
         SqlIdentifier opId = (SqlIdentifier) operand;
         if (!opId.isStar()) { return Optional.empty(); }
 
-        SqlSelect newSelect = (SqlSelect) sqlSelect.clone(sqlSelect.getParserPosition());
+        SqlSelect newSelect = SqlNodes.shallowCopy(sqlSelect);
 
         List<SqlNode> newSelectList = new ArrayList<>();
         for (String col : pkColumns) {

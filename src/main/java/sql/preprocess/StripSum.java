@@ -5,6 +5,7 @@ import sql.ParserResult;
 import sql.PrivacyQuery;
 import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
+import util.SqlNodes;
 
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +35,7 @@ public class StripSum implements Preprocessor {
         SqlIdentifier opId = (SqlIdentifier) operand;
         if (opId.names.size() != 2) { return Optional.empty(); }
 
-        SqlSelect newSelect = (SqlSelect) sqlSelect.clone(sqlSelect.getParserPosition());
+        SqlSelect newSelect = SqlNodes.shallowCopy(sqlSelect);
         newSelect.setSelectList(SqlNodeList.SINGLETON_STAR);
         ParserResult newPR = new ParserResult(newSelect);
         PrivacyQuery pq = new PrivacyQueryEmptyRBWrapper(

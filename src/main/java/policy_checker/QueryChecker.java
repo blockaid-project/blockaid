@@ -25,11 +25,10 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static util.Logger.printMessage;
+import static util.Options.*;
 import static util.TerminalColor.*;
 
 public class QueryChecker {
-    public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
-    public static boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("privoxy.cache_no_retain"), "true");
     public static boolean PRUNE_TRACE = true;
     public static boolean UNNAMED_EQUALITY = true;
 
@@ -40,9 +39,6 @@ public class QueryChecker {
     }
 
     public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.COARSE;
-
-    private static final boolean PRINT_FORMULAS = Objects.equals(System.getProperty("privoxy.print_formulas"), "true");
-    private static final String FORMULA_DIR = System.getenv("PRIVOXY_FORMULA_PATH");
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
@@ -335,6 +331,11 @@ public class QueryChecker {
         printMessage(() -> "transformed: " + currQuery.parsedSql.getParsedSql()
                 + "\t" + currQuery.parameters + "\t" + currQuery.paramNames
         );
+
+        if (SKIP_CHECKING) {
+            return true;
+        }
+
         if (PRECHECK_SETTING != PrecheckSetting.DISABLED) {
             FastCheckDecision precheckResult = doPrecheckPolicy(currQuery);
             if (precheckResult == FastCheckDecision.ALLOW) {

@@ -86,7 +86,7 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
 
     // Assumes that seed is satisfiable.
     private Set<L> growBinarySearch(Set<L> seed) {
-        long startMs = System.currentTimeMillis();
+        long startNs = System.nanoTime();
         int lowerBound = seed.size(), upperBound = getLabels().size();
         while (lowerBound < upperBound) {
             int mid = (lowerBound + upperBound + 1) / 2;
@@ -97,7 +97,7 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
             }
         }
         Optional<Set<L>> satLabels = isSubsetSat(seed, lowerBound);
-        System.out.println("\t\t| GrowB:\t" + (System.currentTimeMillis() - startMs));
+        System.out.println("\t\t| GrowB:\t" + (System.nanoTime() - startNs) / 1000000);
         return satLabels.get();
     }
 
