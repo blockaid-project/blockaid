@@ -39,8 +39,8 @@ public class DecisionTemplate {
         this.lts = ImmutableList.copyOf(lts);
         ImmutableMultimap.Builder<Integer, LessThan> builder = new ImmutableMultimap.Builder<>();
         for (LessThan lt : lts) {
-            builder.put(lt.getLhsEC(), lt);
-            builder.put(lt.getRhsEC(), lt);
+            builder.put(lt.lhsEC(), lt);
+            builder.put(lt.rhsEC(), lt);
         }
         this.ec2LessThan = builder.build();
     }
@@ -56,10 +56,10 @@ public class DecisionTemplate {
 
     private boolean checkLessThan(Map<Integer, Object> ec2Value, int ecIdx) {
         for (LessThan lt : ec2LessThan.get(ecIdx)) {
-            if (!ec2Value.containsKey(lt.getLhsEC()) || !ec2Value.containsKey(lt.getRhsEC())) {
+            if (!ec2Value.containsKey(lt.lhsEC()) || !ec2Value.containsKey(lt.rhsEC())) {
                 continue;
             }
-            Object lhsValue = ec2Value.get(lt.getLhsEC()), rhsValue = ec2Value.get(lt.getRhsEC());
+            Object lhsValue = ec2Value.get(lt.lhsEC()), rhsValue = ec2Value.get(lt.rhsEC());
             if (!Tuple.valueLessThan(lhsValue, rhsValue)) {
                 return false;
             }
@@ -168,7 +168,7 @@ public class DecisionTemplate {
         }
 
         for (LessThan lt : lts) {
-            lines.add(String.format("?%d < ?%d", lt.getLhsEC(), lt.getRhsEC()));
+            lines.add(String.format("?%d < ?%d", lt.lhsEC(), lt.rhsEC()));
         }
 
         lines.add("--------------------------------------------------------------------------------");
@@ -178,36 +178,7 @@ public class DecisionTemplate {
     }
 
     // A less-than constraint between equivalence classes.  Value operands not yet supported.
-    public static class LessThan {
-        private final int lhsEC;
-        private final int rhsEC;
-
-        public LessThan(int lhsEC, int rhsEC) {
-            this.lhsEC = lhsEC;
-            this.rhsEC = rhsEC;
-        }
-
-        public int getLhsEC() {
-            return lhsEC;
-        }
-
-        public int getRhsEC() {
-            return rhsEC;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            LessThan lessThan = (LessThan) o;
-            return lhsEC == lessThan.lhsEC && rhsEC == lessThan.rhsEC;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(lhsEC, rhsEC);
-        }
-    }
+    public record LessThan(int lhsEC, int rhsEC) {}
 
     // The existence of a (previous query, returned row)-pair, or constraints on the current query.
     public static class Entry {

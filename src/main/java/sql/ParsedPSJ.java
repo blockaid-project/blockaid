@@ -54,16 +54,10 @@ public class ParsedPSJ {
             fromClause = sqlSelect.getFrom();
             this.resultBitmap = null;
         }
+        relations = new ArrayList<>();
         if (fromClause.getKind() != SqlKind.JOIN) {
-            if (!(fromClause instanceof SqlIdentifier)) {
-                throw new RuntimeException("unhandled from clause: " + fromClause);
-            }
-            List<String> names = ((SqlIdentifier) fromClause).names;
-            String relation = names.get(names.size() - 1).toUpperCase();
-            relations = Collections.singletonList(relation);
-            relAliasToIdx.put(relation, 0);
+            addRelationName(fromClause);
         } else {
-            relations = new ArrayList<>();
             extractRelationNames((SqlJoin) fromClause);
         }
         for (SqlNode sn : sqlSelect.getSelectList()) {
@@ -238,21 +232,21 @@ public class ParsedPSJ {
             if (names.size() > 1) {
                 throw new RuntimeException("not supported: multipart table alias: " + rhs);
             }
-            alias = names.get(0);
+            alias = names.get(0).toUpperCase();
             node = call.operand(0);
-            hasRelAlias = true;
         }
 
         SqlIdentifier identifier = (SqlIdentifier) node;
         String relationName = identifier.names.get(identifier.names.size() - 1).toUpperCase();
         relations.add(relationName);
-        if (alias != null) {
-            relAliasToIdx.put(alias.toUpperCase(), relations.size() - 1);
+        if (alias != null && !alias.equals(relationName)) {
+            hasRelAlias = true;
+            relAliasToIdx.put(alias, relations.size() - 1);
         } else {
             if (relAliasToIdx.containsKey(relationName)) {
                 throw new RuntimeException("duplicate relation name: " + relationName);
             }
-            relAliasToIdx.put(relationName.toUpperCase(), relations.size() - 1);
+            relAliasToIdx.put(relationName, relations.size() - 1);
         }
     }
 
@@ -314,7 +308,7 @@ public class ParsedPSJ {
             }
         } else if (theta instanceof SqlLiteral literal) {
             if (literal.getTypeName() == SqlTypeName.BOOLEAN) {
-                return context.mkBool(literal.booleanValue());
+                return context.mkCustomBool(literal.booleanValue());
             } else if (literal.getTypeName() == SqlTypeName.INTEGER || literal.getTypeName() == SqlTypeName.DECIMAL) {
                 return context.mkCustomInt(literal.intValue(true));
             } else if (literal.getTypeName() == SqlTypeName.CHAR) {

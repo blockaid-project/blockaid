@@ -73,7 +73,7 @@ public class DecisionTemplateGenerator {
         SubQueryTrace sqt = trace.getSubTrace(toKeep);
 
         // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
-        context.startTrackingConsts();
+        context.pushTrackConsts();
         UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
 //                UnsatCoreFormulaBuilder.Option.POSITIVE);
         ImmutableSet<Operand> allOperandsOld =
@@ -100,28 +100,28 @@ public class DecisionTemplateGenerator {
             printMessage("starting #labels =\t" + startingUnsatCore.size() + "\t" + startingUnsatCore);
 
             long startNs = System.nanoTime();
-            // Seems sketchy to mess with the solver when it's being "owned" by `uce`.
-            solver.push();
+            Solver thisSolver = context.mkSolver();
             for (Label l : startingUnsatCore) {
-                solver.add(labeledExprs.get(l));
+                thisSolver.add(labeledExprs.get(l));
             }
+
             Set<Label> consequence = new HashSet<>();
             for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
                 Label l = entry.getKey();
+                Status res = null;
                 if (startingUnsatCore.contains(l)
-                        || solver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
+                        || (res = thisSolver.check(context.mkNot(entry.getValue()))) == Status.UNSATISFIABLE) {
                     consequence.add(l);
                 }
             }
-            solver.pop();
-            printMessage("conseq   #labels =\t" + consequence.size()); // + "\t" + consequence);
+            printMessage("conseq   #labels =\t" + consequence.size());  // + "\t" + consequence);
             uce.restrictTo(consequence);
 //                    uce.optimizeCritical();
             printMessage("\t\t| Find conseq:\t" + (System.nanoTime() - startNs) / 1e6);
 
             paramsCore = uce.next().get();
         }
-        context.stopTrackingConsts();
+        context.popTrackConsts();
         printMessage("final #labels =\t" + paramsCore.size() + "\t" + paramsCore);
 
         // Step 4: Make decision template.

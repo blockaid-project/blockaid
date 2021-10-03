@@ -15,16 +15,13 @@ import java.util.*;
 public class MyZ3Context {
     final Context rawContext;
 
-    private boolean isTrackingConsts;
-    private final HashSet<Expr> untrackedConsts;
-    private final HashSet<Expr> trackedConsts;
+    private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
 
     public MyZ3Context() {
         this.rawContext = new Context();
-        this.isTrackingConsts = false;
-        this.untrackedConsts = new HashSet<>();
-        this.trackedConsts = new HashSet<>();
+        this.trackedDeclStack = new ArrayList<>();
+        trackedDeclStack.add(new BaseTrackedDecls());
         this.customSorts = new CustomSorts(this);
     }
 
@@ -32,13 +29,24 @@ public class MyZ3Context {
         return customSorts.getValueForExpr(e);
     }
 
-    private <T extends Expr> T trackConstIfNecessary(T c) {
-        if (isTrackingConsts && !untrackedConsts.contains(c)) {
-            trackedConsts.add(c);
-        } else {
-            untrackedConsts.add(c);
+    private <T extends Expr> T trackConst(T c) {
+        for (BaseTrackedDecls decls : trackedDeclStack) {
+            if (decls.containsConst(c)) {
+                return c;
+            }
         }
+        trackedDeclStack.get(trackedDeclStack.size() - 1).addConst(c);
         return c;
+    }
+
+    private FuncDecl trackFuncDecl(FuncDecl f) {
+        for (BaseTrackedDecls decls : trackedDeclStack) {
+            if (decls.containsFuncDecl(f)) {
+                return f;
+            }
+        }
+        trackedDeclStack.get(trackedDeclStack.size() - 1).addFuncDecl(f);
+        return f;
     }
 
     public BoolExpr mkDistinct(Expr... exprs) {
@@ -53,7 +61,7 @@ public class MyZ3Context {
     }
 
     public BoolExpr mkBoolConst(String s) {
-        return trackConstIfNecessary(rawContext.mkBoolConst(s));
+        return trackConst(rawContext.mkBoolConst(s));
     }
 
     public StringSymbol mkSymbol(String s) {
@@ -61,15 +69,15 @@ public class MyZ3Context {
     }
 
     public Expr mkConst(String s, Sort sort) {
-        return trackConstIfNecessary(rawContext.mkConst(s, sort));
+        return trackConst(rawContext.mkConst(s, sort));
     }
 
     public Expr mkFreshConst(String s, Sort sort) {
-        return trackConstIfNecessary(rawContext.mkFreshConst(s, sort));
+        return trackConst(rawContext.mkFreshConst(s, sort));
     }
 
     // Not tracked.
-    public Expr mkFreshExistentialConst(String s, Sort sort) {
+    public Expr mkFreshQuantifiedConst(String s, Sort sort) {
         return rawContext.mkFreshConst(s, sort);
     }
 
@@ -114,29 +122,35 @@ public class MyZ3Context {
         return rawContext.mkExists(quantifiers.toArray(new Expr[0]), body, 1, null, null, null, null);
     }
 
-    public void startTrackingConsts() {
-        trackedConsts.clear();
-        isTrackingConsts = true;
-    }
-
-    public void stopTrackingConsts() {
-        isTrackingConsts = false;
-    }
-
-    public Iterable<Expr> getConsts() {
-        return trackedConsts;
-    }
-
-    public void customSortsPush() {
+    public void pushTrackConsts() {
         customSorts.push();
+        trackedDeclStack.add(new BaseTrackedDecls());
     }
 
-    public void customSortsPop() {
+    public void popTrackConsts() {
+        trackedDeclStack.remove(trackedDeclStack.size() - 1);
         customSorts.pop();
     }
 
+    // DO NOT track any new consts / func decls while iterating through the returned iterables!
+    public TrackedDecls getAllTrackedDecls() {
+        return new MergedTrackedDecls(trackedDeclStack);
+    }
+//
+//    public void customSortsPush() {
+//        customSorts.push();
+//    }
+//
+//    public void customSortsPop() {
+//        customSorts.pop();
+//    }
+
     public String prepareSortDeclaration() {
         return customSorts.prepareSortDeclaration();
+    }
+
+    public String prepareCustomValueConstraints() {
+        return customSorts.prepareCustomValueConstraints();
     }
 
     // Return solver without unique constraints on custom sorts; useful when only generating partial
@@ -158,7 +172,7 @@ public class MyZ3Context {
     }
 
     public Expr mkDate(Date date) {
-        return customSorts.getDate(date);
+        return trackConst(customSorts.getDate(date));
     }
 
     public Sort getTimestampSort() {
@@ -166,7 +180,7 @@ public class MyZ3Context {
     }
 
     public Expr mkTimestamp(Timestamp ts) {
-        return customSorts.getTimestamp(ts);
+        return trackConst(customSorts.getTimestamp(ts));
     }
 
     public Sort getCustomIntSort() {
@@ -174,25 +188,27 @@ public class MyZ3Context {
     }
 
     public Expr mkCustomInt(long value) {
-        return customSorts.getInt(value);
+        return trackConst(customSorts.getInt(value));
     }
 
     public Expr mkCustom(Object value) {
+        Expr e;
         if (value instanceof Long) {
-            return mkCustomInt((long) value);
+            e = mkCustomInt((long) value);
         } else if (value instanceof Integer) {
-            return mkCustomInt((int) value);
+            e = mkCustomInt((int) value);
         } else if (value instanceof String) {
-            return mkCustomString((String) value);
+            e = mkCustomString((String) value);
         } else if ((value instanceof Float) || (value instanceof Double)) {
-            return mkCustomReal((double) value);
+            e = mkCustomReal((double) value);
         } else if (value instanceof Timestamp) {
-            return customSorts.getTimestamp((Timestamp) value);
+            e = customSorts.getTimestamp((Timestamp) value);
         } else if (value instanceof Date) {
-            return customSorts.getDate((Date) value);
+            e = customSorts.getDate((Date) value);
         } else {
             throw new UnsupportedOperationException("object not supported: " + value);
         }
+        return trackConst(e);
     }
 
     public BoolExpr mkCustomIntLt(Expr left, Expr right) { return (BoolExpr) customSorts.intLt.apply(left, right); }
@@ -202,15 +218,23 @@ public class MyZ3Context {
     }
 
     public Expr mkCustomReal(double value) {
-        return customSorts.getReal(value);
+        return trackConst(customSorts.getReal(value));
     }
 
     public Sort getCustomStringSort() {
         return customSorts.stringSort;
     }
 
+    public Sort getCustomBoolSort() {
+        return customSorts.boolSort;
+    }
+
     public Expr mkCustomString(String value) {
-        return customSorts.getString(value);
+        return trackConst(customSorts.getString(value));
+    }
+
+    public Expr mkCustomBool(boolean value) {
+        return trackConst(customSorts.getBool(value));
     }
 
     public BoolExpr mkNot(BoolExpr e) {
@@ -253,7 +277,11 @@ public class MyZ3Context {
         return rawContext.mkBool(b);
     }
 
+    public FuncDecl mkFuncDecl(String s, Sort[] sorts, Sort sort) {
+        return trackFuncDecl(rawContext.mkFuncDecl(s, sorts, sort));
+    }
+
     public FuncDecl mkFreshFuncDecl(String s, Sort[] sorts, Sort sort) {
-        return rawContext.mkFreshFuncDecl(s, sorts, sort);
+        return trackFuncDecl(rawContext.mkFreshFuncDecl(s, sorts, sort));
     }
 }

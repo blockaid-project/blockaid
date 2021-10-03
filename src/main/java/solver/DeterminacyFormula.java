@@ -8,7 +8,9 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
 import com.microsoft.z3.enumerations.Z3_decl_kind;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import solver.context.MyZ3Context;
+import solver.context.TrackedDecls;
 import util.UnionFind;
 
 import java.util.*;
@@ -18,9 +20,10 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-public abstract class DeterminacyFormula {
+public class DeterminacyFormula {
     private static final boolean MERGE_TRACE = false;
 
     protected final MyZ3Context context;
@@ -29,47 +32,50 @@ public abstract class DeterminacyFormula {
     protected final Instance inst2;
 
     protected final ImmutableList<BoolExpr> preamble;
-    private final String preambleSMT;
-
-    public enum TextOption {
-        USE_TEXT,
-        NO_TEXT
-    }
+    private final @Nullable String preambleSMT;
 
     protected final TextOption textOption;
 
-    protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance,
+    protected static String makePreambleSMTNamed(List<NamedBoolExpr> exprs) {
+        return exprs.stream().map(NamedBoolExpr::makeAssertion).collect(Collectors.joining("\n"));
+    }
+
+    protected static String makePreambleSMT(List<BoolExpr> exprs) {
+        StringBuilder sb = new StringBuilder();
+        for (BoolExpr e : exprs) {
+            sb.append("(assert ").append(e.getSExpr()).append(")\n");
+        }
+        return sb.toString();
+    }
+
+    protected DeterminacyFormula(Schema schema, Instance inst1, Instance inst2, Collection<BoolExpr> preamble,
+                                 TextOption text, String preambleSMT) {
+        this.schema = schema;
+        this.context = schema.getContext();
+        this.inst1 = inst1;
+        this.inst2 = inst2;
+        this.preamble = ImmutableList.copyOf(preamble);
+        this.textOption = text;
+        this.preambleSMT = switch (text) {
+            case USE_TEXT -> checkNotNull(preambleSMT);
+            case NO_TEXT -> null;
+        };
+    }
+
+    protected DeterminacyFormula(Schema schema, Function<Integer, Instance> mkInst,
                                  BiFunction<Instance, Instance, List<BoolExpr>> mkPreamble,
                                  TextOption text) {
         this.schema = schema;
         this.context = schema.getContext();
-        this.inst1 = makeInstance.apply(0);
-        this.inst2 = makeInstance.apply(1);
-
-        // Set prepared expr.
-        final long startTime = System.currentTimeMillis();
+        this.inst1 = mkInst.apply(0);
+        this.inst2 = mkInst.apply(1);
 
         this.preamble = ImmutableList.copyOf(mkPreamble.apply(this.inst1, this.inst2));
         this.textOption = text;
-        if (text == TextOption.USE_TEXT) {
-            Solver solver = schema.getContext().mkRawSolver();
-            solver.add(this.preamble.toArray(new BoolExpr[0]));
-            String result = solver.toString();
-            // Remove the custom sorts from preamble -- we add them back when generating the rest of the formula,
-            // because here, sorts that are not used in the preamble but are used later on won't be declared.
-            result = result.replaceAll("\\(declare-sort CS![A-Z]+ 0\\)|\\(declare-fun CS![A-Z]+!\\d+ \\(\\) CS![A-Z]+\\)", "");
-            // FIXME(zhangwen): this is janky.
-            result = result.replaceAll("\\(declare-fun [A-Za-z]+ \\(CS!INT CS!INT\\) Bool\\)", "");
-
-            if (!result.contains("!_NOW")) {
-                result += "(declare-fun !_NOW () CS!INT)\n";
-            }
-            context.mkConst("!_NOW", context.getCustomIntSort());
-            this.preambleSMT = result;
-        } else {
-            this.preambleSMT = null;
-        }
-//        System.out.println("set prepared expr " + getClass().getName() + ":" + (System.currentTimeMillis() - startTime));
+        this.preambleSMT = switch (text) {
+            case USE_TEXT -> makePreambleSMT(this.preamble);
+            case NO_TEXT -> null;
+        };
     }
 
     protected DeterminacyFormula(Schema schema, Function<Integer, Instance> makeInstance,
@@ -244,26 +250,63 @@ public abstract class DeterminacyFormula {
         return generateSMT(() -> makeBodyFormula(queries));
     }
 
-    protected String generateSMT(Supplier<Iterable<BoolExpr>> mkBody) {
+    protected String generateSMTFromString(Supplier<String> mkBodySMT, String extraHeader, String extraFooter) {
         checkState(textOption == TextOption.USE_TEXT);
 
-        context.startTrackingConsts();
-        String bodyFormula = Streams.stream(mkBody.get())
-                .map(formula -> "(assert " + formula + ")")
-                .collect(Collectors.joining("\n"));
-        context.stopTrackingConsts();
-
-        StringBuilder sb = new StringBuilder();
-        for (Expr constant : context.getConsts()) {
-            if (!constant.getSExpr().startsWith("CS!")) {
+        context.pushTrackConsts();
+        try {
+            String bodySMT = mkBodySMT.get();
+            StringBuilder sb = new StringBuilder();
+            sb.append(context.prepareSortDeclaration());
+            TrackedDecls decls = context.getAllTrackedDecls();
+            for (FuncDecl funcDecl : decls.getFuncDecls()) {
+                sb.append(funcDecl.getSExpr()).append("\n");
+            }
+            for (Expr constant : decls.getConsts()) {
                 sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
             }
-        }
-        sb.append(bodyFormula);
-        String body = sb.toString();
+            String header = sb.toString();
 
-        // only used to generate declarations and assertions for sorts
-        String header = context.prepareSortDeclaration();
-        return header + this.preambleSMT + body + "(check-sat)";
+            return extraHeader + header + this.preambleSMT + bodySMT + context.prepareCustomValueConstraints()
+                    + "(check-sat)\n" + extraFooter;
+        } finally {
+            context.popTrackConsts();
+        }
     }
+    protected String generateSMTFromString(Supplier<String> mkBodySMT) {
+        return generateSMTFromString(mkBodySMT, "", "");
+    }
+
+    protected String generateSMT(Supplier<Iterable<BoolExpr>> mkBody) {
+        return generateSMTFromString(() ->
+                Streams.stream(mkBody.get())
+                        .map(formula -> "(assert " + formula + ")")
+                        .collect(Collectors.joining("\n")));
+    }
+
+//    protected String generateUnsatCoreSMT(Supplier<Iterable<NamedBoolExpr>> mkBody) {
+//        checkState(textOption == TextOption.USE_TEXT);
+//
+//        context.pushTrackConsts();
+//        String bodyFormula = Streams.stream(mkBody.get())
+//                .map(nb -> nb.name() == null ?
+//                        "(assert " + nb.expr() + ")" :
+//                        "(assert (! (" + nb.expr() + ") :named " + nb.name() + "))"
+//                )
+//                .collect(Collectors.joining("\n"));
+//        TrackedDecls decls = context.popTrackConsts();
+//
+//        StringBuilder sb = new StringBuilder();
+//        for (Expr constant : decls.getConsts()) {
+//            if (!constant.getSExpr().startsWith("CS!")) {
+//                sb.append("(declare-fun ").append(constant.getSExpr()).append(" () ").append(constant.getSort().getSExpr()).append(")\n");
+//            }
+//        }
+//        sb.append(bodyFormula);
+//        String body = sb.toString();
+//
+//        // only used to generate declarations and assertions for sorts
+//        String header = context.prepareSortDeclaration();
+//        return "(set-option :produce-unsat-cores true)\n" + header + this.preambleSMT + body + "(check-sat)\n(get-unsat-core)\n";
+//    }
 }

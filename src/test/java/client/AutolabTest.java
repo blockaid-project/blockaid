@@ -1,18 +1,25 @@
 package client;
 
 import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
+import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.rel.rules.CalcMergeRule;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.parser.SqlAbstractParserImpl;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserImplFactory;
 import org.apache.calcite.sql.parser.impl.SqlParserImpl;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
+import org.apache.calcite.tools.FrameworkConfig;
+import org.apache.calcite.tools.Frameworks;
+import org.apache.calcite.tools.Planner;
+import org.apache.calcite.tools.ValidationException;
+import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.SourceStringReader;
 import org.apache.commons.io.FileUtils;
 import org.flywaydb.core.Flyway;
@@ -53,7 +60,7 @@ public class AutolabTest {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
             while (numRounds-- > 0) {
-//                long startMs = System.currentTimeMillis();
+                long startMs = System.currentTimeMillis();
                 try (Statement stmt = conn.createStatement()) {
                     stmt.execute("SET @_MY_UID = " + userId);
                 }
@@ -80,7 +87,7 @@ public class AutolabTest {
                 try (Statement stmt = conn.createStatement()) {
                     stmt.execute("SET @TRACE = null");
                 }
-//                System.out.println(System.currentTimeMillis() - startMs);
+//                System.out.println("round:\t" + (System.currentTimeMillis() - startMs));
             }
         }
     }
@@ -400,6 +407,25 @@ public class AutolabTest {
     }
 
     @Test
+    public void testProductionHomepage() throws ClassNotFoundException, SQLException {
+        String[] queries = new String[]{
+                "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 ORDER BY `users`.`id` ASC LIMIT 1",
+                "SELECT  1 AS one FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = 27000000 LIMIT 1",
+                "SELECT `courses`.`id`, `courses`.`name`, `courses`.`display_name`, `courses`.`start_date`, `courses`.`end_date`, `courses`.`disabled`, `courses`.`semester` FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = 27000000 ORDER BY display_name ASC",
+                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000000 LIMIT 1",
+                "SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
+                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000000 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000001 LIMIT 1",
+                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000001 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000002 LIMIT 1",
+                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000002 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+        };
+        testQueries(queries, 27000000, 100000);
+    }
+
+    @Test
     public void testProductionShowGradebook() throws ClassNotFoundException, SQLException {
         String[] queries = new String[]{
                 "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",
@@ -418,7 +444,7 @@ public class AutolabTest {
     }
 
     @Test
-    public void testFetchSchema() throws SQLException, SqlParseException {
+    public void testFetchSchema() throws SQLException, SqlParseException, ValidationException {
         Properties info = new Properties();
         info.put("model",
                 "inline:"
@@ -446,26 +472,32 @@ public class AutolabTest {
 //            System.out.println(parser.parseQuery());
 //            SqlAbstractParserImpl parser = factory.getParser(new SourceStringReader("SELECT * FROM users"));
 //            parser.parse
-//            SchemaPlus rootSchema = calciteConn.getRootSchema();
-//            JdbcSchema dbSchema = rootSchema.getSubSchema("MAIN").unwrap(JdbcSchema.class);
+            SchemaPlus rootSchema = calciteConn.getRootSchema();
+            JdbcSchema dbSchema = rootSchema.getSubSchema("MAIN").unwrap(JdbcSchema.class);
 //            RelDataType rdt = rootSchema.getSubSchema("MAIN").getTable("watchlist_instances").getRowType(
 //                    new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT)
 //            );
 //            List<RelDataTypeField> fields = rdt.getFieldList();
 //            System.out.println(fields);
 
-//            SqlParser.Config parserConfig = SqlParser.config();
-//            dbSchema.dialect.configureParser(parserConfig);
+            SqlParser.Config parserConfig = dbSchema.dialect.configureParser(SqlParser.config()).withQuotedCasing(Casing.UNCHANGED);
 //            SqlParser parser = SqlParser.create("SELECT 1 AS ONE FROM users", parserConfig);
 //            System.out.println(parser.parseQuery());
-            try (PreparedStatement stmt = calciteConn.prepareStatement("SELECT `users`.* FROM `users`")) {
-                stmt.execute();
-                try (ResultSet rs = stmt.getResultSet()) {
-                    while (rs.next()) {
-                        System.out.println(rs.getInt(0));
-                    }
-                }
-            }
+
+            FrameworkConfig config = Frameworks.newConfigBuilder()
+                    .parserConfig(parserConfig)
+                    .defaultSchema(rootSchema.getSubSchema("MAIN"))
+                    .build();
+            Planner planner = Frameworks.getPlanner(config);
+            SqlNode sqlNode = planner.parse("SELECT submissions.id AS submission_id, problems.id AS problem_id, scores.id AS score_id, scores.* FROM `submissions` JOIN problems ON" +
+                    "        submissions.assessment_id = problems.assessment_id JOIN scores ON" +
+                    "        (submissions.id = scores.submission_id" +
+                    "        AND problems.id = scores.problem_id AND scores.released = 1) WHERE `submissions`.`assessment_id` = 4 AND `submissions`.`course_user_datum_id` = 2");
+            System.out.println(sqlNode);
+
+            Pair<SqlNode, RelDataType> p = planner.validateAndGetType(sqlNode);
+            System.out.println(p.left);
+            System.out.println(p.right);
         }
     }
 }

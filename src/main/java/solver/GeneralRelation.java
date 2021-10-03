@@ -34,13 +34,13 @@ public class GeneralRelation implements Relation {
 
     @Override
     public BoolExpr isEmptyExpr() {
-        Tuple tup = makeFreshHead();
+        Tuple tup = makeFreshQuantifiedHead();
         return context.myMkForall(tup.toExprArray(), context.mkNot(context.mkAnd(doesContainExpr(tup))));
     }
 
     @Override
     public Iterable<BoolExpr> isContainedInExpr(Relation other) {
-        Tuple syms = makeFreshHead();
+        Tuple syms = makeFreshQuantifiedHead();
         BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
         BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
         return List.of(
@@ -48,15 +48,15 @@ public class GeneralRelation implements Relation {
         );
     }
 
-    private Tuple makeFreshHead() {
-        return new Tuple(schema, Arrays.stream(signature).map(sort -> context.mkFreshConst("v", sort)));
+    private Tuple makeFreshQuantifiedHead() {
+        return new Tuple(schema, Arrays.stream(signature).map(sort -> context.mkFreshQuantifiedConst("e", sort)));
     }
 
     @Override
     public List<BoolExpr> equalsExpr(Relation other) {
         checkArgument(other instanceof GeneralRelation);
 
-        Tuple syms = makeFreshHead();
+        Tuple syms = makeFreshQuantifiedHead();
         BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
         BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
         return List.of(

@@ -6,20 +6,29 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.*;
+import com.microsoft.z3.Sort;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
+import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.dialect.MysqlSqlDialect;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.tools.FrameworkConfig;
+import org.apache.calcite.tools.Frameworks;
+import org.apache.calcite.tools.Planner;
+import org.apache.calcite.tools.ValidationException;
+import org.apache.calcite.util.Pair;
 import policy_checker.AppCacheSpec;
 import policy_checker.Policy;
 import policy_checker.QueryChecker;
-import solver.Constraint;
-import solver.ForeignKeyDependency;
-import solver.ImportedDependency;
-import solver.UniqueConstraint;
+import solver.*;
 import sql.*;
 
 import java.io.InputStream;
@@ -35,6 +44,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.Preconditions.checkState;
 import static util.Logger.printMessage;
 import static util.Logger.printStylizedMessage;
 import static util.TerminalColor.*;
@@ -48,8 +58,9 @@ public class PrivacyConnection implements Connection {
   private final SchemaPlusWithKey schema;
   private int queryCount;
 
+  private final FrameworkConfig frameworkConfig;
   private final ImmutableList<AppCacheSpec> cacheSpecs;
-  private final LoadingCache<String, ParserResult> parserResults;
+  private final LoadingCache<String, ParserResultWithType> parserResults;
 
   /**
    * Takes ownership of direct_info.
@@ -85,12 +96,23 @@ public class PrivacyConnection implements Connection {
 
     {
       JdbcSchema jdbcSchema = Objects.requireNonNull(schemaPlus.unwrap(JdbcSchema.class));
-      SqlParser.Config parserConfig = jdbcSchema.dialect.configureParser(SqlParser.config());
+      SqlDialect dialect = jdbcSchema.dialect;
+      SqlParser.Config parserConfig = dialect.configureParser(SqlParser.config());
+      if (dialect instanceof MysqlSqlDialect) {
+        parserConfig = parserConfig.withQuotedCasing(Casing.UNCHANGED);
+      }
+      this.frameworkConfig = Frameworks.newConfigBuilder()
+              .parserConfig(parserConfig)
+              .defaultSchema(schemaPlus)
+              .build();
       this.parserResults = CacheBuilder.newBuilder().maximumSize(1000).build(
               new CacheLoader<>() {
                 @Override
-                public ParserResult load(String s) throws SqlParseException {
-                  return new ParserResult(SqlParser.create(s, parserConfig).parseQuery());
+                public ParserResultWithType load(String s) throws SqlParseException, ValidationException {
+                  Planner planner = Frameworks.getPlanner(frameworkConfig);
+                  SqlNode node = planner.parse(s);
+                  Pair<SqlNode, RelDataType> p = planner.validateAndGetType(node);
+                  return new ParserResultWithType(p.left, p.right);
                 }
               }
       );
@@ -122,7 +144,7 @@ public class PrivacyConnection implements Connection {
 
     this.policy_list = new ArrayList<>();
     for (String sql : direct_info.getProperty("policy").split("\n")) {
-      this.policy_list.add(new Policy(this.schema, parseQuery(sql)));
+      this.policy_list.add(new Policy(this.schema, parseQueryUnvalidated(sql)));
     }
 
     this.cacheSpecs = cacheSpec.lines().map(AppCacheSpec::fromSpecString).collect(ImmutableList.toImmutableList());
@@ -159,10 +181,20 @@ public class PrivacyConnection implements Connection {
 
   private ImportedDependency parseImp(String s) throws SQLException {
     String[] parts = s.split(";", 2);
-    return new ImportedDependency(schema, parseQuery(parts[0]), parseQuery(parts[1]));
+    return new ImportedDependency(schema, parseQueryUnvalidated(parts[0]), parseQueryUnvalidated(parts[1]));
   }
 
-  private ParserResult parseQuery(String s) throws SQLException {
+  // Also not cached.
+  private ParserResult parseQueryUnvalidated(String s) throws SQLException {
+    Planner planner = Frameworks.getPlanner(frameworkConfig);
+    try {
+      return new ParserResult(planner.parse(s));
+    } catch (SqlParseException e) {
+      throw new SQLException(e);
+    }
+  }
+
+  private ParserResultWithType parseQuery(String s) throws SQLException {
     try {
       return parserResults.get(s);
     } catch (ExecutionException e) {
@@ -177,7 +209,7 @@ public class PrivacyConnection implements Connection {
    * @return parsed query if policies are applicable, empty otherwise.
    * @throws SQLException if parsing fails.
    */
-  private Optional<ParserResult> shouldApplyPolicy(String query) throws SQLException {
+  private Optional<ParserResultWithType> shouldApplyPolicy(String query) throws SQLException {
     String queryUpper = query.toUpperCase();
     if (queryUpper.startsWith("UPDATE")) {
       // The Calcite parser doesn't like our updates--
@@ -200,7 +232,13 @@ public class PrivacyConnection implements Connection {
     //  Maybe should change conformance level instead.
     query = query.replace("!=", "<>");
 
-    ParserResult parser_result = parseQuery(query);
+    printStylizedMessage("[" + queryCount + "] " + query, ANSI_BLUE_BACKGROUND + ANSI_BLACK);
+
+    long startNs = System.nanoTime();
+    ParserResultWithType parser_result = parseQuery(query);
+    long endNs = System.nanoTime();
+    printStylizedMessage("\t+ parseQuery:\t" + (endNs - startNs) / 1e6,
+            ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
 
     SqlKind kind = parser_result.getSqlNode().getKind();
     if (kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION)) {
@@ -225,7 +263,7 @@ public class PrivacyConnection implements Connection {
       }
 
       for (String q : o.get()) {
-        Optional<ParserResult> parserResult = shouldApplyPolicy(q);
+        Optional<ParserResultWithType> parserResult = shouldApplyPolicy(q);
         if (parserResult.isEmpty()) {
           continue;
         }
@@ -250,16 +288,16 @@ public class PrivacyConnection implements Connection {
   }
 
   private boolean connCheckPolicy(ParserResult parserResult, List<String> paramNames, List<Object> paramValues) {
-    printStylizedMessage(
-            () -> "[" + queryCount + "] checkPolicy: " + parserResult.getParsedSql() + "\t" + paramValues,
-            ANSI_BLUE_BACKGROUND + ANSI_BLACK
-    );
     ++queryCount;
 
+    long startNs = System.nanoTime();
     PrivacyQuery privacy_query = PrivacyQueryFactory.createPrivacyQuery(parserResult, schema, paramValues, paramNames);
+    printStylizedMessage("\t+ createPrivacyQuery:\t" + (System.nanoTime() - startNs) / 1e6
+                    + "\t" + paramValues,
+            ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
 
+    startNs = System.nanoTime();
     current_trace.startQuery(privacy_query, privacy_query.parameters);
-    final long startNs = System.nanoTime();
     try {
       boolean pass = query_checker.checkPolicy(current_trace);
       if (!pass) {
@@ -272,7 +310,7 @@ public class PrivacyConnection implements Connection {
       throw e;
     } finally {
       final long endNs = System.nanoTime();
-      printStylizedMessage("\t+ Policy checking:\t" + (endNs - startNs) / 1000000,
+      printStylizedMessage("\t+ connCheckPolicy:\t" + (endNs - startNs) / 1e6,
               ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
     }
   }
@@ -297,7 +335,7 @@ public class PrivacyConnection implements Connection {
     }
     s = matcher.replaceAll("?");
 
-    Optional<ParserResult> parserResult = shouldApplyPolicy(s);
+    Optional<ParserResultWithType> parserResult = shouldApplyPolicy(s);
     if (parserResult.isEmpty()) {  // We let this query go through directly.
       return direct_connection.prepareStatement(s);
     }
@@ -590,32 +628,29 @@ public class PrivacyConnection implements Connection {
   }
 
   private class ResultSetWrapper implements ResultSet {
-    ResultSet resultSet;
-    List<Integer> columnTypes;
+    private final ResultSet resultSet;
 
-    private ResultSetWrapper(ResultSet resultSet) throws SQLException {
+    private ResultSetWrapper(ResultSet resultSet, ParserResultWithType pr) throws SQLException {
       this.resultSet = resultSet;
 
-      ResultSetMetaData metaData = resultSet.getMetaData();
-      int columnCount = metaData.getColumnCount();
-      columnTypes = new ArrayList<>();
-      for (int i = 1; i <= columnCount; ++i) {
-        columnTypes.add(metaData.getColumnType(i));
-      }
-
+      long startNs = System.nanoTime();
       List<List<Object>> rows = new ArrayList<>();
       while (resultSet.next()) {
         List<Object> row = new ArrayList<>();
-        for (int i = 1; i <= columnTypes.size(); ++i) {
-          Object value = switch (columnTypes.get(i - 1)) {
-            case Types.INTEGER, Types.BIGINT, Types.TINYINT, Types.BIT -> // TODO(zhangwen): turn into a Boolean?
-                    resultSet.getInt(i);
-            case Types.VARCHAR, Types.LONGVARCHAR, Types.CLOB, Types.LONGVARBINARY -> resultSet.getString(i);
-            case Types.DECIMAL, Types.DOUBLE, Types.REAL -> resultSet.getDouble(i);
-            case Types.BOOLEAN -> resultSet.getBoolean(i);
-            case Types.DATE -> resultSet.getDate(i);
-            case Types.TIMESTAMP -> resultSet.getTimestamp(i);
-            default -> throw new UnsupportedOperationException("unsupported type: " + columnTypes.get(i - 1));
+
+        int i = 0;
+        for (RelDataTypeField field : pr.getType().getFieldList()) {
+          ++i;
+
+          SqlTypeName typeName = field.getType().getSqlTypeName();
+          Object value = switch (typeName) {
+            case TINYINT, SMALLINT, INTEGER, BIGINT -> resultSet.getInt(i);
+            case BOOLEAN -> resultSet.getBoolean(i);
+            case FLOAT, REAL, DOUBLE -> resultSet.getDouble(i);
+            case CHAR, VARCHAR, BINARY, VARBINARY, ANY -> resultSet.getString(i);
+            case DATE -> resultSet.getDate(i);
+            case TIMESTAMP -> resultSet.getTimestamp(i);
+            default -> throw new UnsupportedOperationException("unsupported type: " + typeName);
           };
           if (resultSet.wasNull()) {
             value = null;
@@ -627,6 +662,10 @@ public class PrivacyConnection implements Connection {
       current_trace.endQuery(rows);
 
       resultSet.beforeFirst();
+
+      long endNs = System.nanoTime();
+      printStylizedMessage("\t+ addRows:\t" + (endNs - startNs) / 1e6,
+              ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
     }
 
     private void addRow(List<List<Object>> rows, List<Object> row) {
@@ -1625,11 +1664,11 @@ public class PrivacyConnection implements Connection {
 
   public class PrivacyPreparedStatement implements PreparedStatement {
     private final PreparedStatement directStatement;
-    private final ParserResult parserResult;
+    private final ParserResultWithType parserResult;
     private final List<String> paramNames;
     private final List<Object> paramValues;
 
-    PrivacyPreparedStatement(String sql, ParserResult pr, List<String> paramNames) throws SQLException {
+    PrivacyPreparedStatement(String sql, ParserResultWithType pr, List<String> paramNames) throws SQLException {
       this.paramValues = Arrays.asList(new Object[(sql + " ").split("\\?").length - 1]);
       this.parserResult = pr;
       directStatement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
@@ -1645,7 +1684,7 @@ public class PrivacyConnection implements Connection {
       if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
-      return new ResultSetWrapper(directStatement.executeQuery());
+      return new ResultSetWrapper(directStatement.executeQuery(), parserResult);
     }
 
     @Override
@@ -2035,7 +2074,7 @@ public class PrivacyConnection implements Connection {
       if (rs == null) {
         return null;
       }
-      return new ResultSetWrapper(rs);
+      return new ResultSetWrapper(rs, parserResult);
     }
 
     @Override
@@ -2224,7 +2263,7 @@ public class PrivacyConnection implements Connection {
     private final Pattern CHECK_CACHE_PATTERN = Pattern.compile("CHECK\\s+CACHE\\s+READ\\s+(.+)");
 
     private final Statement active_statment;
-    private boolean isChecked = false;
+    private ParserResultWithType parserResult = null; // If not null, this query is checked.
 
     private PrivacyStatement() throws SQLException {
       this.active_statment = direct_connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
@@ -2307,23 +2346,24 @@ public class PrivacyConnection implements Connection {
         return r.get();
       }
 
-      Optional<ParserResult> parserResult = shouldApplyPolicy(s);
-      if (parserResult.isEmpty()) {  // We let this query go through directly.
-        isChecked = false;
+      Optional<ParserResultWithType> o = shouldApplyPolicy(s);
+      if (o.isEmpty()) {  // We let this query go through directly.
+        this.parserResult = null;
         return active_statment.execute(s);
       }
-      if (!connCheckPolicy(parserResult.get())) {
+      ParserResultWithType pr = o.get();
+      if (!connCheckPolicy(pr)) {
         throw new SQLException("Privacy compliance was not met");
       }
-      isChecked = true;
+      this.parserResult = pr;
       return active_statment.execute(s);
     }
 
     @Override
     public ResultSet getResultSet() throws SQLException {
       ResultSet rs = active_statment.getResultSet();
-      if (isChecked) {
-        return new ResultSetWrapper(rs);
+      if (parserResult != null) {
+        return new ResultSetWrapper(rs, parserResult);
       }
       return rs;
     }

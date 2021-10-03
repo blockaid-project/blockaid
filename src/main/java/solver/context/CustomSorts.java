@@ -16,7 +16,9 @@ class CustomSorts {
     final Sort intSort;
     final Sort realSort;
     final Sort stringSort;
+    final Sort boolSort;
 
+    private final String sortDeclarationSMT;
     private final List<Values> valuesStack;
 
     final FuncDecl intLt;
@@ -26,6 +28,7 @@ class CustomSorts {
     private static final Function<Values, Map<Long, Expr>> PICK_INT = v -> v.intValues;
     private static final Function<Values, Map<Double, Expr>> PICK_REAL = v -> v.realValues;
     private static final Function<Values, Map<String, Expr>> PICK_STRING = v -> v.stringValues;
+    private static final Function<Values, Map<Boolean, Expr>> PICK_BOOL = v -> v.boolValues;
 
     private static class Values {
         private final Map<Date, Expr> dateValues = new HashMap<>();
@@ -33,6 +36,7 @@ class CustomSorts {
         private final Map<Long, Expr> intValues = new HashMap<>();
         private final Map<Double, Expr> realValues = new HashMap<>();
         private final Map<String, Expr> stringValues = new HashMap<>();
+        private final Map<Boolean, Expr> boolValues = new HashMap<>();
 
         private final Map<Expr, Object> expr2Obj = new HashMap<>();
     }
@@ -47,10 +51,18 @@ class CustomSorts {
         tsSort = intSort;
         realSort = context.rawContext.mkUninterpretedSort("CS!REAL");
         stringSort = context.rawContext.mkUninterpretedSort("CS!STRING");
+        boolSort = context.rawContext.mkUninterpretedSort("CS!BOOL");
+
+        // dateSort and tsSort are currently the same sort, so we don't declare them.
+        this.sortDeclarationSMT = "(declare-sort " + realSort.getSExpr() + " 0)\n" +
+                "(declare-sort " + stringSort.getSExpr() + " 0)\n" +
+                "(declare-sort " + intSort.getSExpr() + " 0)\n" +
+                "(declare-sort " + boolSort.getSExpr() + " 0)\n";
+
         valuesStack = new ArrayList<>();
         valuesStack.add(new Values());
 
-        intLt = context.rawContext.mkFuncDecl("lt", new Sort[]{intSort, intSort}, context.rawContext.getBoolSort());
+        intLt = context.mkFuncDecl("lt", new Sort[]{intSort, intSort}, context.rawContext.getBoolSort());
 //            {
 //                Expr x = mkConst("x", intSort), y = mkConst("y", intSort), z = mkConst("z", intSort);
 //                BoolExpr trans = mkForall(
@@ -113,6 +125,10 @@ class CustomSorts {
         return get(value, stringSort, PICK_STRING);
     }
 
+    Expr getBool(boolean value) {
+        return get(value, boolSort, PICK_BOOL);
+    }
+
     Optional<Object> getValueForExpr(Expr e) {
         for (int i = valuesStack.size(); i-- > 0; ) {
             Values vs = valuesStack.get(i);
@@ -164,29 +180,25 @@ class CustomSorts {
         prepareSolverForComparableSort(solver, PICK_INT);
         prepareSolverForSort(solver, PICK_REAL);
         prepareSolverForSort(solver, PICK_STRING);
+        prepareSolverForSort(solver, PICK_BOOL);
 //            solver.add(intLtAxioms.toArray(new BoolExpr[0]));
         return solver;
     }
 
     String prepareSortDeclaration() {
         // Reusing prepareSolver is messy - some constants and sorts may not be used/declared.
+        return sortDeclarationSMT;
+    }
+
+    String prepareCustomValueConstraints() {
+        // Reusing prepareSolver is messy - some constants and sorts may not be used/declared.
         StringBuilder sb = new StringBuilder();
-//            sb.append("(declare-sort ").append(dateSort.getSExpr()).append(" 0)\n");
-//            sb.append("(declare-sort ").append(tsSort.getSExpr()).append(" 0)\n");
-        sb.append("(declare-sort ").append(realSort.getSExpr()).append(" 0)\n");
-        sb.append("(declare-sort ").append(stringSort.getSExpr()).append(" 0)\n");
-        sb.append("(declare-sort ").append(intSort.getSExpr()).append(" 0)\n");
-
-        sb.append(intLt.getSExpr()).append("\n");
-//            for (BoolExpr e : intLtAxioms) {
-//                sb.append("(assert ").append(e.getSExpr()).append(")\n");
-//            }
-
         prepareSortValuesComparable(sb, PICK_DATE);
         prepareSortValuesComparable(sb, PICK_TS);
         prepareSortValuesComparable(sb, PICK_INT);
         prepareSortValues(sb, PICK_REAL);
         prepareSortValues(sb, PICK_STRING);
+        prepareSortValues(sb, PICK_BOOL);
         return sb.toString();
     }
 
@@ -197,9 +209,6 @@ class CustomSorts {
         for (Values vs : valuesStack) {
             for (Map.Entry<T, Expr> entry : valueMapPicker.apply(vs).entrySet()) {
                 Expr expr = entry.getValue();
-                sb.append(String.format("(declare-fun %s () %s)  ; %s\n",
-                        expr.getSExpr(), expr.getSort().getSExpr(),
-                        entry.getKey().toString().replace("\n", "")));
                 distinct.append(' ').append(expr.getSExpr());
                 ++numValues;
             }

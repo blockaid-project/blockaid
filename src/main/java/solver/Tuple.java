@@ -111,8 +111,10 @@ public class Tuple {
 
     // FIXME(zhangwen): move to MyZ3Context?
     public static Sort getSortFromObject(MyZ3Context context, Object value) {
-        if (value instanceof Integer || value instanceof Long || value instanceof Boolean) {
+        if (value instanceof Integer || value instanceof Long) {
             return context.getCustomIntSort();
+        } else if (value instanceof Boolean) {
+            return context.getCustomBoolSort();
         } else if (value instanceof Double) {
             return context.getCustomRealSort();
         } else if (value instanceof String) {
@@ -131,21 +133,20 @@ public class Tuple {
     }
 
     public static Expr getExprFromObject(MyZ3Context context, Object value) {
-        if (value instanceof Integer) {
-            return context.mkCustomInt((Integer) value);
-        } else if (value instanceof Long) {
-            return context.mkCustomInt((Long) value);
-        } else if (value instanceof Boolean) {
-            // TODO(zhangwen): "casting" boolean into int.
-            return ((Boolean) value) ? context.mkCustomInt(1) : context.mkCustomInt(0);
-        } else if (value instanceof Double) {
-            return context.mkCustomReal((Double) value);
-        } else if (value instanceof String) {
-            return context.mkCustomString((String) value);
-        } else if (value instanceof Date) {
-            return context.mkDate((Date) value);
-        } else if (value instanceof Timestamp) {
-            return context.mkTimestamp((Timestamp) value);
+        if (value instanceof Integer i) {
+            return context.mkCustomInt(i);
+        } else if (value instanceof Long l) {
+            return context.mkCustomInt(l);
+        } else if (value instanceof Boolean b) {
+            return context.mkCustomBool(b);
+        } else if (value instanceof Double d) {
+            return context.mkCustomReal(d);
+        } else if (value instanceof String s) {
+            return context.mkCustomString(s);
+        } else if (value instanceof Date d) {
+            return context.mkDate(d);
+        } else if (value instanceof Timestamp ts) {
+            return context.mkTimestamp(ts);
         } else if (value instanceof Expr) {
             return (Expr) value;
         } else if (value == null) {
@@ -179,9 +180,10 @@ public class Tuple {
 
     // For decision template generation / matching.
     public static Object normalizeValue(Object v) {
-        if (v instanceof Boolean) {
-            return ((boolean) v) ? 1 : 0;
-        }
         return v;
+//        if (v instanceof Boolean) {
+//            return ((boolean) v) ? 1 : 0;
+//        }
+//        return v;
     }
 }

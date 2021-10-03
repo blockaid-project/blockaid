@@ -94,14 +94,15 @@ public class QueryChecker {
         this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
 //        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
 //        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
-        this.dtg = new DecisionTemplateGenerator(this, schema, policySet, policyQueries,
-                fastCheckDeterminacyFormula);
+        this.dtg = ENABLE_CACHING ?
+                new DecisionTemplateGenerator(this, schema, policySet, policyQueries, fastCheckDeterminacyFormula) : null;
 
         // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
         this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
 
-        // Start custom sort value tracking for first query
-        context.customSortsPush();
+        // At this point, the context should be tracking all constants from the views and constraints.
+        // Call `push` to separate them from the trace-specific constants.
+        context.pushTrackConsts();
     }
 
     private static Sort getSortFromSqlType(MyZ3Context context, RelDataType type) {
@@ -127,8 +128,7 @@ public class QueryChecker {
         } else if (family == SqlTypeFamily.DATE) {
             return context.getDateSort();
         } else if (family == SqlTypeFamily.BOOLEAN) {
-            return context.getCustomIntSort();
-//            return context.mkBoolSort();
+            return context.getCustomBoolSort();
         } else if (family == SqlTypeFamily.ANY) {
             // FIXME(zhangwen): I think text belongs in here.
             return context.getCustomStringSort();
@@ -138,8 +138,8 @@ public class QueryChecker {
 
     public void resetSequence() {
         MyZ3Context context = schema.getContext();
-        context.customSortsPop();
-        context.customSortsPush();
+        context.popTrackConsts();
+        context.pushTrackConsts();
         queryCount = 0;
     }
 
@@ -328,9 +328,9 @@ public class QueryChecker {
         queryCount += 1;
 
         PrivacyQuery currQuery = queries.getCurrentQuery().getQuery();
-        printMessage(() -> "transformed: " + currQuery.parsedSql.getParsedSql()
-                + "\t" + currQuery.parameters + "\t" + currQuery.paramNames
-        );
+//        printMessage(() -> "transformed: " + currQuery.parsedSql.getParsedSql()
+//                + "\t" + currQuery.parameters + "\t" + currQuery.paramNames
+//        );
 
         if (SKIP_CHECKING) {
             return true;

@@ -2,7 +2,6 @@ package solver;
 
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
-import com.microsoft.z3.Solver;
 import com.microsoft.z3.Sort;
 import solver.context.MyZ3Context;
 
@@ -57,6 +56,6 @@ public abstract class Query {
     public Tuple makeFreshExistentialHead() {
         Schema schema = getSchema();
         MyZ3Context context = schema.getContext();
-        return new Tuple(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshExistentialConst("e", t)));
+        return new Tuple(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshQuantifiedConst("e", t)));
     }
 }

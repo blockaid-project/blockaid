@@ -1,6 +1,9 @@
 package solver;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Multimap;
 import com.microsoft.z3.*;
 import solver.context.MyZ3Context;
 
@@ -76,8 +79,8 @@ public abstract class PSJ extends Query {
     // Returns a formula stating that tuple is in the output of this query on the instance.
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
-        List<BoolExpr> body = new ArrayList<>();
-        Tuple[] symbolicTups = relations.stream().map(schema::makeFreshExistentialTuple).toArray(Tuple[]::new);
+        List<BoolExpr> bodyClauses = new ArrayList<>();
+        Tuple[] symbolicTups = relations.stream().map(schema::makeFreshQuantifiedTuple).toArray(Tuple[]::new);
         Tuple headSymTup = headSelector(symbolicTups);
         checkArgument(headSymTup.size() == tuple.size());
 
@@ -85,18 +88,39 @@ public abstract class PSJ extends Query {
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
             Tuple tup = symbolicTups[i];
-            Iterables.addAll(body, instance.get(relationName).doesContainExpr(tup));
+            Iterables.addAll(bodyClauses, instance.get(relationName).doesContainExpr(tup));
         }
 
-        body.add(predicateGenerator(symbolicTups)); // The WHERE clause.
+        bodyClauses.add(predicateGenerator(symbolicTups)); // The WHERE clause.
 
-        // Symbolic head = actual head.
+        HashMultimap<Expr, Expr> subs = HashMultimap.create(); // Substitute from -> to.
         for (int i = 0; i < tuple.size(); ++i) {
-            body.add(context.mkEq(headSymTup.get(i), tuple.get(i)));
+            subs.put(headSymTup.get(i), tuple.get(i));
         }
 
-        List<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toList());
-        return List.of(context.myMkExists(existentialVars, context.mkAnd(body)));
+        // Substitute.
+        ArrayList<Expr> substituteFrom = new ArrayList<>(), substituteTo = new ArrayList<>();
+        for (Expr fromTerm : subs.keySet()) {
+            Set<Expr> targets = subs.get(fromTerm);
+            substituteFrom.add(fromTerm);
+
+            Expr canonicalToTerm = null;
+            for (Expr toTerm : targets) {
+                if (canonicalToTerm == null) {
+                    canonicalToTerm = toTerm;
+                    substituteTo.add(toTerm);
+                } else {
+                    // Two exprs in tuple map to the same symbolic head sym, so we have to constrain them to be equal.
+                    bodyClauses.add(context.mkEq(toTerm, canonicalToTerm));
+                }
+            }
+        }
+
+        Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
+        headSymTup.stream().forEach(existentialVars::remove);
+        BoolExpr body = (BoolExpr) context.mkAnd(bodyClauses)
+                .substitute(substituteFrom.toArray(new Expr[0]), substituteTo.toArray(new Expr[0]));
+        return List.of(context.myMkExists(existentialVars, body));
     }
 
     // FIXME(zhangwen): these optimizations seem to break something. (e.g., if the same column is projected twice)

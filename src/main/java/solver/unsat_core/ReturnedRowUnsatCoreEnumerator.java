@@ -1,8 +1,8 @@
 package solver.unsat_core;
 
 import solver.DecisionTemplateGenerator;
-import solver.RRLVampireDeterminacyFormula;
 import solver.context.MyZ3Context;
+import solver.executor.CVC4Executor;
 import solver.labels.PreambleLabel;
 import solver.labels.ReturnedRowLabel;
 import cache.trace.*;
@@ -15,13 +15,15 @@ import policy_checker.QueryChecker;
 import solver.*;
 import solver.executor.ProcessSMTExecutor;
 import solver.executor.SMTExecutor;
-import solver.executor.VampireProofExecutor;
+import solver.executor.VampireUCoreExecutor;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static util.Logger.printMessage;
+import static util.Logger.printStylizedMessage;
 import static util.TerminalColor.*;
 
 public class ReturnedRowUnsatCoreEnumerator {
@@ -31,7 +33,7 @@ public class ReturnedRowUnsatCoreEnumerator {
     private final Schema schema;
     private final Collection<Policy> policies;
     private final Collection<Query> views;
-    private final RRLVampireDeterminacyFormula myFormula;
+    private final RRLUnsatCoreDeterminacyFormula rrlFormula;
 
     private UnsatCoreFormulaBuilder formulaBuilder = null;
     private Solver solver = null;
@@ -42,31 +44,34 @@ public class ReturnedRowUnsatCoreEnumerator {
         this.schema = schema;
         this.policies = policies;
         this.views = views;
-        this.myFormula = new RRLVampireDeterminacyFormula(schema, views);
+        this.rrlFormula = new RRLUnsatCoreDeterminacyFormula(schema, views);
     }
 
     public record Core(Set<ReturnedRowLabel> rrCore, Set<PreambleLabel> preambleCore) {}
 
     public Optional<Core> getInitialRRCore(UnmodifiableLinearQueryTrace trace) {
-        long startMs = System.currentTimeMillis();
-        String smtVampire = myFormula.generateSMT(trace);
-        System.out.println("\t\t| Prepare Vampire:\t" + (System.currentTimeMillis() - startMs));
+        long startNs = System.nanoTime();
+        String smt = rrlFormula.generateUnsatCoreSMT(trace);
+        System.out.println("\t\t| Prepare Vampire:\t" + (System.nanoTime() - startNs) / 1000000);
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        executors.add(new VampireProofExecutor("vampire_lrs+10_1", smtVampire, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
-        executors.add(new VampireProofExecutor("vampire_dis+11_3", smtVampire, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_" + (TIMEOUT_S * 10)));
-        executors.add(new VampireProofExecutor("vampire_dis+3_1", smtVampire, latch, "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_" + (TIMEOUT_S * 10)));
-        executors.add(new VampireProofExecutor("vampire_dis+2_3", smtVampire, latch, "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
-//            executors.add(new VampireProofExecutor("vampire_lrs+1011", smtVampire, latch, "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_" + (TIMEOUT_S * 10)));
-//            executors.add(new VampireProofExecutor("vampire_lrs+11_20", smtVampire, latch, "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_" + (TIMEOUT_S * 10)));
-//            executors.add(new VampireProofExecutor("vampire_lrs+1_7", smtVampire, latch, "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_" + (TIMEOUT_S * 10)));
+        executors.add(new CVC4Executor("cvc4", smt, latch));
+        executors.add(new VampireUCoreExecutor("vampire_lrs+10_1", smt, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
+//        executors.add(new VampireUCoreExecutor("vampire_lrs+1_3", smt, latch, "lrs+1_3:2_afr=on:afp=100000:afq=1.0:anc=all_dependent:cond=on:fde=none:gs=on:inw=on:ile=on:irw=on:nm=6:nwc=1:stl=30:sos=theory:updr=off:uhcvi=on_" + (TIMEOUT_S * 10)));
+        executors.add(new VampireUCoreExecutor("vampire_dis+11_3", smt, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_" + (TIMEOUT_S * 10)));
+        executors.add(new VampireUCoreExecutor("vampire_dis+3_1", smt, latch, "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_" + (TIMEOUT_S * 10)));
+//        executors.add(new VampireUCoreExecutor("vampire_dis+2_3", smt, latch, "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
+
+//            executors.add(new VampireProofExecutor("vampire_lrs+1011", smt, latch, "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_" + (TIMEOUT_S * 10)));
+//            executors.add(new VampireProofExecutor("vampire_lrs+11_20", smt, latch, "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_" + (TIMEOUT_S * 10)));
+//            executors.add(new VampireProofExecutor("vampire_lrs+1_7", smt, latch, "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_" + (TIMEOUT_S * 10)));
 
         for (SMTExecutor executor : executors) {
             executor.start();
         }
 
-        startMs = System.currentTimeMillis();
+        startNs = System.nanoTime();
         try {
             latch.await(TIMEOUT_S, TimeUnit.SECONDS);
             for (SMTExecutor executor : executors) {
@@ -81,27 +86,31 @@ public class ReturnedRowUnsatCoreEnumerator {
 
         Set<ReturnedRowLabel> smallestRRCore = null;
         Set<PreambleLabel> preambleCore = null;
+        String winner = null;
         for (ProcessSMTExecutor e : executors) {
             if (e.getResult() != Status.UNSATISFIABLE) {
                 continue;
             }
-            System.out.println(e.getName());
 
-            String output = e.getOutput();
-            Set<ReturnedRowLabel> core = myFormula.extractRRLabels(output);
-            System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + core + ANSI_RESET);
-            System.out.println(ANSI_RED + ANSI_BLUE_BACKGROUND + myFormula.extractPreambleLabels(output) + ANSI_RESET);
-            if (smallestRRCore == null || smallestRRCore.size() > core.size()) {
-                smallestRRCore = core;
-                preambleCore = myFormula.extractPreambleLabels(output);
+            List<String> unsatCore = Arrays.asList(e.getUnsatCore());
+            Set<ReturnedRowLabel> rrCore = rrlFormula.extractRRLabels(unsatCore);
+            if (smallestRRCore == null || smallestRRCore.size() > rrCore.size()) {
+                winner = e.getName();
+                smallestRRCore = rrCore;
+                preambleCore = rrlFormula.extractPreambleLabels(unsatCore);
             }
         }
-        System.out.println("\t\t| Vampire:\t" + (System.currentTimeMillis() - startMs));
-        checker.printFormula(smtVampire, "rr_unsat_core");
+        System.out.println("\t\t| Vampire:\t" + (System.nanoTime() - startNs) / 1000000);
+        checker.printFormula(smt, "rr_unsat_core");
 
         if (smallestRRCore == null) {
             return Optional.empty();
         }
+
+        printMessage("Winner:\t" + winner);
+        printStylizedMessage(smallestRRCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
+        printStylizedMessage(preambleCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
+
         return Optional.of(new Core(smallestRRCore, preambleCore));
     }
 
@@ -119,23 +128,26 @@ public class ReturnedRowUnsatCoreEnumerator {
 
         long startMs = System.currentTimeMillis();
         MyZ3Context context = schema.getContext();
-        context.startTrackingConsts();
-        this.solver = context.mkSolver(context.mkSymbol("QF_UF"));
+        context.pushTrackConsts();
         try {
             CountingBoundEstimator cbe = new CountingBoundEstimator();
-            BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe, solver);
+            UnsatCoreBoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
             Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, subTrace);
+
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + boundSlack);
             BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(schema, views, slackBounds,
-                    true, DeterminacyFormula.TextOption.NO_TEXT, null, preambleCore);
+                    true, TextOption.NO_TEXT, null, preambleCore);
             this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
             System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
 
+            UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
+            solver = context.mkSolver(context.mkSymbol("QF_UF"));
+
             if (subTrace.size() == 1) { // Only the current query is in the trace.  It doesn't depend on any previous!
+                // However, only return after making a solver, which is expected by subsequent callers to `getSolver()`.
                 return Collections.emptySet();
             }
 
-            UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
             solver.push();
             solver.add(fs.getBackground().toArray(new BoolExpr[0]));
             System.out.println("\t\t| Bounded RRL core 2:\t" + (System.currentTimeMillis() - startMs));
@@ -150,7 +162,7 @@ public class ReturnedRowUnsatCoreEnumerator {
                 solver.pop();
             }
         } finally {
-            context.stopTrackingConsts();
+            context.popTrackConsts();
             System.out.println("\t\t| Bounded RRL core:\t" + (System.currentTimeMillis() - startMs));
         }
     }

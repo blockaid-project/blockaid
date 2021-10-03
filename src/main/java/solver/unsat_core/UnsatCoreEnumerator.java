@@ -5,6 +5,9 @@ import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
 import solver.context.MyZ3Context;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -49,13 +52,6 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
     public Set<L> getStartingUnsatCore() {
         long startMs = System.currentTimeMillis();
 
-        // The entire formula had better be unsatisfiable; otherwise there is no unsat core!
-        checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE,
-                "to enumerate unsat cores, the formulas must be unsat");
-
-        long durMs = System.currentTimeMillis() - startMs;
-        System.out.println("\t\t| getStartingUnsatCore:\t" + durMs);
-
 //        try {
 //            StringBuilder sb = new StringBuilder(solver.toString());
 //            int i = 0;
@@ -67,6 +63,13 @@ public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> imple
 //        } catch (IOException e) {
 //            throw new RuntimeException(e);
 //        }
+
+        // The entire formula had better be unsatisfiable; otherwise there is no unsat core!
+        checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE,
+                "to enumerate unsat cores, the formulas must be unsat");
+
+        long durMs = System.currentTimeMillis() - startMs;
+        System.out.println("\t\t| getStartingUnsatCore:\t" + durMs);
 
         return getUnsatCore().get();
     }

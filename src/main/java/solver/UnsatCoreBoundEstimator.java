@@ -22,12 +22,8 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
     private Solver solver;
 
     public UnsatCoreBoundEstimator(BoundEstimator initialBounds) {
-        this(initialBounds, null);
-    }
-
-    public UnsatCoreBoundEstimator(BoundEstimator initialBounds, Solver solver) {
         this.initialBounds = initialBounds;
-        this.solver = solver;
+        this.solver = null;
     }
 
     @Override
@@ -35,40 +31,45 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
         MyZ3Context context = schema.getContext();
         Map<String, Integer> bounds = new HashMap<>(initialBounds.calculateBounds(schema, queries));
 
-        if (solver == null) {
-            solver = context.mkSolver();
-        }
-
         int iters;
         for (iters = 0; ; ++iters) {
-            // FIXME(zhangwen): are constants tracked correctly?
+            ArrayList<NamedBoolExpr> assertions = new ArrayList<>();
+
+            Instance instance = schema.makeConcreteInstance("inst", bounds,
+                    queries.computeKnownRows(schema));
+
+            Map<Constraint, Iterable<BoolExpr>> constraints = instance.getConstraints();
+            Map<BoolExpr, Constraint> dependencyLabels = new HashMap<>();
+            int i = 0;
+            for (Map.Entry<Constraint, Iterable<BoolExpr>> constraint : constraints.entrySet()) {
+                String name = "dependency!" + (i++);
+                assertions.add(new NamedBoolExpr(context.mkAnd(constraint.getValue()), name));
+                dependencyLabels.put(context.mkBoolConst(name), constraint.getKey());
+            }
+
+            // add query constraints with labels
+            i = 0;
+            Map<BoolExpr, PrivacyQuery> queryLabels = new HashMap<>();
+            for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
+                PrivacyQuery query = queryTraceEntry.getQuery();
+                Query solverQuery = query.getSolverQuery(schema);
+                Relation r = solverQuery.apply(instance);
+                if (queryTraceEntry.hasTuples()) {
+                    List<Tuple> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
+                    String name = "query!" + (i++);
+                    assertions.add(new NamedBoolExpr(context.mkAnd(r.doesContainExpr(tuples)), name));
+                    queryLabels.put(context.mkBoolConst(name), query);
+                }
+            }
+
+            if (solver == null) {
+                // Only need to make the solver once, because the constants never change.
+                solver = context.mkSolver();
+            }
             solver.push();
             try {
-//            Params p = context.mkParams(); p.add("timeout", 1000); solver.setParameters(p);
-                Instance instance = schema.makeConcreteInstance("inst", bounds,
-                        queries.computeKnownRows(schema));
-
-                Map<Constraint, Iterable<BoolExpr>> constraints = instance.getConstraints();
-                Map<BoolExpr, Constraint> dependencyLabels = new HashMap<>();
-                for (Map.Entry<Constraint, Iterable<BoolExpr>> constraint : constraints.entrySet()) {
-                    BoolExpr label = (BoolExpr) context.mkFreshConst("dependency", context.getBoolSort());
-                    solver.assertAndTrack(context.mkAnd(Iterables.toArray(constraint.getValue(), BoolExpr.class)), label);
-                    dependencyLabels.put(label, constraint.getKey());
-                }
-
-                // add query constraints with labels
-                Map<BoolExpr, PrivacyQuery> queryLabels = new HashMap<>();
-                for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
-                    PrivacyQuery query = queryTraceEntry.getQuery();
-                    Query solverQuery = query.getSolverQuery(schema);
-                    Relation r = solverQuery.apply(instance);
-                    if (queryTraceEntry.hasTuples()) {
-                        List<Tuple> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
-                        BoolExpr expr = context.mkAnd(Iterables.toArray(r.doesContainExpr(tuples), BoolExpr.class));
-                        BoolExpr label = (BoolExpr) context.mkFreshConst("query", context.getBoolSort());
-                        solver.assertAndTrack(expr, label);
-                        queryLabels.put(label, query);
-                    }
+                for (NamedBoolExpr e : assertions) {
+                    solver.assertAndTrack(e.expr(), context.mkBoolConst(e.name()));
                 }
 
                 // todo timeouts on this...
@@ -78,16 +79,6 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
 //            System.out.println("\t\t| bound estimator check:\t" + durMs + "\t" + bounds);
                 if (res == Status.SATISFIABLE) {
                     break;
-                }
-                if (res != Status.UNSATISFIABLE) {
-                    System.out.println(bounds);
-                    try {
-                        for (BoolExpr l : dependencyLabels.keySet()) solver.add(l);
-                        for (BoolExpr l : queryLabels.keySet()) solver.add(l);
-                        Files.write(Paths.get("/tmp/bound_estimator.smt2"), solver.toString().getBytes());
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
                 }
                 checkState(res == Status.UNSATISFIABLE, "solver returned: " + res);
                 BoolExpr[] core = solver.getUnsatCore();
@@ -121,5 +112,9 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
         }
 //        System.out.println("\t\t| iterations: " + iters + ", bounds: " + bounds);
         return bounds;
+    }
+
+    public Solver getSolver() {
+        return Objects.requireNonNull(solver);
     }
 }

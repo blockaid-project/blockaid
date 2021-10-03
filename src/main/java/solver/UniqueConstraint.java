@@ -44,8 +44,8 @@ public class UniqueConstraint implements Constraint {
 
         Relation relation = instance.get(this.relationName);
         Schema schema = instance.schema;
-        Tuple tup1 = schema.makeFreshTuple(relationName);
-        Tuple tup2 = schema.makeFreshTuple(relationName);
+        Tuple tup1 = schema.makeFreshQuantifiedTuple(relationName);
+        Tuple tup2 = schema.makeFreshQuantifiedTuple(relationName);
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
         checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);

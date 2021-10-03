@@ -1,9 +1,12 @@
 package sql.preprocess;
 
 import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.SqlTypeName;
 import sql.ParserResult;
 import util.SqlNodes;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -37,6 +40,12 @@ public class ExtractParams extends SqlTransformer {
         this.paramNames = paramNames;
     }
 
+    private SqlNode visitLiteral(Object v, SqlParserPos pos) {
+        params.add(i, v);
+        paramNames.add(i, "?");
+        return new SqlDynamicParam(i, pos).accept(this);
+    }
+
     @Override
     public SqlNode visit(SqlLiteral sqlLiteral) {
         Object v = switch (sqlLiteral.getTypeName()) {
@@ -46,28 +55,16 @@ public class ExtractParams extends SqlTransformer {
 //            case SYMBOL -> sqlLiteral;
             default -> throw new RuntimeException("unhandled literal type: " + sqlLiteral.getTypeName());
         };
-
-        params.add(i, v);
-        paramNames.add(i, "?");
-        return new SqlDynamicParam(i, sqlLiteral.getParserPosition()).accept(this);
+        return visitLiteral(v, sqlLiteral.getParserPosition());
     }
 
     private boolean isCloseToDateTimeNow(Object v) {
-        if (!(v instanceof String s)) {
+        if (!(v instanceof Timestamp ts)) {
             return false;
         }
 
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime ldt;
-        // We expect the datetime to look like '2021-08-13 03:04:40.605143'.
-        // https://stackoverflow.com/questions/30135025/java-date-parsing-with-microsecond-or-nanosecond-accuracy
-        try {
-            ldt = LocalDateTime.parse(s.replace(" ", "T"));
-        } catch (DateTimeParseException e) {
-            // Not a date-time.  Ignore!
-            return false;
-        }
-
+        LocalDateTime ldt = ts.toLocalDateTime();
         return Math.abs(ldt.until(now, ChronoUnit.SECONDS)) <= NOW_DATETIME_THRESHOLD_S;
     }
 
@@ -109,6 +106,38 @@ public class ExtractParams extends SqlTransformer {
                 }
                 yield new SqlJoin(join.getParserPosition(), newLeft, join.isNaturalNode(), join.getJoinTypeNode(),
                         newRight, join.getConditionTypeNode(), newCondition);
+            }
+            case CAST -> {
+                List<SqlNode> operands = sqlCall.getOperandList();
+                if (!(operands.get(0) instanceof SqlLiteral literal)) {
+                    throw new RuntimeException("not supported: " + sqlCall);
+                }
+                if (literal.getTypeName() != SqlTypeName.CHAR) {
+                    throw new RuntimeException("cast literal not supported: " + literal);
+                }
+                String s = literal.getValueAs(String.class);
+
+                SqlDataTypeSpec spec = (SqlDataTypeSpec) operands.get(1);
+                if (!(spec.getTypeNameSpec() instanceof SqlBasicTypeNameSpec basicSpec)) {
+                    throw new RuntimeException("cast type spec not supported: " + spec);
+                }
+
+                if (basicSpec.getTypeName().names.size() != 1) {
+                    throw new RuntimeException("spec name not supported: " + basicSpec.getTypeName());
+                }
+                String typeName = basicSpec.getTypeName().names.get(0);
+                if (typeName.equals("TIMESTAMP")) {
+                    LocalDateTime ldt;
+                    // We expect the datetime to look like '2021-08-13 03:04:40.605143'.
+                    // https://stackoverflow.com/questions/30135025/java-date-parsing-with-microsecond-or-nanosecond-accuracy
+                    try {
+                        ldt = LocalDateTime.parse(s.replace(" ", "T"));
+                    } catch (DateTimeParseException e) {
+                        throw new RuntimeException(e);
+                    }
+                    yield visitLiteral(Timestamp.valueOf(ldt), sqlCall.getParserPosition());
+                }
+                throw new RuntimeException("type not supported: " + typeName);
             }
             default -> super.visit(sqlCall);
         };

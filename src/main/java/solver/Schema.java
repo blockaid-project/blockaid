@@ -140,18 +140,14 @@ public class Schema {
         );
     }
 
-    public Tuple makeFreshTuple(String relationName) {
-        return makeFreshTuple(relationName, "v");
+    public Tuple makeFreshQuantifiedTuple(String relationName) {
+        return makeFreshQuantifiedTuple(relationName, "e");
     }
 
-    public Tuple makeFreshExistentialTuple(String relationName) {
-        return makeFreshExistentialTuple(relationName, "e");
-    }
-
-    public Tuple makeFreshExistentialTuple(String relationName, String prefix) {
+    public Tuple makeFreshQuantifiedTuple(String relationName, String prefix) {
         List<Column> columns = relations.get(relationName.toUpperCase());
         return new Tuple(this, columns.stream()
-                .map(column -> context.mkFreshExistentialConst(prefix, column.type)));
+                .map(column -> context.mkFreshQuantifiedConst(prefix, column.type)));
     }
 
     public Tuple makeFreshTuple(String relationName, String prefix) {
