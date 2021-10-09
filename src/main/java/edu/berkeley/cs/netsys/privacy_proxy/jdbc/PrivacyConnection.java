@@ -6,7 +6,6 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.*;
-import com.microsoft.z3.Sort;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.jdbc.CalciteConnection;
@@ -20,10 +19,7 @@ import org.apache.calcite.sql.dialect.MysqlSqlDialect;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.type.SqlTypeName;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.Planner;
-import org.apache.calcite.tools.ValidationException;
+import org.apache.calcite.tools.*;
 import org.apache.calcite.util.Pair;
 import policy_checker.AppCacheSpec;
 import policy_checker.Policy;
@@ -44,7 +40,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkState;
 import static util.Logger.printMessage;
 import static util.Logger.printStylizedMessage;
 import static util.TerminalColor.*;
@@ -109,6 +104,7 @@ public class PrivacyConnection implements Connection {
               new CacheLoader<>() {
                 @Override
                 public ParserResultWithType load(String s) throws SqlParseException, ValidationException {
+                  printStylizedMessage("Parsing", ANSI_RED);
                   Planner planner = Frameworks.getPlanner(frameworkConfig);
                   SqlNode node = planner.parse(s);
                   Pair<SqlNode, RelDataType> p = planner.validateAndGetType(node);
@@ -257,17 +253,17 @@ public class PrivacyConnection implements Connection {
 
   private boolean checkCacheRead(String key) throws SQLException {
     for (AppCacheSpec spec : cacheSpecs) {
-      Optional<List<String>> o = spec.getQueries(key);
+      Optional<List<AppCacheSpec.QueryWithParams<Object>>> o = spec.getQueries(key);
       if (o.isEmpty()) { // Cache key is not matched by this spec.
         continue;
       }
 
-      for (String q : o.get()) {
-        Optional<ParserResultWithType> parserResult = shouldApplyPolicy(q);
+      for (AppCacheSpec.QueryWithParams<Object> qwp : o.get()) {
+        Optional<ParserResultWithType> parserResult = shouldApplyPolicy(qwp.query());
         if (parserResult.isEmpty()) {
           continue;
         }
-        boolean pass = connCheckPolicy(parserResult.get());
+        boolean pass = connCheckPolicy(parserResult.get(), qwp.params());
         current_trace.endQueryDiscard();
         if (!pass) {
           return false;
@@ -285,6 +281,12 @@ public class PrivacyConnection implements Connection {
 
   private boolean connCheckPolicy(ParserResult parserResult) {
     return connCheckPolicy(parserResult, Collections.emptyList(), Collections.emptyList());
+  }
+
+  // Unnamed parameters.
+  private boolean connCheckPolicy(ParserResult parserResult, List<Object> paramValues) {
+    List<String> paramNames = Collections.nCopies(paramValues.size(), "?");
+    return connCheckPolicy(parserResult, paramNames, paramValues);
   }
 
   private boolean connCheckPolicy(ParserResult parserResult, List<String> paramNames, List<Object> paramValues) {
@@ -445,7 +447,7 @@ public class PrivacyConnection implements Connection {
 
   @Override
   public Statement createStatement(int i, int i1) throws SQLException {
-    throw new UnsupportedOperationException();
+    throw new UnsupportedOperationException("createStatement(int, int)");
   }
 
   @Override
@@ -1694,7 +1696,7 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setNull(int i, int i1) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setNull(int, int)");
     }
 
     @Override
@@ -1755,38 +1757,38 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setBytes(int i, byte[] bytes) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setBytes");
     }
 
     @Override
     public void setDate(int i, Date date) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setDate");
     }
 
     @Override
     public void setTime(int i, Time time) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setTime");
     }
 
     @Override
     public void setTimestamp(int i, Timestamp timestamp) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setTimestamp");
     }
 
     @Override
     public void setAsciiStream(int i, InputStream inputStream, int i1) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setAsciiStream");
     }
 
     @Override
     @Deprecated
     public void setUnicodeStream(int i, InputStream inputStream, int i1) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setUnicodeStream");
     }
 
     @Override
     public void setBinaryStream(int i, InputStream inputStream, int i1) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setBinaryStream");
     }
 
     @Override
@@ -1799,12 +1801,12 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setObject(int i, Object o, int i1) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setObject(int, Object, int)");
     }
 
     @Override
     public void setObject(int i, Object o) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setObject(int, Object)");
     }
 
     @Override
@@ -1818,32 +1820,32 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void addBatch() throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("addBatch");
     }
 
     @Override
     public void setCharacterStream(int i, Reader reader, int i1) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setCharacterStream");
     }
 
     @Override
     public void setRef(int i, Ref ref) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setRef");
     }
 
     @Override
     public void setBlob(int i, Blob blob) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setBlob");
     }
 
     @Override
     public void setClob(int i, Clob clob) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setClob");
     }
 
     @Override
     public void setArray(int i, Array array) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setArray");
     }
 
     @Override
@@ -1853,27 +1855,29 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setDate(int i, Date date, Calendar calendar) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setDate(int, Date, Calendar)");
     }
 
     @Override
     public void setTime(int i, Time time, Calendar calendar) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setTime(int, Time, Calendar)");
     }
 
     @Override
     public void setTimestamp(int i, Timestamp timestamp, Calendar calendar) throws SQLException {
-      throw new UnsupportedOperationException();
+      directStatement.setTimestamp(i, timestamp, calendar);
+      // TODO(zhangwen): what to do with the Calendar object?
+      paramValues.set(i - 1, timestamp);
     }
 
     @Override
     public void setNull(int i, int i1, String s) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setNull(int, int, String)");
     }
 
     @Override
     public void setURL(int i, URL url) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setURL");
     }
 
     @Override
@@ -1883,52 +1887,52 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public void setRowId(int i, RowId rowId) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setRowId");
     }
 
     @Override
     public void setNString(int i, String s) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setNString");
     }
 
     @Override
     public void setNCharacterStream(int i, Reader reader, long l) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setNCharacterStream");
     }
 
     @Override
     public void setNClob(int i, NClob nClob) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setNClob");
     }
 
     @Override
     public void setClob(int i, Reader reader, long l) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setClob(int, Reader, long)");
     }
 
     @Override
     public void setBlob(int i, InputStream inputStream, long l) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setBlob(int, InputStream, long)");
     }
 
     @Override
     public void setNClob(int i, Reader reader, long l) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setNClob(int, Reader, long)");
     }
 
     @Override
     public void setSQLXML(int i, SQLXML sqlxml) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setSQLXML");
     }
 
     @Override
     public void setObject(int i, Object o, int i1, int i2) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setObject(int, Object, int, int)");
     }
 
     @Override
     public void setAsciiStream(int i, InputStream inputStream, long l) throws SQLException {
-      throw new UnsupportedOperationException();
+      throw new UnsupportedOperationException("setAsciiStream(int, InputStream, long)");
     }
 
     @Override

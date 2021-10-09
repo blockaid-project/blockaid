@@ -254,16 +254,18 @@ public class QueryChecker {
             return FastCheckDecision.ALLOW;
         }
 
-        boolean anyApplicable = false;
-        for (Policy policy : policySet) {
-            if (!precheckPolicyDenial(query, policy)) {
-                anyApplicable = true;
-                break;
+        if (ENABLE_QUICK_DENIAL) {
+            boolean anyApplicable = false;
+            for (Policy policy : policySet) {
+                if (!precheckPolicyDenial(query, policy)) {
+                    anyApplicable = true;
+                    break;
+                }
             }
-        }
 
-        if (!anyApplicable) {
-            return FastCheckDecision.DENY;
+            if (!anyApplicable) {
+                return FastCheckDecision.DENY;
+            }
         }
 
         return FastCheckDecision.UNKNOWN;

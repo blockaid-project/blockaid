@@ -1,6 +1,6 @@
 raw_score/submissions/(?<submissionId>\d+)-\d+/assessments/(?<assessmentId>\d+)-\d+!
 SELECT problems.* FROM problems WHERE problems.assessment_id = ?assessmentId!
-SELECT scores.* FROM scores WHERE scores.submission_id = ?submissionId AND scores.released = 1;
+SELECT scores.* FROM scores WHERE scores.submission_id = ?submissionId AND scores.released = true;
 
 raw_score_includes_unreleased/submissions/(?<submissionId>\d+)-\d+/assessments/(?<assessmentId>\d+)-\d+!
 SELECT problems.* FROM problems WHERE problems.assessment_id = ?assessmentId!

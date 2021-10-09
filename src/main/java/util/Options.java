@@ -27,4 +27,7 @@ public class Options {
 
     /* Quiet mode -- suppress log messages. */
     public static final boolean QUIET = Objects.equals(System.getProperty("privoxy.quiet"), "true");
+
+    /* Enable quick denial check -- off by default since denials are not performance-sensitive.  */
+    public static final boolean ENABLE_QUICK_DENIAL = Objects.equals(System.getProperty("privoxy.enable_quick_denial"), "true");
 }

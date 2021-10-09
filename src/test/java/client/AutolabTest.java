@@ -3,38 +3,27 @@ package client;
 import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.rel.rules.CalcMergeRule;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.parser.SqlAbstractParserImpl;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
-import org.apache.calcite.sql.parser.SqlParserImplFactory;
-import org.apache.calcite.sql.parser.impl.SqlParserImpl;
-import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
 import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.Pair;
-import org.apache.calcite.util.SourceStringReader;
-import org.apache.commons.io.FileUtils;
-import org.flywaydb.core.Flyway;
-import org.h2.command.Prepared;
 import org.junit.Before;
 import org.junit.Test;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 
-import java.io.File;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Properties;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class AutolabTest {
@@ -57,6 +46,13 @@ public class AutolabTest {
     }
 
     private void testQueries(String[] queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
+        testQueries(
+                Arrays.stream(queries).map(PQuery::new).toArray(PQuery[]::new),
+                userId, numRounds
+        );
+    }
+
+    private void testQueries(PQuery[] queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
         Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
         try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
             while (numRounds-- > 0) {
@@ -65,12 +61,23 @@ public class AutolabTest {
                     stmt.execute("SET @_MY_UID = " + userId);
                 }
 
-                for (String q : queries) {
+                for (PQuery pq : queries) {
+                    String q = pq.query;
                     if (q.contains("%")) {
                         q = String.format(q, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")));
                     }
                     if (q.startsWith("SELECT")) {
                         try (PreparedStatement stmt = conn.prepareStatement(q)) {
+                            for (int i = 1; i <= pq.params.length; ++i) {
+                                Object o = pq.params[i - 1];
+                                if (o instanceof Integer integer) {
+                                    stmt.setInt(i, integer);
+                                } else if (o instanceof String str) {
+                                    stmt.setString(i, str);
+                                } else {
+                                    throw new UnsupportedOperationException("unsupported param: " + o);
+                                }
+                            }
                             stmt.execute();
                             try (ResultSet rs = stmt.getResultSet()) {
                                 while (rs.next()) {
@@ -78,6 +85,7 @@ public class AutolabTest {
                             }
                         }
                     } else {
+                        checkArgument(pq.params.length == 0);
                         try (Statement stmt = conn.createStatement()) {
                             stmt.execute(q);
                         }
@@ -408,19 +416,19 @@ public class AutolabTest {
 
     @Test
     public void testProductionHomepage() throws ClassNotFoundException, SQLException {
-        String[] queries = new String[]{
-                "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",
-                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 ORDER BY `users`.`id` ASC LIMIT 1",
-                "SELECT  1 AS one FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = 27000000 LIMIT 1",
-                "SELECT `courses`.`id`, `courses`.`name`, `courses`.`display_name`, `courses`.`start_date`, `courses`.`end_date`, `courses`.`disabled`, `courses`.`semester` FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = 27000000 ORDER BY display_name ASC",
-                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
-                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000000 LIMIT 1",
-                "SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
-                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000000 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
-                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000001 LIMIT 1",
-                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000001 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
-                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000002 LIMIT 1",
-                "SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000002 AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC",
+        PQuery[] queries = new PQuery[]{
+                new PQuery("SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'"),
+                new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?", 27000000, 1),
+                new PQuery("SELECT  1 AS one FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = ? LIMIT ?", 27000000, 1),
+                new PQuery("SELECT `courses`.`id`, `courses`.`name`, `courses`.`display_name`, `courses`.`start_date`, `courses`.`end_date`, `courses`.`disabled`, `courses`.`semester` FROM `courses` INNER JOIN `course_user_data` ON `courses`.`id` = `course_user_data`.`course_id` WHERE `course_user_data`.`user_id` = ? ORDER BY display_name ASC", 27000000),
+                new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? LIMIT ?", 27000000, 1),
+                new PQuery("SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = ? AND `course_user_data`.`course_id` = ? LIMIT ?", 27000000, 10000000, 1),
+                new PQuery("SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = ? LIMIT ?", 27000000, 1),
+                new PQuery("SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = ? AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC", 10000000),
+                new PQuery("SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = ? AND `course_user_data`.`course_id` = ? LIMIT 1", 27000000, 10000001),
+                new PQuery("SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = ? AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC", 10000001),
+                new PQuery("SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = ? AND `course_user_data`.`course_id` = ? LIMIT ?", 27000000, 10000002, 1),
+                new PQuery("SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = ? AND (start_at < '%1$s' AND end_at > '%1$s') ORDER BY due_at ASC, name ASC", 10000002),
         };
         testQueries(queries, 27000000, 100000);
     }
@@ -498,6 +506,16 @@ public class AutolabTest {
             Pair<SqlNode, RelDataType> p = planner.validateAndGetType(sqlNode);
             System.out.println(p.left);
             System.out.println(p.right);
+        }
+    }
+
+    private class PQuery {
+        final String query;
+        final Object[] params;
+
+        public PQuery(String query, Object... params) {
+            this.query = query;
+            this.params = params;
         }
     }
 }
