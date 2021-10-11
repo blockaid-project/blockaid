@@ -4,6 +4,7 @@ import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
+import sql.ParserResult;
 
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -11,8 +12,8 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TraceCache {
-    private record CacheKey(String sql, ImmutableList<String> paramNames) {
-        public CacheKey(String sql, Collection<String> paramNames) {
+    private record CacheKey(ParserResult sql, ImmutableList<String> paramNames) {
+        public CacheKey(ParserResult sql, Collection<String> paramNames) {
             this(sql, ImmutableList.copyOf(paramNames));
         }
     }
@@ -25,7 +26,7 @@ public class TraceCache {
         readLock.lock();
         try {
             QueryTraceEntry currQuery = queryTrace.getCurrentQuery();
-            CacheKey cacheKey = new CacheKey(currQuery.getParsedSql(), currQuery.getQuery().paramNames);
+            CacheKey cacheKey = new CacheKey(currQuery.getParserResult(), currQuery.getQuery().paramNames);
             List<DecisionTemplate> templates = compliantCache.get(cacheKey);
             ListIterator<DecisionTemplate> iterator = templates.listIterator(templates.size());
             while (iterator.hasPrevious()) {
@@ -40,7 +41,7 @@ public class TraceCache {
         }
     }
 
-    public void addCompliantToCache(String currentQuery, List<String> paramNames, DecisionTemplate template) {
+    public void addCompliantToCache(ParserResult currentQuery, List<String> paramNames, DecisionTemplate template) {
         Lock writeLock = lock.writeLock();
         writeLock.lock();
         try {

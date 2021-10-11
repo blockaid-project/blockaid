@@ -60,7 +60,7 @@ public class CachedQueryTrace {
 
         if (cacheEntry.isCurrentQuery()) {
             QueryTraceEntry traceEntry = trace.getCurrentQuery();
-            if (cacheEntry.checkQueryText(traceEntry)) {
+            if (cacheEntry.checkQuery(traceEntry)) {
                 usedEntries.add(traceEntry);
                 if (checkQueryTrace(entries, trace, usedEntries)) {
                     return true;
@@ -68,8 +68,8 @@ public class CachedQueryTrace {
                 usedEntries.remove(usedEntries.size() - 1);
             }
         } else {
-            for (QueryTraceEntry traceEntry : trace.getEntriesByText(cacheEntry.getQueryText())) {
-                if (cacheEntry.checkQueryText(traceEntry)) {
+            for (QueryTraceEntry traceEntry : trace.getEntriesByQuery(cacheEntry.getQuery())) {
+                if (cacheEntry.checkQuery(traceEntry)) {
                     usedEntries.add(traceEntry);
                     if (checkQueryTrace(entries, trace, usedEntries)) {
                         return true;

@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import solver.Schema;
-import solver.Tuple;
+import sql.ParserResult;
 import sql.PrivacyQuery;
 
 import java.util.*;
@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static util.Logger.printMessage;
 
 public class QueryTraceEntry {
     private final PrivacyQuery query;
@@ -51,8 +52,12 @@ public class QueryTraceEntry {
         return query;
     }
 
+    public ParserResult getParserResult() {
+        return query.parserResult;
+    }
+
     public String getParsedSql() {
-        return query.parsedSql.getParsedSql();
+        return query.parserResult.getParsedSql();
     }
 
     /**
@@ -136,8 +141,6 @@ public class QueryTraceEntry {
         }
 
         PrivacyQuery q = getQuery();
-        int numColumns = getTuples().get(0).size();
-
         List<Integer> pkValuedColIndices = getPkValuedColIndices(schema);
         for (Iterator<Integer> it = pkValuedColIndices.iterator(); it.hasNext(); ) {
             int colIdx = it.next();
@@ -155,8 +158,8 @@ public class QueryTraceEntry {
         } else {
             colIndicesForPruning = pkValuedColIndices;
         }
-        System.out.println("FOR PRUNE:\t" + getParsedSql());
-        System.out.println("\t" + colIndicesForPruning);
+        printMessage("FOR PRUNE:\t" + getParsedSql());
+        printMessage("\t" + colIndicesForPruning);
         return Optional.ofNullable(colIndicesForPruning);
     }
 

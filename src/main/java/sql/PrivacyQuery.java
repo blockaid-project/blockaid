@@ -8,7 +8,7 @@ import solver.Schema;
 import java.util.*;
 
 public abstract class PrivacyQuery {
-    public final ParserResult parsedSql;
+    public final ParserResult parserResult;
     public final ImmutableList<Object> parameters;
     public final ImmutableList<String> paramNames;
 
@@ -18,19 +18,19 @@ public abstract class PrivacyQuery {
      */
     protected PrivacyQuery(PrivacyQuery pq)
     {
-        this.parsedSql = pq.parsedSql;
+        this.parserResult = pq.parserResult;
         this.parameters = pq.parameters;
         this.paramNames = pq.paramNames;
     }
 
-    public PrivacyQuery(ParserResult parsedSql)
+    public PrivacyQuery(ParserResult parserResult)
     {
-        this(parsedSql, Collections.emptyList(), Collections.emptyList());
+        this(parserResult, Collections.emptyList(), Collections.emptyList());
     }
 
-    public PrivacyQuery(ParserResult parsedSql, List<Object> parameters, List<String> paramNames)
+    public PrivacyQuery(ParserResult parserResult, List<Object> parameters, List<String> paramNames)
     {
-        this.parsedSql = parsedSql;
+        this.parserResult = parserResult;
         this.parameters = ImmutableList.copyOf(parameters);
         this.paramNames = ImmutableList.copyOf(paramNames);
     }
@@ -40,7 +40,7 @@ public abstract class PrivacyQuery {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PrivacyQuery query = (PrivacyQuery) o;
-        if (!parsedSql.equals(query.parsedSql)) return false;
+        if (!parserResult.equals(query.parserResult)) return false;
         if (parameters.size() != query.parameters.size()) return false;
         for (int i = 0; i < parameters.size(); ++i) {
             if (paramNames.get(i).equals("?") && !parameters.get(i).equals(query.parameters.get(i))) return false;
@@ -50,7 +50,7 @@ public abstract class PrivacyQuery {
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(parsedSql);
+        int result = parserResult.hashCode();
         for (int i = 0; i < parameters.size(); ++i) {
             if (paramNames.get(i).equals("?")) {
                 result = 31 * result + Objects.hash(parameters.get(i));

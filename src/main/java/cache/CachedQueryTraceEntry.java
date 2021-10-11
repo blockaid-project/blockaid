@@ -2,6 +2,7 @@ package cache;
 
 import cache.trace.QueryTraceEntry;
 import com.google.common.collect.Lists;
+import sql.ParserResult;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -10,7 +11,7 @@ import java.util.regex.Pattern;
 import static com.google.common.base.Preconditions.checkState;
 
 public class CachedQueryTraceEntry {
-    private final String queryText;
+    private final ParserResult qpr;
     private final boolean isCurrentQuery;
     private final List<Object> parameters; // exact value comparisons, null if value is irrelevant
     private final List<List<Object>> tuples;
@@ -22,12 +23,8 @@ public class CachedQueryTraceEntry {
 
     private boolean isEmpty;
 
-    public CachedQueryTraceEntry(QueryTraceEntry traceEntry, boolean isCurrentQuery, List<Integer> parameterEquality, List<List<Integer>> tupleEquality) {
-        this(traceEntry.getParsedSql(), traceEntry.getParameters(), traceEntry.getTuples(), isCurrentQuery, parameterEquality, tupleEquality);
-    }
-
-    private CachedQueryTraceEntry(String queryText, List<Object> parameters, Iterable<List<Object>> tuples, boolean isCurrentQuery, List<Integer> parameterEquality, List<List<Integer>> tupleEquality) {
-        this.queryText = queryText;
+    private CachedQueryTraceEntry(ParserResult qpr, List<Object> parameters, Iterable<List<Object>> tuples, boolean isCurrentQuery, List<Integer> parameterEquality, List<List<Integer>> tupleEquality) {
+        this.qpr = qpr;
         this.isCurrentQuery = isCurrentQuery;
         this.parameters = parameters;
         this.tuples = Lists.newArrayList(tuples);
@@ -70,16 +67,16 @@ public class CachedQueryTraceEntry {
         return isEmpty;
     }
 
-    public String getQueryText() {
-        return queryText;
+    public ParserResult getQuery() {
+        return qpr;
     }
 
     public boolean isCurrentQuery() {
         return isCurrentQuery;
     }
 
-    public boolean checkQueryText(QueryTraceEntry query) {
-        return queryText.equals(query.getParsedSql());
+    public boolean checkQuery(QueryTraceEntry qte) {
+        return qpr.equals(qte.getParserResult());
     }
 
     // Updates mappedIndices with encountered indices.
@@ -182,8 +179,9 @@ public class CachedQueryTraceEntry {
     @Override
     public String toString() {
         StringBuilder out = new StringBuilder();
+        // TODO(zhangwen): a question mark might not denote a parameter (e.g., if it's in a string).
         Pattern pattern = Pattern.compile("\\?");
-        Matcher matcher = pattern.matcher(queryText);
+        Matcher matcher = pattern.matcher(qpr.getParsedSql());
         int i = 0;
         while (matcher.find()) {
             matcher.appendReplacement(out, "");

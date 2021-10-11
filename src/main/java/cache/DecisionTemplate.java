@@ -4,6 +4,7 @@ import cache.trace.QueryTrace;
 import cache.trace.QueryTraceEntry;
 import com.google.common.collect.*;
 import solver.Tuple;
+import sql.ParserResult;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -99,7 +100,7 @@ public class DecisionTemplate {
         try {
             if (thisEntry.isCurrentQuery) {
                 QueryTraceEntry qte = trace.getCurrentQuery();
-                if (!qte.getParsedSql().equals(thisEntry.queryText)) {
+                if (!qte.getParserResult().equals(thisEntry.qpr)) {
                     return false;
                 }
                 ec2Value.push();
@@ -113,7 +114,7 @@ public class DecisionTemplate {
                 }
             }
 
-            for (QueryTraceEntry qte : trace.getEntriesByText(thisEntry.queryText)) {
+            for (QueryTraceEntry qte : trace.getEntriesByQuery(thisEntry.qpr)) {
                 ec2Value.push();
                 try {
                     if (!thisEntry.matchParams(qte, ec2Value)) {
@@ -153,9 +154,9 @@ public class DecisionTemplate {
         Multimap<String, Entry> entriesByStr = ArrayListMultimap.create();
         for (Entry entry : entries) {
             if (entry.isCurrentQuery) {
-                currQueryText = entry.convertedQueryText;
+                currQueryText = entry.toStringQuery();
             } else {
-                entriesByStr.put(entry.convertedQueryText, entry);
+                entriesByStr.put(entry.toStringQuery(), entry);
             }
         }
         checkState(currQueryText != null);
@@ -182,8 +183,8 @@ public class DecisionTemplate {
 
     // The existence of a (previous query, returned row)-pair, or constraints on the current query.
     public static class Entry {
-        private final String queryText;
-        private final String convertedQueryText; // With query parameters substituted with ECs / values.
+        private final ParserResult qpr;
+        private String convertedQueryText = null; // With query parameters substituted with ECs / values; lazily computed.
         private final boolean isCurrentQuery;
 
         // Maps query parameter index -> what value it must take.
@@ -197,10 +198,10 @@ public class DecisionTemplate {
         // Maps row attribute index -> which equivalence class it belongs to.
         private final ImmutableMap<Integer, Integer> rowAttrIdx2EC;
 
-        private Entry(String queryText, boolean isCurrentQuery, ImmutableMap<Integer, Object> paramIdx2Value,
+        private Entry(ParserResult query, boolean isCurrentQuery, ImmutableMap<Integer, Object> paramIdx2Value,
                      ImmutableMap<Integer, Integer> paramIdx2EC, ImmutableMap<Integer, Object> rowAttrIdx2Value,
                      ImmutableMap<Integer, Integer> rowAttrIdx2EC) {
-            this.queryText = queryText;
+            this.qpr = query;
             this.isCurrentQuery = isCurrentQuery;
 
             if (isCurrentQuery) {
@@ -212,34 +213,34 @@ public class DecisionTemplate {
             this.paramIdx2EC = paramIdx2EC;
             this.rowAttrIdx2Value = rowAttrIdx2Value;
             this.rowAttrIdx2EC = rowAttrIdx2EC;
-
-            // Convert query text.
-            StringBuilder sb = new StringBuilder();
-            Pattern pattern = Pattern.compile("\\?");
-            Matcher matcher = pattern.matcher(queryText);
-            int i = 0;
-            while (matcher.find()) {
-                matcher.appendReplacement(sb, "");
-                Integer ecIdx = paramIdx2EC.get(i);
-                Object value = paramIdx2Value.get(i);
-                if (ecIdx != null) {
-                    sb.append("?").append(ecIdx);
-                } else if (value != null) {
-                    if (value instanceof String) {
-                        sb.append("\"").append(value).append("\"");
-                    } else {
-                        sb.append(value);
-                    }
-                } else {
-                    sb.append("*");
-                }
-                ++i;
-            }
-            matcher.appendTail(sb);
-            this.convertedQueryText = sb.toString();
         }
 
         public String toStringQuery() {
+            if (convertedQueryText == null) {
+                StringBuilder sb = new StringBuilder();
+                Pattern pattern = Pattern.compile("\\?");
+                Matcher matcher = pattern.matcher(qpr.getParsedSql());
+                int i = 0;
+                while (matcher.find()) {
+                    matcher.appendReplacement(sb, "");
+                    Integer ecIdx = paramIdx2EC.get(i);
+                    Object value = paramIdx2Value.get(i);
+                    if (ecIdx != null) {
+                        sb.append("?").append(ecIdx);
+                    } else if (value != null) {
+                        if (value instanceof String) {
+                            sb.append("\"").append(value).append("\"");
+                        } else {
+                            sb.append(value);
+                        }
+                    } else {
+                        sb.append("*");
+                    }
+                    ++i;
+                }
+                matcher.appendTail(sb);
+                convertedQueryText = sb.toString();
+            }
             return convertedQueryText;
         }
 
@@ -352,7 +353,7 @@ public class DecisionTemplate {
 
         public Entry build() {
             return new Entry(
-                    queryTraceEntry.getParsedSql(),
+                    queryTraceEntry.getParserResult(),
                     isCurrentQuery,
                     ImmutableMap.copyOf(paramIdx2Value),
                     ImmutableMap.copyOf(paramIdx2EC),

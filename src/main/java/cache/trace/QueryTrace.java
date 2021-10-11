@@ -1,6 +1,7 @@
 package cache.trace;
 
 import com.google.common.collect.*;
+import sql.ParserResult;
 import sql.PrivacyQuery;
 
 import java.sql.Timestamp;
@@ -12,7 +13,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class QueryTrace extends UnmodifiableLinearQueryTrace {
-    private final ArrayListMultimap<String, QueryTraceEntry> queries;
+    private final ArrayListMultimap<ParserResult, QueryTraceEntry> queries;
     private final ArrayList<QueryTraceEntry> queryList; // Used to maintain order between queries.
     private QueryTraceEntry currentQuery;
     private Instant lastNow = null;
@@ -66,12 +67,12 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
             }
         }
         currentQuery = new QueryTraceEntry(query, parameters);
-        queries.put(currentQuery.getParsedSql(), currentQuery);
+        queries.put(currentQuery.getParserResult(), currentQuery);
         queryList.add(currentQuery);
     }
 
     private void removeCurrentQuery() {
-        List<QueryTraceEntry> bucket = queries.get(currentQuery.getParsedSql());
+        List<QueryTraceEntry> bucket = queries.get(currentQuery.getParserResult());
         bucket.remove(bucket.size() - 1);
         queryList.remove(queryList.size() - 1);
     }
@@ -98,8 +99,8 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
         return Collections.unmodifiableList(queryList);
     }
 
-    public Iterable<QueryTraceEntry> getEntriesByText(String queryText) {
-        return queries.get(queryText);
+    public Iterable<QueryTraceEntry> getEntriesByQuery(ParserResult pr) {
+        return queries.get(pr);
     }
 
     public QueryTraceEntry getCurrentQuery() {

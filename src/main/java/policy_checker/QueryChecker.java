@@ -367,8 +367,7 @@ public class QueryChecker {
             for (DecisionTemplate dt : oTemplates.get()) {
                 Logger.printStylizedMessage(dt.toString(), ANSI_BLACK + ANSI_YELLOW_BACKGROUND);
                 if (!CACHE_NO_RETAIN) {
-                    cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parsedSql.getParsedSql(),
-                            currQuery.paramNames, dt);
+                    cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parserResult, currQuery.paramNames, dt);
                 }
             }
 //            cacheDecision(queries, policyResult);
