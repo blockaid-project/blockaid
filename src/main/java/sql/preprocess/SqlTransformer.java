@@ -61,7 +61,7 @@ class SqlTransformer implements SqlVisitor<SqlNode> {
 
     @Override
     public SqlNode visit(SqlDataTypeSpec sqlDataTypeSpec) {
-        throw new RuntimeException("not supported: SqlDataTypeSpec");
+        return sqlDataTypeSpec;
     }
 
     @Override

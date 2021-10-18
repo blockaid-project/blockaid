@@ -9,59 +9,75 @@ import sql.PrivacyQuery;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 
 public class TestCache {
-    private static class FakeParserResult extends ParserResult {
-        private FakeParserResult(String sql) {
-            super(sql, null, null, false, false);
-        }
-    }
+//    private static class FakeParserResult extends ParserResult {
+//        private FakeParserResult(String sql) {
+//            super(sql, null, null, false, false);
+//        }
+//    }
 
-    private static class FakePrivacyQuery extends PrivacyQuery {
-        private FakePrivacyQuery(String sql) {
-            super(new FakeParserResult(sql));
-        }
+//    private static class FakePrivacyQuery extends PrivacyQuery {
+//        private FakePrivacyQuery(String sql) {
+//            super(new FakeParserResult(sql));
+//        }
+//
+//        @Override
+//        public Set<String> getAllNormalizedProjectColumns() {
+//            return null;
+//        }
+//
+//        @Override
+//        public Set<String> getProjectColumnsByIdx(int colIdx) {
+//            return null;
+//        }
+//
+//        @Override
+//        public Set<String> getNormalizedProjectColumnsByIdx(int colIdx) {
+//            return null;
+//        }
+//
+//        @Override
+//        public List<String> getThetaColumns() {
+//            return null;
+//        }
+//
+//        @Override
+//        public Set<String> getAllNormalizedThetaColumns() {
+//            return null;
+//        }
+//
+//        @Override
+//        public List<String> getRelations() {
+//            return null;
+//        }
+//
+//        @Override
+//        public Query getSolverQuery(Schema schema) {
+//            return null;
+//        }
+//
+//        @Override
+//        public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
+//            return null;
+//        }
+//
+//        @Override
+//        public List<Boolean> getResultBitmap() {
+//            return null;
+//        }
+//    }
 
-        @Override
-        public List<String> getProjectColumns() {
-            return null;
-        }
-
-        @Override
-        public List<String> getThetaColumns() {
-            return null;
-        }
-
-        @Override
-        public List<String> getRelations() {
-            return null;
-        }
-
-        @Override
-        public Query getSolverQuery(Schema schema) {
-            return null;
-        }
-
-        @Override
-        public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
-            return null;
-        }
-
-        @Override
-        public List<Boolean> getResultBitmap() {
-            return null;
-        }
-    }
-
-    private static PrivacyQuery Q1 = new FakePrivacyQuery("SELECT * FROM users WHERE id = ?_MY_UID");
-    private static PrivacyQuery Q2 = new FakePrivacyQuery("SELECT posts.* FROM posts INNER JOIN share_visibilities ON share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' WHERE posts.id = ?? AND share_visibilities.user_id = ?_MY_UID");
-    private static PrivacyQuery Q3 = new FakePrivacyQuery("SELECT * FROM people WHERE owner_id = ?_MY_UID");
-    private static PrivacyQuery Q4 = new FakePrivacyQuery("SELECT * FROM posts WHERE id = ?? AND author_id = ??");
-    private static PrivacyQuery Q5 = new FakePrivacyQuery("SELECT id FROM mentions WHERE mentions_container_id = ?? AND mentions_container_type = 'Post' AND person_id = ??");
+//    private static final PrivacyQuery Q1 = new FakePrivacyQuery("SELECT * FROM users WHERE id = ?");
+//    private static final PrivacyQuery Q2 = new FakePrivacyQuery("SELECT posts.* FROM posts INNER JOIN share_visibilities ON share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' WHERE posts.id = ?? AND share_visibilities.user_id = ?_MY_UID");
+//    private static final PrivacyQuery Q3 = new FakePrivacyQuery("SELECT * FROM people WHERE owner_id = ?_MY_UID");
+//    private static final PrivacyQuery Q4 = new FakePrivacyQuery("SELECT * FROM posts WHERE id = ?? AND author_id = ??");
+//    private static final PrivacyQuery Q5 = new FakePrivacyQuery("SELECT id FROM mentions WHERE mentions_container_id = ?? AND mentions_container_type = 'Post' AND person_id = ??");
 
 //    @Test
 //    public void testCachedQueryTrace() {

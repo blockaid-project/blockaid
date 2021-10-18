@@ -28,6 +28,7 @@ public class TraceCache {
             QueryTraceEntry currQuery = queryTrace.getCurrentQuery();
             CacheKey cacheKey = new CacheKey(currQuery.getParserResult(), currQuery.getQuery().paramNames);
             List<DecisionTemplate> templates = compliantCache.get(cacheKey);
+
             ListIterator<DecisionTemplate> iterator = templates.listIterator(templates.size());
             while (iterator.hasPrevious()) {
                 DecisionTemplate template = iterator.previous();

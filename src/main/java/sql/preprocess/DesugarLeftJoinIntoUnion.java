@@ -7,6 +7,8 @@ import sql.*;
 
 import java.util.*;
 
+import static sql.preprocess.Util.getTableName;
+
 public class DesugarLeftJoinIntoUnion implements Preprocessor {
     public static final DesugarLeftJoinIntoUnion INSTANCE = new DesugarLeftJoinIntoUnion();
 
@@ -25,16 +27,20 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
         SqlNode fromClause = select.getFrom();
         if (fromClause.getKind() != SqlKind.JOIN) { return Optional.empty(); }
         SqlJoin join = (SqlJoin) fromClause;
-        if (join.isNatural() || join.getJoinType() != JoinType.LEFT || join.getLeft().getKind() != SqlKind.IDENTIFIER
-                || join.getRight().getKind() != SqlKind.IDENTIFIER
-                || join.getConditionType() != JoinConditionType.ON) { return Optional.empty(); }
-        SqlIdentifier joinLeft = (SqlIdentifier) join.getLeft();
-        if (joinLeft.names.size() != 1) { return Optional.empty(); }
-        String tableName = joinLeft.names.get(0);
+        if (join.isNatural() || join.getJoinType() != JoinType.LEFT || join.getConditionType() != JoinConditionType.ON) {
+            return Optional.empty();
+        }
 
-        SqlIdentifier joinRight = (SqlIdentifier) join.getRight();
-        if (joinRight.names.size() != 1) { return Optional.empty(); }
-        String rightTableName = joinRight.names.get(0);
+        SqlNode joinLeft = join.getLeft(), joinRight = join.getRight();
+        String tableName, rightTableName;
+        {
+            Optional<String> oTableName = getTableName(joinLeft), oRightTableName = getTableName(joinRight);
+            if (oTableName.isEmpty() || oRightTableName.isEmpty()) {
+                return Optional.empty();
+            }
+            tableName = oTableName.get();
+            rightTableName = oRightTableName.get();
+        }
 
         SqlNode joinCondition = join.getCondition();
         if (replaceFieldsWithNull(joinCondition, rightTableName).isPresent()) {
@@ -43,11 +49,15 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
         }
 
         List<SqlNode> selectList = select.getSelectList().getList();
-        if (selectList.size() != 1) { return Optional.empty(); }
-        SqlNode selectColumnNode = selectList.get(0);
-        if (selectColumnNode.getKind() != SqlKind.IDENTIFIER) { return Optional.empty(); }
-        SqlIdentifier selectId = (SqlIdentifier) selectColumnNode;
-        if (selectId.names.size() != 2 || !selectId.names.get(0).equals(tableName)) { return Optional.empty(); }
+        boolean isSelectSupported = selectList.stream().allMatch(node -> {
+            if (node.getKind() != SqlKind.IDENTIFIER) {
+                return false;
+            }
+            SqlIdentifier selectId = (SqlIdentifier) node;
+            return selectId.isSimple() || selectId.isStar()
+                    || (selectId.names.size() == 2 && selectId.names.get(0).equals(tableName));
+        });
+        if (!isSelectSupported) { return Optional.empty(); }
 
         // Only handling the case where the select list contains no parameters.
         if (select.getSelectList().accept(DynParamCounter.INSTANCE) > 0) {
@@ -115,9 +125,17 @@ public class DesugarLeftJoinIntoUnion implements Preprocessor {
                 }
                 return Optional.of(node);
             case OTHER:
+                if (node instanceof SqlDataTypeSpec) {
+                    return Optional.of(node);
+                }
+
                 SqlNodeList nl = (SqlNodeList) node;
                 ArrayList<SqlNode> newChildren = new ArrayList<>();
                 for (SqlNode child : nl.getList()) {
+                    if (child == null) {
+                        newChildren.add(null);
+                        continue;
+                    }
                     Optional<SqlNode> newChild = replaceFieldsWithNull(child, relation);
                     if (newChild.isEmpty()) {
                         return Optional.empty();

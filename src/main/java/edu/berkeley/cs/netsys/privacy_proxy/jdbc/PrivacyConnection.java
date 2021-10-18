@@ -104,11 +104,12 @@ public class PrivacyConnection implements Connection {
               new CacheLoader<>() {
                 @Override
                 public ParserResultWithType load(String s) throws SqlParseException, ValidationException {
-                  printStylizedMessage("Parsing", ANSI_RED);
                   Planner planner = Frameworks.getPlanner(frameworkConfig);
                   SqlNode node = planner.parse(s);
                   Pair<SqlNode, RelDataType> p = planner.validateAndGetType(node);
-                  return new ParserResultWithType(p.left, p.right);
+                  ParserResultWithType res = new ParserResultWithType(p.left, p.right);
+                  printStylizedMessage(() -> "Parsed: " + res.getParsedSql(), ANSI_RED);
+                  return res;
                 }
               }
       );
@@ -221,7 +222,7 @@ public class PrivacyConnection implements Connection {
     }
 
     // FIXME(zhangwen): HACK-- As Eric reported, Calcite doesn't like "one", and so we append an underscore to it.
-    query = query.replace("1 AS one", "1 AS one_");
+    query = query.replaceAll("\\b1 AS one\\b", "1 AS one_");
     // FIXME(zhangwen): HACK-- Calcite also doesn't like "FOR UPDATE" or "BINARY", it seems.
     query = query.replaceAll("(FOR UPDATE|BINARY)", "");
     // FIXME(zhangwen): HACK-- Bang equal '!=' is not allowed under the current SQL conformance level.

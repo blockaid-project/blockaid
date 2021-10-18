@@ -6,8 +6,7 @@ import org.apache.calcite.util.Litmus;
 import java.util.List;
 import java.util.Objects;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.*;
 
 /**
  * Wrapper around `SqlNode` that (1) has `equals` and `hashCode` defined and (2) caches the node's string repr.
@@ -77,8 +76,10 @@ public class ParserResult {
             SqlLiteral quantifier = call.getFunctionQuantifier();
             ret = 31 * ret + (quantifier == null ? 0 : Objects.hashCode(quantifier.getValue()));
             return ret;
+        } else if (node instanceof SqlNodeList nodeList) {
+            return computeHashCode(nodeList.getList());
         } else {
-            throw new UnsupportedOperationException("unhandled node type: " + node);
+            throw new UnsupportedOperationException("unhandled node type: " + node.getClass().getName());
         }
     }
 
@@ -89,5 +90,10 @@ public class ParserResult {
             hashCode = 31 * hashCode + computeHashCode(e);
         }
         return hashCode;
+    }
+
+    @Override
+    public String toString() {
+        return getParsedSql();
     }
 }

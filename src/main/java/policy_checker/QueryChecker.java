@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -172,6 +173,12 @@ public class QueryChecker {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+    }
+
+    public void printFormula(Supplier<String> mkFormula, String fileNamePrefix) {
+        if (PRINT_FORMULAS) {
+            printFormula(mkFormula.get(), fileNamePrefix);
         }
     }
 

@@ -3,15 +3,20 @@ package sql.preprocess;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOrderBy;
+import org.apache.calcite.sql.SqlSelect;
 import sql.ParserResult;
 import sql.PrivacyQuery;
 import sql.PrivacyQueryFactory;
 import sql.SchemaPlusWithKey;
+import util.SqlNodes;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Strips order by, fetch next, offset.
+ */
 public class StripOrderBy implements Preprocessor {
     public static final StripOrderBy INSTANCE = new StripOrderBy();
 
@@ -19,22 +24,31 @@ public class StripOrderBy implements Preprocessor {
 
     public Optional<PrivacyQuery> perform(ParserResult result, SchemaPlusWithKey schema, List<Object> parameters,
                                           List<String> paramNames) {
-        if (result.getKind() != SqlKind.ORDER_BY) {
+        boolean changed = false;
+
+        SqlNode node = result.getSqlNode();
+        if (node.getKind() == SqlKind.ORDER_BY) {
+            node = ((SqlOrderBy) node).query;
+            changed = true;
+        }
+        if (node.getKind() == SqlKind.SELECT) {
+            SqlSelect select = (SqlSelect) node;
+            if (select.getOrderList() != null || select.getFetch() != null || select.getOffset() != null) {
+                SqlSelect newSelect = SqlNodes.shallowCopy(select);
+                newSelect.setOrderBy(null);
+                newSelect.setFetch(null);
+                newSelect.setOffset(null);
+                node = newSelect;
+                changed = true;
+            }
+        }
+
+        if (!changed) {
             return Optional.empty();
         }
 
-        SqlOrderBy ob = (SqlOrderBy) result.getSqlNode();
-        SqlNode subQuery = ob.query;
-        ParserResult newPR = new ParserResult(subQuery);
-
-        // We might have removed some parameters in the query.  Remove them in `parameters` and `paramNames`, too.
-        int numParamsInSubQuery = subQuery.accept(DynParamCounter.INSTANCE);
-        if (numParamsInSubQuery != parameters.size()) {
-            // Assuming the removed parameters are at the end of the list.  This is correct?
-            parameters = parameters.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
-            paramNames = paramNames.stream().limit(numParamsInSubQuery).collect(Collectors.toList());
-        }
-
-        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, parameters, paramNames));
+        ShiftDynParams.Result res = ShiftDynParams.perform(node, parameters, paramNames);
+        ParserResult newPR = new ParserResult(res.node());
+        return Optional.of(PrivacyQueryFactory.createPrivacyQuery(newPR, schema, res.params(), res.paramNames()));
     }
 }

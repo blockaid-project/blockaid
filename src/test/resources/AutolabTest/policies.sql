@@ -14,11 +14,9 @@ SELECT users.id, users.first_name, users.last_name, users.email, users.school, u
 -- information (`id` and `name` are a one-to-one correspondence) so we leave it in.
 SELECT courses.id, courses.name FROM courses;
 -- An enrolled student can see whether the course's display name and semester (shown on front page), start and end dates (not sensitive), and whether it is disabled or not...
-SELECT courses.id, courses.display_name, courses.disabled, courses.start_date, courses.end_date, courses.semester FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID;
--- and can access the course if it's not disabled.
-SELECT courses.* FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND courses.disabled = false;
--- An instructor can view anything about the course.
-SELECT courses.* FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = true;
+-- The rest of the fields don't seem sensitive anyway, so let's reveal all fields of the `courses` table regardless of `disabled`.
+-- (Of course, the visibility of associated course resources, like assignments, still depends on whether the course is disabled.)
+SELECT courses.* FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.user_id = _MY_UID;
 
 SELECT announcements.* FROM announcements WHERE announcements.`system` = true;
 -- TODO(zhangwen): Autolab has two issues surrounding announcements:

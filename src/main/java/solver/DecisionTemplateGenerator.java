@@ -23,6 +23,7 @@ import static util.Logger.printMessage;
 import static util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
+    private final QueryChecker checker;
     private final Schema schema;
     private final ReturnedRowUnsatCoreEnumerator rruce;
     private final UnsatCoreFormulaBuilder unboundedUcBuilder;
@@ -30,6 +31,7 @@ public class DecisionTemplateGenerator {
 
     public DecisionTemplateGenerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
                                      List<Query> views, DeterminacyFormula unboundedFormula) {
+        this.checker = checker;
         this.schema = schema;
         this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, schema, policies, views);
         this.unboundedUcBuilder = new UnsatCoreFormulaBuilder(unboundedFormula, policies);
@@ -90,6 +92,7 @@ public class DecisionTemplateGenerator {
 //        }
 
         solver.add(fs.getBackground().toArray(new BoolExpr[0]));
+        checker.printFormula(solver::toString, "bg");
 
         Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
         Set<Label> paramsCore;
@@ -108,9 +111,8 @@ public class DecisionTemplateGenerator {
             Set<Label> consequence = new HashSet<>();
             for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
                 Label l = entry.getKey();
-                Status res = null;
                 if (startingUnsatCore.contains(l)
-                        || (res = thisSolver.check(context.mkNot(entry.getValue()))) == Status.UNSATISFIABLE) {
+                        || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
                     consequence.add(l);
                 }
             }

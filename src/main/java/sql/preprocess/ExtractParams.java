@@ -90,9 +90,15 @@ public class ExtractParams extends SqlTransformer {
                 SqlSelect newSelect = (SqlSelect) SqlNodes.shallowCopy(sqlCall);
                 newSelect.setFrom(newSelect.getFrom().accept(this));
                 SqlNode where = newSelect.getWhere();
-                if (where != null) {
-                    newSelect.setWhere(where.accept(this));
+                if (where != null) { newSelect.setWhere(where.accept(this)); }
+                if (newSelect.getGroup() != null) { throw new RuntimeException("not supported (group): " + sqlCall); }
+                if (!newSelect.getWindowList().isEmpty()) {
+                    throw new RuntimeException("not supported (window): " + sqlCall);
                 }
+                if (newSelect.getHaving() != null) { throw new RuntimeException("not supported (having): " + sqlCall); }
+                if (newSelect.getOffset() != null) { throw new RuntimeException("not supported (offset): " + sqlCall); }
+                SqlNode fetch = newSelect.getFetch();
+                if (fetch != null) { newSelect.setFetch(fetch.accept(this)); }
                 yield newSelect;
             }
             case JOIN -> {

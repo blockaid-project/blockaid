@@ -43,7 +43,8 @@ class DynParamCounter implements SqlVisitor<Integer> {
 
     @Override
     public Integer visit(SqlDataTypeSpec sqlDataTypeSpec) {
-        throw new RuntimeException("not supported: SqlDataTypeSpec");
+        // TODO(zhangwen): I think this is right.
+        return 0;
     }
 
     @Override

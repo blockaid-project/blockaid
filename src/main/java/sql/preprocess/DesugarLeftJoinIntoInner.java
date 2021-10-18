@@ -10,6 +10,8 @@ import util.SqlNodes;
 import java.util.List;
 import java.util.Optional;
 
+import static sql.preprocess.Util.getTableName;
+
 /**
  * Turns left join into inner join in the trivial case where the join condition is on a foreign key.
  */
@@ -33,16 +35,20 @@ public class DesugarLeftJoinIntoInner implements Preprocessor {
         SqlNode fromClause = select.getFrom();
         if (fromClause.getKind() != SqlKind.JOIN) { return Optional.empty(); }
         SqlJoin join = (SqlJoin) fromClause;
-        if (join.isNatural() || join.getJoinType() != JoinType.LEFT || join.getLeft().getKind() != SqlKind.IDENTIFIER
-                || join.getRight().getKind() != SqlKind.IDENTIFIER
-                || join.getConditionType() != JoinConditionType.ON) { return Optional.empty(); }
-        SqlIdentifier joinLeft = (SqlIdentifier) join.getLeft();
-        if (joinLeft.names.size() != 1) { return Optional.empty(); }
-        String tableName = joinLeft.names.get(0);
+        if (join.isNatural() || join.getJoinType() != JoinType.LEFT || join.getConditionType() != JoinConditionType.ON) {
+            return Optional.empty();
+        }
 
-        SqlIdentifier joinRight = (SqlIdentifier) join.getRight();
-        if (joinRight.names.size() != 1) { return Optional.empty(); }
-        String rightTableName = joinRight.names.get(0);
+        SqlNode joinLeft = join.getLeft(), joinRight = join.getRight();
+        String tableName, rightTableName;
+        {
+            Optional<String> oTableName = getTableName(joinLeft), oRightTableName = getTableName(joinRight);
+            if (oTableName.isEmpty() || oRightTableName.isEmpty()) {
+                return Optional.empty();
+            }
+            tableName = oTableName.get();
+            rightTableName = oRightTableName.get();
+        }
 
         if (join.getCondition().getKind() != SqlKind.EQUALS) { return Optional.empty(); }
         SqlNode[] operands = ((SqlBasicCall) join.getCondition()).getOperands();

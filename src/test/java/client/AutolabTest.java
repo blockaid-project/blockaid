@@ -509,13 +509,5 @@ public class AutolabTest {
         }
     }
 
-    private class PQuery {
-        final String query;
-        final Object[] params;
-
-        public PQuery(String query, Object... params) {
-            this.query = query;
-            this.params = params;
-        }
-    }
+    private record PQuery(String query, Object... params) { }
 }
