@@ -10,6 +10,7 @@ import solver.labels.SubPreamble;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static util.Options.DISABLE_PREAMBLE_PRUNE;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
     public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds, boolean splitProducts) {
@@ -25,7 +26,8 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
             List<BoolExpr> clauses = new ArrayList<>();
 
             checkArgument(inst1.getConstraints().keySet().equals(inst2.getConstraints().keySet()));
-            SubPreamble sub = selectedPreamble == null ? SubPreamble.all(inst1, inst2, views)
+            SubPreamble sub = selectedPreamble == null || DISABLE_PREAMBLE_PRUNE
+                    ? SubPreamble.all(inst1, inst2, views)
                     : SubPreamble.fromLabels(selectedPreamble);
 
             for (Constraint c : sub.constraints()) {

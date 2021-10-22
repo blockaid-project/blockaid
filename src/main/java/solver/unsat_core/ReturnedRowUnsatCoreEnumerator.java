@@ -52,7 +52,7 @@ public class ReturnedRowUnsatCoreEnumerator {
     public Optional<Core> getInitialRRCore(UnmodifiableLinearQueryTrace trace) {
         long startNs = System.nanoTime();
         String smt = rrlFormula.generateUnsatCoreSMT(trace);
-        System.out.println("\t\t| Prepare Vampire:\t" + (System.nanoTime() - startNs) / 1000000);
+        System.out.println("\t\t| Prepare formula:\t" + (System.nanoTime() - startNs) / 1000000);
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
@@ -100,7 +100,7 @@ public class ReturnedRowUnsatCoreEnumerator {
                 preambleCore = rrlFormula.extractPreambleLabels(unsatCore);
             }
         }
-        System.out.println("\t\t| Vampire:\t" + (System.nanoTime() - startNs) / 1000000);
+        System.out.println("\t\t| Solve:\t" + (System.nanoTime() - startNs) / 1000000);
         checker.printFormula(smt, "rr_unsat_core");
 
         if (smallestRRCore == null) {

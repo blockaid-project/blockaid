@@ -235,6 +235,7 @@ public class DeterminacyFormula {
         body.add(context.mkNot(
                 context.mkAnd(query.apply(inst2).doesContainExpr(extHeadTup))
         ));
+        // Quantifier elimination doesn't seem to do much for this one.
         return List.of(context.myMkExists(
                 extHeadTup.toExprList(),
                 context.mkAnd(body)

@@ -7,6 +7,9 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
 
+import static com.google.common.base.Preconditions.checkState;
+import static util.Options.DISABLE_QE;
+
 /**
  * Custom Z3 Context to track constants and use uninterpreted sorts for everything.
  * Assumes that mkSolver is only called after the formula is generated (otherwise,
@@ -14,15 +17,29 @@ import java.util.*;
  */
 public class MyZ3Context {
     final Context rawContext;
+    private final Tactic qeLight;
 
     private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
 
     public MyZ3Context() {
         this.rawContext = new Context();
+        this.qeLight = rawContext.mkTactic("qe-light");
         this.trackedDeclStack = new ArrayList<>();
         trackedDeclStack.add(new BaseTrackedDecls());
         this.customSorts = new CustomSorts(this);
+    }
+
+    public BoolExpr eliminateQuantifiers(BoolExpr e) {
+        if (DISABLE_QE) {
+            return e;
+        }
+
+        Goal g = rawContext.mkGoal(false, false, false);
+        g.add(e);
+        ApplyResult res = qeLight.apply(g);
+        checkState(res.getNumSubgoals() == 1);
+        return res.getSubgoals()[0].AsBoolExpr();
     }
 
     public Optional<Object> getValueForExpr(Expr e) {

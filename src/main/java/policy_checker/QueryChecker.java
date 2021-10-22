@@ -141,6 +141,9 @@ public class QueryChecker {
         MyZ3Context context = schema.getContext();
         context.popTrackConsts();
         context.pushTrackConsts();
+        if (CLEAR_CACHE_AT_RESET) {
+            cache.policyDecisionCacheFine.clear();
+        }
         queryCount = 0;
     }
 
@@ -194,7 +197,7 @@ public class QueryChecker {
         // fast check
         long startTime = System.currentTimeMillis();
         String fastCheckSMT = this.fastCheckDeterminacyFormula.generateSMT(queries);
-        System.out.println("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
+        printMessage("\t| Make fastSMT:\t" + (System.currentTimeMillis() - startTime));
 
         // regular check
 //        startTime = System.currentTimeMillis();

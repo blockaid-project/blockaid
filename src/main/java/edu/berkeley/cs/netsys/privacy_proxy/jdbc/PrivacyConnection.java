@@ -229,8 +229,6 @@ public class PrivacyConnection implements Connection {
     //  Maybe should change conformance level instead.
     query = query.replace("!=", "<>");
 
-    printStylizedMessage("[" + queryCount + "] " + query, ANSI_BLUE_BACKGROUND + ANSI_BLACK);
-
     long startNs = System.nanoTime();
     ParserResultWithType parser_result = parseQuery(query);
     long endNs = System.nanoTime();
@@ -264,7 +262,7 @@ public class PrivacyConnection implements Connection {
         if (parserResult.isEmpty()) {
           continue;
         }
-        boolean pass = connCheckPolicy(parserResult.get(), qwp.params());
+        boolean pass = connCheckPolicy(qwp.query(), parserResult.get(), qwp.params());
         current_trace.endQueryDiscard();
         if (!pass) {
           return false;
@@ -280,17 +278,20 @@ public class PrivacyConnection implements Connection {
     return false;
   }
 
-  private boolean connCheckPolicy(ParserResult parserResult) {
-    return connCheckPolicy(parserResult, Collections.emptyList(), Collections.emptyList());
+  private boolean connCheckPolicy(String originalSql, ParserResult parserResult) {
+    return connCheckPolicy(originalSql, parserResult, Collections.emptyList(), Collections.emptyList());
   }
 
   // Unnamed parameters.
-  private boolean connCheckPolicy(ParserResult parserResult, List<Object> paramValues) {
+  private boolean connCheckPolicy(String originalSql, ParserResult parserResult, List<Object> paramValues) {
     List<String> paramNames = Collections.nCopies(paramValues.size(), "?");
-    return connCheckPolicy(parserResult, paramNames, paramValues);
+    return connCheckPolicy(originalSql, parserResult, paramNames, paramValues);
   }
 
-  private boolean connCheckPolicy(ParserResult parserResult, List<String> paramNames, List<Object> paramValues) {
+  private boolean connCheckPolicy(String originalSql, ParserResult parserResult, List<String> paramNames,
+                                  List<Object> paramValues) {
+    printStylizedMessage("[" + queryCount + "] " + originalSql + "\t" + paramValues,
+            ANSI_BLUE_BACKGROUND + ANSI_BLACK);
     ++queryCount;
 
     long startNs = System.nanoTime();
@@ -1666,12 +1667,14 @@ public class PrivacyConnection implements Connection {
   }
 
   public class PrivacyPreparedStatement implements PreparedStatement {
+    private final String originalSql;
     private final PreparedStatement directStatement;
     private final ParserResultWithType parserResult;
     private final List<String> paramNames;
     private final List<Object> paramValues;
 
     PrivacyPreparedStatement(String sql, ParserResultWithType pr, List<String> paramNames) throws SQLException {
+      this.originalSql = sql;
       this.paramValues = Arrays.asList(new Object[(sql + " ").split("\\?").length - 1]);
       this.parserResult = pr;
       directStatement = direct_connection.prepareStatement(sql, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
@@ -1679,7 +1682,7 @@ public class PrivacyConnection implements Connection {
     }
 
     public boolean checkPolicy() {
-      return connCheckPolicy(parserResult, paramNames, paramValues);
+      return connCheckPolicy(originalSql, parserResult, paramNames, paramValues);
     }
 
     @Override
@@ -1812,7 +1815,6 @@ public class PrivacyConnection implements Connection {
 
     @Override
     public boolean execute() throws SQLException {
-//      System.out.println("PrivacyPreparedStatement.execute");
       if (!checkPolicy()) {
         throw new SQLException("Privacy compliance was not met");
       }
@@ -2357,7 +2359,7 @@ public class PrivacyConnection implements Connection {
         return active_statment.execute(s);
       }
       ParserResultWithType pr = o.get();
-      if (!connCheckPolicy(pr)) {
+      if (!connCheckPolicy(s, pr)) {
         throw new SQLException("Privacy compliance was not met");
       }
       this.parserResult = pr;

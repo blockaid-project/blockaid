@@ -5,7 +5,6 @@ import com.microsoft.z3.Sort;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 import static com.google.common.base.Preconditions.*;
 

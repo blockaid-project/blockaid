@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static util.Logger.printMessage;
 import static util.TerminalColor.ANSI_RED_BACKGROUND;
 
 public class SMTPortfolioRunner {
@@ -74,7 +75,7 @@ public class SMTPortfolioRunner {
 
         if (oWinner.isPresent()) {
             SMTExecutor winner = oWinner.get();
-            System.out.println("\t| Invoke solvers:\t" + solverDurationNs / 1000000 + "," + winner.getName());
+            printMessage("\t| Invoke solvers:\t" + solverDurationNs / 1000000 + "," + winner.getName());
             return winner.getResult() == Status.UNSATISFIABLE;
         }
 

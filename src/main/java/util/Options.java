@@ -11,10 +11,13 @@ public class Options {
     public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
 
     /* Generate decision templates but don't store them. */
-    public static boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("privoxy.cache_no_retain"), "true");
+    public static final boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("privoxy.cache_no_retain"), "true");
+
+    /* Clear decision cache at trace reset. */
+    public static final boolean CLEAR_CACHE_AT_RESET = Objects.equals(System.getProperty("privoxy.clear_cache_at_reset"), "true");
 
     /* Skip checking and return compliant for every query (but still parses and transforms queries). */
-    public static boolean SKIP_CHECKING = Objects.equals(System.getProperty("privoxy.skip_checking"), "true");
+    public static final boolean SKIP_CHECKING = Objects.equals(System.getProperty("privoxy.skip_checking"), "true");
 
     /* Print formulas to file. */
     public static final boolean PRINT_FORMULAS = Objects.equals(System.getProperty("privoxy.print_formulas"), "true");
@@ -28,6 +31,12 @@ public class Options {
     /* Quiet mode -- suppress log messages. */
     public static final boolean QUIET = Objects.equals(System.getProperty("privoxy.quiet"), "true");
 
-    /* Enable quick denial check -- off by default since denials are not performance-sensitive.  */
+    /* Enable quick denial check -- off by default since denials are not performance-sensitive. */
     public static final boolean ENABLE_QUICK_DENIAL = Objects.equals(System.getProperty("privoxy.enable_quick_denial"), "true");
+
+    /* Disable quantifier elimination optimization. */
+    public static final boolean DISABLE_QE = Objects.equals(System.getProperty("privoxy.disable_qe"), "true");
+
+    /* Disable preamble pruning in decision template generation. */
+    public static final boolean DISABLE_PREAMBLE_PRUNE = Objects.equals(System.getProperty("privoxy.disable_preamble_prune"), "true");
 }
