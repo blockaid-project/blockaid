@@ -1,6 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.*;
 
@@ -11,7 +11,7 @@ public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
     private final MapSolver<L> ms;
     private final Order order;
 
-    public AbstractUnsatCoreEnumerator(MyZ3Context context, Collection<L> labels, Order order) {
+    public AbstractUnsatCoreEnumerator(Z3ContextWrapper context, Collection<L> labels, Order order) {
         this.labels = labels;
         this.ms = new MapSolver<>(context, labels, order);
         this.order = order;

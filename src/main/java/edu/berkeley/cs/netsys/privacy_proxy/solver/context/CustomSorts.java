@@ -9,7 +9,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 class CustomSorts {
-    private final MyZ3Context context;
+    private final Z3CustomSortsContext context;
 
     final Sort dateSort;
     final Sort tsSort;
@@ -41,7 +41,7 @@ class CustomSorts {
         private final Map<Expr, Object> expr2Obj = new HashMap<>();
     }
 
-    CustomSorts(MyZ3Context context) {
+    CustomSorts(Z3CustomSortsContext context) {
         this.context = context;
 
         intSort = context.rawContext.mkUninterpretedSort("CS!INT");

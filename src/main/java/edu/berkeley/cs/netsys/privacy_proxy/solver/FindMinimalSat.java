@@ -3,17 +3,17 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.Label;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class FindMinimalSat implements AutoCloseable {
-    private final MyZ3Context context;
+    private final Z3ContextWrapper context;
     private final Solver solver;
 
-    public FindMinimalSat(MyZ3Context context, Solver solver) {
+    public FindMinimalSat(Z3ContextWrapper context, Solver solver) {
         this.context = context;
         this.solver = solver;
         solver.push();

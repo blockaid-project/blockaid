@@ -3,7 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.FuncDecl;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,7 +57,7 @@ public class Instance {
         return constraints;
     }
 
-    public MyZ3Context getContext() {
+    public Z3ContextWrapper getContext() {
         return schema.getContext();
     }
 }

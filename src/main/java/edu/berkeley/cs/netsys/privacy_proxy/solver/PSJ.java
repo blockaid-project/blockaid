@@ -2,7 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.google.common.collect.Iterables;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkState;
 
 public abstract class PSJ extends Query {
     private final Schema schema;
@@ -81,7 +80,7 @@ public abstract class PSJ extends Query {
         Tuple headSymTup = headSelector(symbolicTups);
         checkArgument(headSymTup.size() == tuple.size());
 
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
             Tuple tup = symbolicTups[i];
@@ -137,7 +136,7 @@ public abstract class PSJ extends Query {
     public BoolExpr[] generateExists(Instance instance) {
         checkArgument(instance.isConcrete);
 
-        final MyZ3Context context = instance.getContext();
+        final Z3ContextWrapper context = instance.getContext();
         final List<BoolExpr> exprs = new ArrayList<>();
         visitJoins(instance, (Tuple[] ts, BoolExpr[] es) ->
                 exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)))

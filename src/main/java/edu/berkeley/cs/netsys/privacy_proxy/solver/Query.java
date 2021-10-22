@@ -3,7 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
 import com.microsoft.z3.Sort;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,7 +36,7 @@ public abstract class Query {
 
     public Tuple makeHead(IntFunction<String> nameGenerator) {
         Schema schema = getSchema();
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
 
         Sort[] sorts = this.headTypes();
         int numColumns = sorts.length;
@@ -49,13 +49,13 @@ public abstract class Query {
 
     public Tuple makeFreshHead() {
         Schema schema = getSchema();
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         return new Tuple(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshConst("z", t)));
     }
 
     public Tuple makeFreshExistentialHead() {
         Schema schema = getSchema();
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         return new Tuple(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshQuantifiedConst("e", t)));
     }
 }

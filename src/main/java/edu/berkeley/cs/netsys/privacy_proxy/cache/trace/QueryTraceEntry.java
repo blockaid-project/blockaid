@@ -6,6 +6,7 @@ import com.google.common.collect.Iterables;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.ParserResult;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
+import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -94,14 +95,14 @@ public class QueryTraceEntry {
     }
 
     // Can only be called if tuples are returned.
-    public List<Integer> getPkValuedColIndices(Schema schema) {
+    public List<Integer> getPkValuedColIndices(SchemaPlusWithKey rawSchema) {
         if (pkValuedColIndices == null) {
             PrivacyQuery q = getQuery();
             checkState(hasTuples());
             int numColumns = getTuples().get(0).size();
 
             pkValuedColIndices = new ArrayList<>();
-            ImmutableSet<String> pkValuedColumns = schema.getRawSchema().getPkValuedColumns();
+            ImmutableSet<String> pkValuedColumns = rawSchema.getPkValuedColumns();
             for (int colIdx = 0; colIdx < numColumns; ++colIdx) {
                 for (String col : q.getNormalizedProjectColumnsByIdx(colIdx)) {
                     if (pkValuedColumns.contains(col)) {
@@ -115,20 +116,20 @@ public class QueryTraceEntry {
     }
 
     // Assumes that PK columns are integer.
-    public Set<Integer> getReturnedPkValues(Schema schema) {
+    public Set<Integer> getReturnedPkValues(SchemaPlusWithKey rawSchema) {
         if (!hasTuples()) {
             return Collections.emptySet();
         }
         Set<Integer> res = new HashSet<>();
         for (List<Object> tup : getTuples()) {
-            for (Integer colIdx : getPkValuedColIndices(schema)) {
+            for (Integer colIdx : getPkValuedColIndices(rawSchema)) {
                 res.add((Integer) tup.get(colIdx));
             }
         }
         return res;
     }
 
-    public Optional<Collection<Integer>> isEligibleForPruning(Schema schema) {
+    public Optional<Collection<Integer>> isEligibleForPruning(SchemaPlusWithKey rawSchema) {
         if (computedColIndicesForPruning) {
             return Optional.ofNullable(colIndicesForPruning);
         }
@@ -141,7 +142,7 @@ public class QueryTraceEntry {
         }
 
         PrivacyQuery q = getQuery();
-        List<Integer> pkValuedColIndices = getPkValuedColIndices(schema);
+        List<Integer> pkValuedColIndices = getPkValuedColIndices(rawSchema);
         for (Iterator<Integer> it = pkValuedColIndices.iterator(); it.hasNext(); ) {
             int colIdx = it.next();
             Set<Object> values = tuples.stream().map(t -> t.get(colIdx)).collect(Collectors.toSet());

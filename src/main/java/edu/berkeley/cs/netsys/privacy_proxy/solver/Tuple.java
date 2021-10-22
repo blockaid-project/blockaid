@@ -2,7 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -53,7 +53,7 @@ public class Tuple {
         checkArgument(size() == other.size(),
                 "tuple sizes are different: %s vs %s", size(), other.size());
 
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         if (isEmpty()) {
             return context.mkTrue();
         }
@@ -61,8 +61,7 @@ public class Tuple {
         BoolExpr[] exprs = new BoolExpr[size()];
         for (int i = 0; i < size(); ++i) {
             Expr lhs = get(i), rhs = other.get(i);
-            Optional<Object> lhsV = context.getValueForExpr(lhs), rhsV = context.getValueForExpr(rhs);
-            if (lhsV.isPresent() && rhsV.isPresent() && !lhsV.get().equals(rhsV.get())) {
+            if (context.areDistinctConstants(lhs, rhs)) {
                 // LHS and RHS represent distinct concrete values, which can't be equal!
                 return context.mkFalse();
             }
@@ -107,54 +106,6 @@ public class Tuple {
         return "Tuple{" +
                 "content=" + content +
                 '}';
-    }
-
-    // FIXME(zhangwen): move to MyZ3Context?
-    public static Sort getSortFromObject(MyZ3Context context, Object value) {
-        if (value instanceof Integer || value instanceof Long) {
-            return context.getCustomIntSort();
-        } else if (value instanceof Boolean) {
-            return context.getCustomBoolSort();
-        } else if (value instanceof Double) {
-            return context.getCustomRealSort();
-        } else if (value instanceof String) {
-            return context.getCustomStringSort();
-        } else if (value instanceof Date) {
-            return context.getDateSort();
-        } else if (value instanceof Timestamp) {
-            return context.getTimestampSort();
-        } else if (value instanceof Expr) {
-            return ((Expr) value).getSort();
-        } else if (value == null) {
-            throw new UnsupportedOperationException("null value unhandled");
-        } else {
-            throw new UnsupportedOperationException("unknown type for constant loading");
-        }
-    }
-
-    public static Expr getExprFromObject(MyZ3Context context, Object value) {
-        if (value instanceof Integer i) {
-            return context.mkCustomInt(i);
-        } else if (value instanceof Long l) {
-            return context.mkCustomInt(l);
-        } else if (value instanceof Boolean b) {
-            return context.mkCustomBool(b);
-        } else if (value instanceof Double d) {
-            return context.mkCustomReal(d);
-        } else if (value instanceof String s) {
-            return context.mkCustomString(s);
-        } else if (value instanceof Date d) {
-            return context.mkDate(d);
-        } else if (value instanceof Timestamp ts) {
-            return context.mkTimestamp(ts);
-        } else if (value instanceof Expr) {
-            return (Expr) value;
-        } else if (value == null) {
-            // FIXME(zhangwen): handle NULL properly.
-            return null;
-        } else {
-            throw new UnsupportedOperationException("unknown type for constant loading: " + value);
-        }
     }
 
     // FIXME(zhangwen): move this somewhere.

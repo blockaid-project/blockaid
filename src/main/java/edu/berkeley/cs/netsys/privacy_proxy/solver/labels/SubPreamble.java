@@ -3,6 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.labels;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Constraint;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Instance;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,12 +11,12 @@ import java.util.Collection;
 import static com.google.common.base.Preconditions.checkArgument;
 
 public record SubPreamble(Collection<Query> views, Collection<Constraint> constraints) {
-    public static SubPreamble fromLabels(Iterable<PreambleLabel> labels) {
+    public static SubPreamble fromLabels(Schema schema, Iterable<PreambleLabel> labels) {
         ArrayList<Query> views = new ArrayList<>();
         ArrayList<Constraint> constraints = new ArrayList<>();
         for (PreambleLabel l : labels) {
             switch (l.getKind()) {
-                case VIEW -> views.add(((ViewLabel) l).query());
+                case VIEW -> views.add(((ViewLabel) l).policy().getSolverQuery(schema));
                 case CONSTRAINT -> constraints.add(((ConstraintLabel) l).constraint());
                 default -> throw new IllegalArgumentException("unrecognized preamble label: " + l);
             }

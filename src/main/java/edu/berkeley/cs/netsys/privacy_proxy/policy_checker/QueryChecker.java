@@ -7,10 +7,8 @@ import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTupleIdxPair;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
 import com.microsoft.z3.*;
-import org.apache.calcite.rel.type.*;
-import org.apache.calcite.sql.type.SqlTypeFamily;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
@@ -21,7 +19,6 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -51,15 +48,16 @@ public class QueryChecker {
 
     public static long SOLVE_TIMEOUT_MS = 2000; // ms
 
-    private final Schema schema;
+    private final SchemaPlusWithKey rawSchema;
     private final List<Policy> policySet;
-    private final List<Query> policyQueries;
+
+    private final Schema customSortsSchema;
+    private final Schema theorySchema;
+    private final ImmutableList<Schema> allSchemata;
 
     private final SMTPortfolioRunner runner;
     private final DeterminacyFormula fastCheckDeterminacyFormula;
 //    private final DeterminacyFormula determinacyFormula;
-//    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormula;
-//    private final UnsatCoreDeterminacyFormula unsatCoreDeterminacyFormulaEliminate;
     private final DecisionCache cache;
 
     private int queryCount; // Number of queries processed so far.
@@ -70,77 +68,44 @@ public class QueryChecker {
      */
     private static final ConcurrentHashMap<Properties, DecisionCache> decisionCaches = new ConcurrentHashMap<>();
 
-    public QueryChecker(Properties info, ArrayList<Policy> policySet, SchemaPlusWithKey rawSchema,
+    public QueryChecker(Properties info, ImmutableList<Policy> policySet, SchemaPlusWithKey rawSchema,
                         List<Constraint> dependencies) {
+        this.rawSchema = rawSchema;
         this.policySet = policySet;
-        MyZ3Context context = new MyZ3Context();
 
-        Map<String, List<Column>> relations = new HashMap<>();
-        for (String tableName : rawSchema.schema.getTableNames()) {
-            List<Column> columns = new ArrayList<>();
-            for (RelDataTypeField field : rawSchema.getTypeForTable(tableName).getFieldList()) {
-                Sort type = getSortFromSqlType(context, field.getType());
-                // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
-                //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
-                columns.add(new Column(field.getName().toUpperCase(), type));
-            }
-            relations.put(tableName.toUpperCase(), columns);
-        }
-
-        this.schema = new Schema(context, rawSchema, relations, dependencies);
-        this.policyQueries = policySet.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
+        this.customSortsSchema = new Schema(Z3ContextWrapper.makeCustomSortsContext(), rawSchema, dependencies);
+        this.theorySchema = new Schema(
+                BOUNDED_USE_TYEORY ? Z3ContextWrapper.makeTheoryContext() : Z3ContextWrapper.makeCustomSortsContext(),
+                rawSchema, dependencies);
+        this.allSchemata = ImmutableList.of(customSortsSchema, theorySchema);
 
         this.runner = new SMTPortfolioRunner(this, SOLVE_TIMEOUT_MS);
-//        this.determinacyFormula = new BasicDeterminacyFormula(schema, policyQueries);
-        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(schema, policyQueries);
-//        this.unsatCoreDeterminacyFormula = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, false);
-//        this.unsatCoreDeterminacyFormulaEliminate = new UnsatCoreDeterminacyFormula(schema, policySet, policyQueries, UNNAMED_EQUALITY, true);
+//        this.determinacyFormula = new BasicDeterminacyFormula(customSortsSchema, policySet);
+        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(customSortsSchema, policySet);
         this.dtg = ENABLE_CACHING ?
-                new DecisionTemplateGenerator(this, schema, policySet, policyQueries, fastCheckDeterminacyFormula) : null;
+                new DecisionTemplateGenerator(this, customSortsSchema, theorySchema,
+                        policySet, fastCheckDeterminacyFormula)
+                : null;
 
         // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
-        this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) -> new DecisionCache(schema, policySet));
+        this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) ->
+                // This schema is for building preapproved sets; shouldn't matter which one we use.
+                new DecisionCache(customSortsSchema, policySet));
 
         // At this point, the context should be tracking all constants from the views and constraints.
         // Call `push` to separate them from the trace-specific constants.
-        context.pushTrackConsts();
+        for (Schema schema : allSchemata) {
+            schema.getContext().pushTrackConsts();
+        }
     }
 
-    private static Sort getSortFromSqlType(MyZ3Context context, RelDataType type) {
-        RelDataTypeFamily family = type.getFamily();
-        if (family == SqlTypeFamily.NUMERIC) {
-            // TODO(zhangwen): treating decimal also as int.
-            switch (type.getSqlTypeName()) {
-                case TINYINT:
-                case SMALLINT:
-                case INTEGER:
-                case BIGINT:
-                    return context.getCustomIntSort();
-                case FLOAT:
-                case REAL:
-                case DOUBLE:
-                    return context.getCustomRealSort();
-            }
-            throw new IllegalArgumentException("Unsupported numeric type: " + type);
-        } else if (family == SqlTypeFamily.CHARACTER || family == SqlTypeFamily.BINARY) {
-            return context.getCustomStringSort();
-        } else if (family == SqlTypeFamily.TIMESTAMP) {
-            return context.getTimestampSort();
-        } else if (family == SqlTypeFamily.DATE) {
-            return context.getDateSort();
-        } else if (family == SqlTypeFamily.BOOLEAN) {
-            return context.getCustomBoolSort();
-        } else if (family == SqlTypeFamily.ANY) {
-            // FIXME(zhangwen): I think text belongs in here.
-            return context.getCustomStringSort();
-        }
-        throw new IllegalArgumentException("unrecognized family: " + family);
-    }
 
     public void resetSequence() {
-        MyZ3Context context = schema.getContext();
-        context.popTrackConsts();
-        context.pushTrackConsts();
+        for (Schema schema : allSchemata) {
+            Z3ContextWrapper context = schema.getContext();
+            context.popTrackConsts();
+            context.pushTrackConsts();
+        }
         if (CLEAR_CACHE_AT_RESET) {
             cache.policyDecisionCacheFine.clear();
         }
@@ -211,54 +176,6 @@ public class QueryChecker {
         return runner.checkFastUnsatFormula(fastCheckSMT, "fast_unsat");
     }
 
-    private static class UnsatCore {
-        private final ImmutableSet<String> labels;
-        private final ImmutableMap<Object, Integer> equalityMap;
-
-        public UnsatCore(Iterable<String> labels, Map<Object, Integer> equalityMap) {
-            this.labels = ImmutableSet.copyOf(labels);
-            this.equalityMap = ImmutableMap.copyOf(equalityMap);
-        }
-    }
-
-//    private UnsatCore tryGetUnsatCore(QueryTrace queries) {
-//        CountDownLatch latch = new CountDownLatch(4);
-//        List<SMTExecutor> executors = new ArrayList<>();
-//
-//        String smt = this.unsatCoreDeterminacyFormula.generateSMT(queries);
-//        Map<Object, Integer> equalityMap = this.unsatCoreDeterminacyFormula.getAssertionMap();
-//        executors.add(new Z3Executor("z3_unsat", smt, latch));
-//        executors.add(new CVC4Executor("cvc4_unsat", smt, latch));
-//        printFormula(smt, "gen", queries);
-//
-//        smt = this.unsatCoreDeterminacyFormulaEliminate.generateSMT(queries);
-//        Map<Object, Integer> equalityMapEliminate = this.unsatCoreDeterminacyFormulaEliminate.getAssertionMap();
-//        executors.add(new Z3Executor("z3_unsat_eliminate", smt, latch));
-//        executors.add(new CVC4Executor("cvc4_unsat_eliminate", smt, latch));
-//        printFormula(smt, "gen_elim", queries);
-//
-//        runExecutors(executors, latch);
-//
-//        String[] minCore = null;
-//        Map<Object, Integer> usedEqualityMap = null;
-//        for (int i = 0; i < executors.size(); ++i) {
-//            SMTExecutor executor = executors.get(i);
-//            String[] core = executor.getUnsatCore();
-//            if (core != null) {
-//                System.err.println(Arrays.asList(core));
-//            } else {
-//                System.err.println("no result");
-//            }
-//            if (core != null && (minCore == null || minCore.length >= core.length)) {
-//                minCore = core;
-//                usedEqualityMap = (i < 2 ? equalityMap : equalityMapEliminate);
-////                usedEqualityMap = equalityMapEliminate;
-//            }
-//        }
-//
-//        return minCore == null ? null : new UnsatCore(Arrays.asList(minCore), usedEqualityMap);
-//    }
-
     private FastCheckDecision doPrecheckPolicy(PrivacyQuery query) {
         if (precheckPolicyApproval(query)) {
             return FastCheckDecision.ALLOW;
@@ -301,7 +218,7 @@ public class QueryChecker {
             }
 
             List<List<Object>> tuples = qte.getTuples();
-            Optional<Collection<Integer>> oPkColIdxForPrune = qte.isEligibleForPruning(schema);
+            Optional<Collection<Integer>> oPkColIdxForPrune = qte.isEligibleForPruning(rawSchema);
             if (oPkColIdxForPrune.isEmpty()) { // Keep them all.
                 for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
                     picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
@@ -330,7 +247,7 @@ public class QueryChecker {
 //                System.out.println("=== done ===");
             }
 
-            seenPkValues.addAll(qte.getReturnedPkValues(schema));
+            seenPkValues.addAll(qte.getReturnedPkValues(rawSchema));
         }
 
         return trace.getSubTrace(picked);
@@ -388,164 +305,12 @@ public class QueryChecker {
         }
     }
 
-    /**
-     * Caches a query decision. Equalities between fields (query parameters,
-     * past query returned tuple cell values, and constants via SET) are only
-     * considered if a query parameter is one of the fields. Values are not
-     * considered for constants via SET -- it is assumed that the exact value
-     * for these constants _never_ matters, and only equality against them is
-     * relevant.
-     */
-//    private void cacheDecision(QueryTrace queries, boolean policyResult) {
-//        UnsatCore core = null;
-//        if (policyResult) {
-//            core = tryGetUnsatCore(queries);
-//        }
-//        System.err.println("policy compliance: " + policyResult);
-//        if (core == null) {
-//            System.err.println("no core, not cached");
-//            return;
-//        }
-//
-//        QueryTraceEntry currQuery = queries.getCurrentQuery();
-//
-//        System.err.println("min core: " + core.labels);
-//        CachedQueryTrace cacheTrace = new CachedQueryTrace();
-//        int queryNumber = 0;
-//        Set<Object> valueConstraints = new HashSet<>();
-//        Set<Integer> paramAssertions = new HashSet<>();
-//        Multiset<Integer> assertionOccurrences = HashMultiset.create();
-//        // check used values, assertions
-//        for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
-//            boolean keptQuery = core.labels.contains("a_q!" + queryNumber) || queryEntry == currQuery;
-//            List<Object> parameters = queryEntry.getParameters();
-//            for (int i = 0; i < parameters.size(); ++i) {
-//                Object parameter = parameters.get(i);
-//                if (core.labels.contains("a_pv!" + queryNumber + "!" + i)) {
-//                    valueConstraints.add(parameter);
-//                }
-//                if (!keptQuery || !core.equalityMap.containsKey(parameter)) {
-//                    continue;
-//                }
-//                int assertionNum = core.equalityMap.get(parameter);
-//                if (UNNAMED_EQUALITY || core.labels.contains("a_e!" + assertionNum)) {
-//                    paramAssertions.add(assertionNum);
-//                    assertionOccurrences.add(assertionNum);
-//                }
-//            }
-//
-//            int attrNum = 0;
-//            for (List<Object> tuple : queryEntry.getTuples()) {
-//                for (Object value : tuple) {
-//                    if (core.labels.contains("a_v!" + queryNumber + "!" + attrNum)) {
-//                        valueConstraints.add(value);
-//                    }
-//                    if (!keptQuery || !core.equalityMap.containsKey(value)) {
-//                        ++attrNum;
-//                        continue;
-//                    }
-//                    int assertionNum = core.equalityMap.get(value);
-//                    if (UNNAMED_EQUALITY || core.labels.contains("a_e!" + assertionNum)) {
-//                        assertionOccurrences.add(assertionNum);
-//                    }
-//                    ++attrNum;
-//                }
-//            }
-//            ++queryNumber;
-//        }
-//        for (Integer value : queries.getConstMap().values()) {
-//            if (core.equalityMap.containsKey(value)) {
-//                int assertionNum = core.equalityMap.get(value);
-//                if (UNNAMED_EQUALITY || core.labels.contains("a_e!" + assertionNum)) {
-//                    assertionOccurrences.add(assertionNum);
-//                }
-//            }
-//        }
-//
-//        queryNumber = 0;
-//        // generate cache entry
-//        for (QueryTraceEntry queryEntry : queries.getAllEntries()) {
-//            if (!core.labels.contains("a_q!" + queryNumber) && queryEntry != currQuery) {
-//                ++queryNumber;
-//                continue;
-//            }
-//            // equalities
-//            List<Integer> parameterEquality = new ArrayList<>();
-//            for (Object parameter : queryEntry.getParameters()) {
-//                if (!core.equalityMap.containsKey(parameter)) {
-//                    parameterEquality.add(null);
-//                    continue;
-//                }
-//                int assertionNum = core.equalityMap.get(parameter);
-//                if (paramAssertions.contains(assertionNum) && assertionOccurrences.count(assertionNum) > 1) {
-//                    parameterEquality.add(assertionNum);
-//                } else {
-//                    parameterEquality.add(null);
-//                }
-//            }
-//            List<List<Integer>> tupleEquality = new ArrayList<>();
-//            for (List<Object> tuple : queryEntry.getTuples()) {
-//                List<Integer> indices = new ArrayList<>();
-//                for (Object value : tuple) {
-//                    if (!core.equalityMap.containsKey(value)) {
-//                        indices.add(null);
-//                        continue;
-//                    }
-//                    int assertionNum = core.equalityMap.get(value);
-//                    if (paramAssertions.contains(assertionNum) && assertionOccurrences.count(assertionNum) > 1) {
-//                        indices.add(assertionNum);
-//                    } else {
-//                        indices.add(null);
-//                    }
-//                }
-//                tupleEquality.add(indices);
-//            }
-//            // values
-//            QueryTraceEntry processedQuery = new QueryTraceEntry(queryEntry);
-//            List<Object> parameters = processedQuery.getParameters();
-//            for (int i = 0; i < parameters.size(); ++i) {
-//                if (!valueConstraints.contains(parameters.get(i))) {
-//                    parameters.set(i, null);
-//                }
-//            }
-//            for (List<Object> tuple : processedQuery.getTuples()) {
-//                for (int j = 0; j < tuple.size(); ++j) {
-//                    if (!valueConstraints.contains(tuple.get(j))) {
-//                        tuple.set(j, null);
-//                    }
-//                }
-//            }
-//            CachedQueryTraceEntry entry = new CachedQueryTraceEntry(processedQuery, queryEntry == currQuery, parameterEquality, tupleEquality);
-//            if (!entry.isEmpty()) {
-//                cacheTrace.addEntry(entry);
-//            }
-//            ++queryNumber;
-//        }
-//        for (Map.Entry<String, Integer> c : queries.getConstMap().entrySet()) {
-//            String name = c.getKey();
-//            Integer value = c.getValue();
-//            if (!core.equalityMap.containsKey(value)) {
-//                cacheTrace.addVariable(name, null);
-//                continue;
-//            }
-//            int assertionNum = core.equalityMap.get(value);
-//            // TODO is it ok to ignore equalities solely between constants and maybe tuple values?
-//            if (paramAssertions.contains(assertionNum) && assertionOccurrences.count(assertionNum) > 1) {
-//                cacheTrace.addVariable(name, assertionNum);
-//            } else {
-//                cacheTrace.addVariable(name, null);
-//            }
-//        }
-//        System.err.println(cacheTrace);
-//        cache.policyDecisionCacheFine.addCompliantToCache(currQuery.getParsedSql(), currQuery.getQuery().paramNames, cacheTrace, policyResult);
-//    }
-
     // The fields of `DecisionCache` are shared between `QueryChecker` objects for the same database & policy.
     private static class DecisionCache {
         final ImmutableList<ImmutableSet<String>> preapprovedSets;
         final TraceCache policyDecisionCacheFine;
 
-        public DecisionCache(Schema schema, ArrayList<Policy> policySet) {
+        public DecisionCache(Schema schema, List<Policy> policySet) {
             switch (PRECHECK_SETTING) {
                 case DISABLED -> this.preapprovedSets = null;
                 case COARSE -> this.preapprovedSets = buildPreapprovedSetsCoarse(policySet);
@@ -560,7 +325,7 @@ public class QueryChecker {
          * @param policySet the set of policies from which to build the preapproved set.
          * @return the preapproved set.
          */
-        private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsCoarse(ArrayList<Policy> policySet) {
+        private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsCoarse(List<Policy> policySet) {
             // FIXME(zhangwen): should we use normalized column names here?
             return policySet.stream().filter(Policy::hasNoTheta)
                     .map(policy -> ImmutableSet.copyOf(policy.getProjectColumns()))
@@ -568,7 +333,7 @@ public class QueryChecker {
         }
 
         private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsFull(
-                Schema schema, ArrayList<Policy> policySet) {
+                Schema schema, List<Policy> policySet) {
             class Entry {
                 private final BoolExpr predicate;
                 private final ImmutableSet<String> columns;
@@ -579,7 +344,7 @@ public class QueryChecker {
                 }
             }
 
-            MyZ3Context ctx = schema.getContext();
+            Z3ContextWrapper ctx = schema.getContext();
 
             ImmutableList.Builder<ImmutableSet<String>> preapprovedSetsBuilder = ImmutableList.builder();
 
@@ -615,7 +380,7 @@ public class QueryChecker {
                             if (!nextColumns.isEmpty()) {
                                 BoolExpr nextPredicate = ctx.mkOr(prevPredicate, policySet.get(j).getPredicate(schema));
 
-                                Solver solver = ctx.mkSolver();
+                                Solver solver = ctx.mkRawSolver();
                                 solver.add(ctx.mkNot(nextPredicate));
                                 Status q = solver.check();
                                 boolean predicateResult = (q == Status.UNSATISFIABLE);
@@ -641,7 +406,7 @@ public class QueryChecker {
             return preapprovedSetsBuilder.build();
         }
 
-        private static ImmutableSet<String> getAllColumns(ArrayList<Policy> policySet) {
+        private static ImmutableSet<String> getAllColumns(Collection<Policy> policySet) {
             return policySet.stream()
                     .flatMap(policy -> policy.getProjectColumns().stream())
                     .collect(ImmutableSet.toImmutableSet());

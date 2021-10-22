@@ -11,7 +11,7 @@ public class ImportedDependency implements Dependency {
     private final PrivacyQuery q2;
     private final ImmutableList<String> relevantColumns;
 
-    // Cosntraint: lhs is subset of rhs.
+    // Constraint: lhs is subset of rhs.
     public ImportedDependency(SchemaPlusWithKey schema, ParserResult lhs, ParserResult rhs) {
         q1 = PrivacyQueryFactory.createPrivacyQuery(lhs, schema, Collections.emptyList(), Collections.emptyList());
         q2 = PrivacyQueryFactory.createPrivacyQuery(rhs, schema, Collections.emptyList(), Collections.emptyList());

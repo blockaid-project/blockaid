@@ -5,7 +5,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryT
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 
 import java.util.*;
@@ -23,7 +23,7 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
 
     @Override
     public Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace queries) {
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         Map<String, Integer> bounds = new HashMap<>(initialBounds.calculateBounds(schema, queries));
 
         int iters;

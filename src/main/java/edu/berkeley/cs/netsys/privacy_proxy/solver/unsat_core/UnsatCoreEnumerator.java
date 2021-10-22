@@ -3,8 +3,11 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -12,13 +15,13 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
 public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
-    private final MyZ3Context context;
+    private final Z3ContextWrapper context;
     private final Solver solver;
     private final ImmutableMap<L, BoolExpr> label2BoolConst;
     private final ImmutableMap<BoolExpr, L> boolConst2Label;
 
     // Sets solver to minimize unsat cores.
-    public UnsatCoreEnumerator(MyZ3Context context, Solver solver, Map<L, BoolExpr> labeledExprs, Order order) {
+    public UnsatCoreEnumerator(Z3ContextWrapper context, Solver solver, Map<L, BoolExpr> labeledExprs, Order order) {
         super(context, labeledExprs.keySet(), order);
 
         this.context = context;

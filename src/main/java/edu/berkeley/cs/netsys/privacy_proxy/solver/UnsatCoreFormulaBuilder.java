@@ -8,7 +8,7 @@ import com.microsoft.z3.Expr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.*;
 
 import java.util.*;
@@ -22,7 +22,7 @@ public class UnsatCoreFormulaBuilder {
 
     // Shorthands.
     private final Schema schema;
-    private final MyZ3Context context;
+    private final Z3ContextWrapper context;
 
     public enum Option {
         NORMAL,
@@ -178,7 +178,7 @@ public class UnsatCoreFormulaBuilder {
                 Expr paramExpr = context.mkConst(
                         // TODO(zhangwen): this naming scheme has to match that in `ParsedPSJ`, which is error-prone.
                         "!" + qPrefix + "!" + paramIdx,
-                        Tuple.getSortFromObject(context, paramValues.get(paramIdx)));
+                        context.getSortForValue(paramValues.get(paramIdx)));
                 Object v = paramValues.get(paramIdx);
                 checkState(!expr2Operand.containsKey(paramExpr));
                 expr2Operand.put(paramExpr, new QueryParamOperand(queryIdx, isCurrentQuery, paramIdx));
@@ -230,7 +230,7 @@ public class UnsatCoreFormulaBuilder {
             // TODO(zhangwen): should put const naming scheme in one place.
             String name = e.getKey();
             Object value = e.getValue();
-            Expr constExpr = context.mkConst("!" + name, Tuple.getSortFromObject(context, value));
+            Expr constExpr = context.mkConst("!" + name, context.getSortForValue(value));
             expr2Operand.put(constExpr, new ContextConstantOperand(name));
             ecs.put(value, constExpr);
         }
@@ -256,7 +256,7 @@ public class UnsatCoreFormulaBuilder {
             List<Expr> variables = ecs.get(value);
 
             // Generate equalities of the form: variable = value.
-            Expr vExpr = Tuple.getExprFromObject(context, value);
+            Expr vExpr = context.getExprForValue(value);
             if (vExpr != null) {
                 // TODO(zhangwen): we currently ignore NULL values, i.e., assuming NULLs are irrelevant for compliance.
                 ValueOperand rhs = new ValueOperand(value);
@@ -291,8 +291,7 @@ public class UnsatCoreFormulaBuilder {
                 }
 
                 ValueOperand vo1 = new ValueOperand(value1), vo2 = new ValueOperand(value2);
-                Expr vExpr1 = Tuple.getExprFromObject(context, value1),
-                        vExpr2 = Tuple.getExprFromObject(context, value2);
+                Expr vExpr1 = context.getExprForValue(value1), vExpr2 = context.getExprForValue(value2);
                 for (Expr p1 : ecs.get(value1)) {
                     Operand o1 = expr2Operand.get(p1);
                     label2Expr.put(new LessThanLabel(o1, vo2), context.mkCustomIntLt(p1, vExpr2));
@@ -321,7 +320,8 @@ public class UnsatCoreFormulaBuilder {
                                       Map<Expr, Operand> expr2Operand,
                                       Set<Expr> pkValuedExprs,
                                       Collection<BoolExpr> returnedRowExprs) {
-        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+        Solver solver = context.mkSolver();
+//        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
         solver.add(returnedRowExprs.toArray(new BoolExpr[0]));
 
         for (Object v : ecs.keySet()) {

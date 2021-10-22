@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -40,7 +40,7 @@ public class UniqueConstraint implements Constraint {
     }
 
     private Iterable<BoolExpr> applyGeneral(Instance instance) {
-        MyZ3Context context = instance.getContext();
+        Z3ContextWrapper context = instance.getContext();
 
         Relation relation = instance.get(this.relationName);
         Schema schema = instance.schema;
@@ -69,7 +69,7 @@ public class UniqueConstraint implements Constraint {
     }
 
     private Iterable<BoolExpr> applyConcrete(Instance instance) {
-        MyZ3Context context = instance.getContext();
+        Z3ContextWrapper context = instance.getContext();
 
         ConcreteRelation relation = (ConcreteRelation) instance.get(this.relationName);
         Schema schema = instance.schema;

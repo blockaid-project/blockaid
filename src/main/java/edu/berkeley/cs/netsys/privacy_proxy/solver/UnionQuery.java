@@ -2,7 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,7 +37,7 @@ public class UnionQuery extends Query {
 
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
-        MyZ3Context context = instance.getContext();
+        Z3ContextWrapper context = instance.getContext();
         BoolExpr[] exprs = new BoolExpr[queries.length];
         for (int i = 0; i < queries.length; ++i) {
             exprs[i] = context.mkAnd(queries[i].doesContain(instance, tuple));

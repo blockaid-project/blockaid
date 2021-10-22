@@ -48,7 +48,6 @@ public class PrivacyConnection implements Connection {
   private final Connection direct_connection;
   private final CalciteConnection calcite_connection;
   private final QueryChecker query_checker;
-  private final ArrayList<Policy> policy_list;
   private QueryTrace current_trace;
   private final SchemaPlusWithKey schema;
   private int queryCount;
@@ -139,10 +138,11 @@ public class PrivacyConnection implements Connection {
 
     schema = new SchemaPlusWithKey(schemaPlus, ImmutableMap.copyOf(primaryKeys), foreignKeys);
 
-    this.policy_list = new ArrayList<>();
+    ImmutableList.Builder<Policy> policyListBuilder = new ImmutableList.Builder<>();
     for (String sql : direct_info.getProperty("policy").split("\n")) {
-      this.policy_list.add(new Policy(this.schema, parseQueryUnvalidated(sql)));
+      policyListBuilder.add(new Policy(this.schema, parseQueryUnvalidated(sql)));
     }
+    ImmutableList<Policy> policyList = policyListBuilder.build();
 
     this.cacheSpecs = cacheSpec.lines().map(AppCacheSpec::fromSpecString).collect(ImmutableList.toImmutableList());
 
@@ -155,7 +155,7 @@ public class PrivacyConnection implements Connection {
 
     this.query_checker = new QueryChecker(
             direct_info,
-            this.policy_list,
+            policyList,
             this.schema,
             dependencies
     );

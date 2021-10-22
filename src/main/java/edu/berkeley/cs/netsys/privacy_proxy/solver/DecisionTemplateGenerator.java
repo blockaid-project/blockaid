@@ -2,7 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import edu.berkeley.cs.netsys.privacy_proxy.cache.DecisionTemplate;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.*;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core.Order;
@@ -24,16 +24,16 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
     private final QueryChecker checker;
-    private final Schema schema;
+    private final Schema boundedSchema;
     private final ReturnedRowUnsatCoreEnumerator rruce;
     private final UnsatCoreFormulaBuilder unboundedUcBuilder;
     private final SMTPortfolioRunner runner;
 
-    public DecisionTemplateGenerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
-                                     List<Query> views, DeterminacyFormula unboundedFormula) {
+    public DecisionTemplateGenerator(QueryChecker checker, Schema unboundedSchema, Schema boundedSchema,
+                                     ImmutableList<Policy> policies, DeterminacyFormula unboundedFormula) {
         this.checker = checker;
-        this.schema = schema;
-        this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, schema, policies, views);
+        this.boundedSchema = boundedSchema;
+        this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, unboundedSchema, boundedSchema, policies);
         this.unboundedUcBuilder = new UnsatCoreFormulaBuilder(unboundedFormula, policies);
         this.runner = new SMTPortfolioRunner(checker, QueryChecker.SOLVE_TIMEOUT_MS);
     }
@@ -68,7 +68,7 @@ public class DecisionTemplateGenerator {
         // Reusing the bounded formula builder to avoid making the bounded formula again.
         UnsatCoreFormulaBuilder boundedUcBuilder = rruce.getFormulaBuilder();
 
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = boundedSchema.getContext();
         ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
                 .map(rrl -> new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()))
                 .collect(ImmutableList.toImmutableList());

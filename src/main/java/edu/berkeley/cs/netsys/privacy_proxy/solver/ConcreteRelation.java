@@ -3,7 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.google.common.collect.Iterables;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,7 +15,7 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.CONTAINMENT_USE_
 
 public class ConcreteRelation implements Relation {
     private final Schema schema;
-    private final MyZ3Context context;
+    private final Z3ContextWrapper context;
     private final Sort[] signature;
     private final Tuple[] tuples;
     private final BoolExpr[] exists;

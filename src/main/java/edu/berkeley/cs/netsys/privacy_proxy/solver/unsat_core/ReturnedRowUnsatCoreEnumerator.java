@@ -1,7 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
 import edu.berkeley.cs.netsys.privacy_proxy.solver.DecisionTemplateGenerator;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVC4Executor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
@@ -30,21 +30,19 @@ public class ReturnedRowUnsatCoreEnumerator {
     private static final int TIMEOUT_S = 20;
 
     private final QueryChecker checker;
-    private final Schema schema;
-    private final Collection<Policy> policies;
-    private final Collection<Query> views;
+    private final Schema boundedSchema;
+    private final ImmutableList<Policy> policies;
     private final RRLUnsatCoreDeterminacyFormula rrlFormula;
 
     private UnsatCoreFormulaBuilder formulaBuilder = null;
     private Solver solver = null;
 
-    public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema schema, Collection<Policy> policies,
-                                          List<Query> views) {
+    public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema unboundedSchema, Schema boundedSchema,
+                                          ImmutableList<Policy> policies) {
         this.checker = checker;
-        this.schema = schema;
+        this.boundedSchema = boundedSchema;
         this.policies = policies;
-        this.views = views;
-        this.rrlFormula = new RRLUnsatCoreDeterminacyFormula(schema, views);
+        this.rrlFormula = new RRLUnsatCoreDeterminacyFormula(unboundedSchema, policies);
     }
 
     public record Core(Set<ReturnedRowLabel> rrCore, Set<PreambleLabel> preambleCore) {}
@@ -127,21 +125,23 @@ public class ReturnedRowUnsatCoreEnumerator {
         );
 
         long startMs = System.currentTimeMillis();
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = boundedSchema.getContext();
         context.pushTrackConsts();
         try {
             CountingBoundEstimator cbe = new CountingBoundEstimator();
             UnsatCoreBoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
-            Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, subTrace);
+            Map<String, Integer> bounds = boundEstimator.calculateBounds(boundedSchema, subTrace);
 
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + boundSlack);
-            BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(schema, views, slackBounds,
+            BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(
+                    boundedSchema, policies, slackBounds,
                     true, TextOption.NO_TEXT, null, preambleCore);
             this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
             System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
 
             UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
-            solver = context.mkSolver(context.mkSymbol("QF_UF"));
+//            solver = context.mkSolver(context.mkSymbol("QF_UF"));
+            solver = context.mkSolver();
 
             if (subTrace.size() == 1) { // Only the current query is in the trace.  It doesn't depend on any previous!
                 // However, only return after making a solver, which is expected by subsequent callers to `getSolver()`.

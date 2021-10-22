@@ -4,7 +4,7 @@ import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.*;
 
@@ -13,7 +13,7 @@ import static com.google.common.base.Preconditions.checkState;
 // For enumerating minimal unsat cores using the MARCO algorithm.
 // Adapted from https://github.com/Z3Prover/z3/blob/master/examples/python/mus/marco.py.
 class MapSolver<L> {
-    private final MyZ3Context context;
+    private final Z3ContextWrapper context;
     private final Solver solver;
     private final Order order; // Enumerate seeds in increasing order by size?
 
@@ -23,7 +23,7 @@ class MapSolver<L> {
 
     private int bound;
 
-    public MapSolver(MyZ3Context context, Collection<L> labels, Order order) {
+    public MapSolver(Z3ContextWrapper context, Collection<L> labels, Order order) {
         this.context = context;
         this.solver = context.mkRawSolver();
         this.order = order;

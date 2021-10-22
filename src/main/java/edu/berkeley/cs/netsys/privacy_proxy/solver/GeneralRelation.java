@@ -1,7 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,7 +11,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 public class GeneralRelation implements Relation {
     private final Schema schema;
-    private final MyZ3Context context;
+    private final Z3ContextWrapper context;
     private final RelationFunction function;
     private final Sort[] signature;
 

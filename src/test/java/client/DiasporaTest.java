@@ -1,19 +1,6 @@
 package client;
 
 import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
-import org.apache.calcite.adapter.jdbc.JdbcSchema;
-import org.apache.calcite.avatica.util.Casing;
-import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.parser.SqlParser;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.Planner;
-import org.apache.calcite.tools.ValidationException;
-import org.apache.calcite.util.Pair;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -21,7 +8,6 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.Properties;
 
 import static com.google.common.base.Preconditions.checkArgument;
 

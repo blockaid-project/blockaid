@@ -39,4 +39,7 @@ public class Options {
 
     /* Disable preamble pruning in decision template generation. */
     public static final boolean DISABLE_PREAMBLE_PRUNE = Objects.equals(System.getProperty("privoxy.disable_preamble_prune"), "true");
+
+    /* Use ints and bools in bounded formula. */
+    public static final boolean BOUNDED_USE_TYEORY = Objects.equals(System.getProperty("privoxy.bounded_use_theory"), "true");
 }

@@ -6,7 +6,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.BoolExpr;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ConstraintLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
@@ -23,16 +24,17 @@ import static com.google.common.base.Preconditions.checkArgument;
 public class RRLUnsatCoreDeterminacyFormula {
     private final DeterminacyFormula baseFormula;
     private final ImmutableList<Constraint> constraints;
+    private final ImmutableList<Policy> policies;
     private final ImmutableList<Query> views;
 
     private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)");
     private static final Pattern PREAMBLE_PATTERN = Pattern.compile("(Constraint|View)!(\\d+)");
 
-    public RRLUnsatCoreDeterminacyFormula(Schema schema, List<Query> views) {
+    public RRLUnsatCoreDeterminacyFormula(Schema schema, ImmutableList<Policy> policies) {
         Instance inst1 = schema.makeFreshInstance("instance0"),
                 inst2 = schema.makeFreshInstance("instance1");
 
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         ArrayList<NamedBoolExpr> preamble = new ArrayList<>();
 
         Map<Constraint, Iterable<BoolExpr>> c1 = inst1.getConstraints(), c2 = inst2.getConstraints();
@@ -46,7 +48,8 @@ public class RRLUnsatCoreDeterminacyFormula {
             ));
         }
 
-        this.views = ImmutableList.copyOf(views);
+        this.policies = policies;
+        this.views = schema.getPolicyQueries(policies);
         for (int i = 0; i < views.size(); ++i) {
             Query v = views.get(i);
             preamble.add(new NamedBoolExpr(
@@ -64,7 +67,7 @@ public class RRLUnsatCoreDeterminacyFormula {
 
     private List<NamedBoolExpr> generateTupleCheckNamed(UnmodifiableLinearQueryTrace trace) {
         Schema schema = baseFormula.schema;
-        MyZ3Context context = baseFormula.context;
+        Z3ContextWrapper context = baseFormula.context;
         ArrayList<NamedBoolExpr> exprs = new ArrayList<>();
 
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
@@ -121,7 +124,7 @@ public class RRLUnsatCoreDeterminacyFormula {
             int i = Integer.parseInt(m.group(2));
             res.add(switch (m.group(1)) {
                 case "Constraint" -> new ConstraintLabel(constraints.get(i));
-                case "View" -> new ViewLabel(views.get(i));
+                case "View" -> new ViewLabel(policies.get(i));
                 default -> throw new IllegalArgumentException("parse preamble label failed: " + m.group(0));
             });
         }

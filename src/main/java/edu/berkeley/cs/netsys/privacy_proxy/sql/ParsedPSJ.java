@@ -2,10 +2,10 @@ package edu.berkeley.cs.netsys.privacy_proxy.sql;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.type.SqlTypeName;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
 import edu.berkeley.cs.netsys.privacy_proxy.util.UnionFind;
 
 import java.text.ParseException;
@@ -286,7 +286,7 @@ public class ParsedPSJ {
     }
 
     private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         if (theta instanceof SqlIdentifier identifier) {
             String name = quantifyName(identifier);
             if (symbolMap.containsKey(name)) {
@@ -373,12 +373,12 @@ public class ParsedPSJ {
                 if (param == null) {
                     throw new UnsupportedOperationException("null parameter is not supported (yet)");
                 }
-                return Tuple.getExprFromObject(context, param);
+                return context.getExprForValue(param);
             } else {
                 if (symbolMap.containsKey(name)) {
                     return symbolMap.get(name);
                 } else {
-                    return context.mkConst(name, Tuple.getSortFromObject(context, param));
+                    return context.mkConst(name, context.getSortForValue(param));
                 }
             }
         }
@@ -421,7 +421,7 @@ public class ParsedPSJ {
     }
 
     private BoolExpr getPredicate(Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);

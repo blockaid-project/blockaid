@@ -1,27 +1,28 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.executor;
 
+import com.google.common.collect.ImmutableList;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTrace;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Solver;
 import com.microsoft.z3.Status;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 public class BoundedExecutor extends SMTExecutor {
     private final Schema schema;
-    private final Collection<Query> views;
+    private final ImmutableList<Policy> policies;
     private final QueryTrace queries;
     private Solver solver;
     private boolean shuttingDown = false;
 
-    public BoundedExecutor(String name, CountDownLatch latch, Schema schema, Collection<Query> views, QueryTrace queries) {
+    public BoundedExecutor(String name, CountDownLatch latch, Schema schema, ImmutableList<Policy> policies, QueryTrace queries) {
         super(name, latch, true, false, false, false);
         this.schema = schema;
-        this.views = views;
+        this.policies = policies;
         this.queries = queries;
     }
 
@@ -29,11 +30,11 @@ public class BoundedExecutor extends SMTExecutor {
     protected Status doRunNormal() {
         long startTime = System.currentTimeMillis();
 
-        MyZ3Context context = schema.getContext();
+        Z3ContextWrapper context = schema.getContext();
         // this sucks - this executor cannot exit even if we get a fast unsat, until formula generation is done
         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
-        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, bounds, true);
+        DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policies, bounds, true);
 
         synchronized (this) {
             if (shuttingDown) {

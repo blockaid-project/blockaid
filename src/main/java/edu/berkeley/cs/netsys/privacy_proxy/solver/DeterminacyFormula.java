@@ -8,8 +8,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.*;
 import com.microsoft.z3.enumerations.Z3_decl_kind;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.TrackedDecls;
 import edu.berkeley.cs.netsys.privacy_proxy.util.UnionFind;
 
@@ -26,7 +26,7 @@ import static com.google.common.base.Preconditions.checkState;
 public class DeterminacyFormula {
     private static final boolean MERGE_TRACE = false;
 
-    protected final MyZ3Context context;
+    protected final Z3ContextWrapper context;
     protected final Schema schema;
     protected final Instance inst1;
     protected final Instance inst2;
@@ -146,7 +146,7 @@ public class DeterminacyFormula {
         ArrayList<BoolExpr> checks = new ArrayList<>();
 
         Schema schema = inst.schema;
-        MyZ3Context ctx = schema.getContext();
+        Z3ContextWrapper ctx = schema.getContext();
         for (Map.Entry<String, Map<Expr, UnionFind<Integer>>> relEntry : facts.entrySet()) {
             String relName = relEntry.getKey();
             List<Column> columns = schema.getColumns(relName);
@@ -177,7 +177,7 @@ public class DeterminacyFormula {
     public static List<Tuple> getTupleObjects(QueryTraceEntry qte, Schema schema) {
         return qte.getTuplesStream().map(
                 tuple -> new Tuple(schema, tuple.stream().map(
-                        v -> Tuple.getExprFromObject(schema.getContext(), v)
+                        v -> schema.getContext().getExprForValue(v)
                 ))).collect(Collectors.toList());
     }
 
@@ -215,8 +215,8 @@ public class DeterminacyFormula {
         for (Map.Entry<String, Object> entry : queries.getConstMap().entrySet()) {
             Object value = entry.getValue();
             exprs.add(context.mkEq(
-                    context.mkConst("!" + entry.getKey(), Tuple.getSortFromObject(context, value)),
-                    context.mkCustom(entry.getValue())
+                    context.mkConst("!" + entry.getKey(), context.getSortForValue(value)),
+                    context.getExprForValue(entry.getValue())
             ));
         }
 

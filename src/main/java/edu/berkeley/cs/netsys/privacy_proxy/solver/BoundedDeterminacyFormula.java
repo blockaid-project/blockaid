@@ -1,9 +1,11 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.microsoft.z3.BoolExpr;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.MyZ3Context;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
 
@@ -13,22 +15,22 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_PREAMBLE_PRUNE;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
-    public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds, boolean splitProducts) {
-        this(schema, views, bounds, splitProducts, TextOption.USE_TEXT, null, null);
+    public BoundedDeterminacyFormula(Schema schema, ImmutableList<Policy> policies, Map<String, Integer> bounds, boolean splitProducts) {
+        this(schema, policies, bounds, splitProducts, TextOption.USE_TEXT, null, null);
     }
 
-    public BoundedDeterminacyFormula(Schema schema, Collection<Query> views, Map<String, Integer> bounds,
+    public BoundedDeterminacyFormula(Schema schema, ImmutableList<Policy> policies, Map<String, Integer> bounds,
                                      boolean splitProducts, TextOption text,
                                      ListMultimap<String, Map<String, Object>> table2KnownRows,
                                      Collection<PreambleLabel> selectedPreamble) {
         super(schema, (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds, table2KnownRows), (Instance inst1, Instance inst2) -> {
-            MyZ3Context context = schema.getContext();
+            Z3ContextWrapper context = schema.getContext();
             List<BoolExpr> clauses = new ArrayList<>();
 
             checkArgument(inst1.getConstraints().keySet().equals(inst2.getConstraints().keySet()));
             SubPreamble sub = selectedPreamble == null || DISABLE_PREAMBLE_PRUNE
-                    ? SubPreamble.all(inst1, inst2, views)
-                    : SubPreamble.fromLabels(selectedPreamble);
+                    ? SubPreamble.all(inst1, inst2, schema.getPolicyQueries(policies))
+                    : SubPreamble.fromLabels(schema, selectedPreamble);
 
             for (Constraint c : sub.constraints()) {
                 Iterables.addAll(clauses, inst1.getConstraints().get(c));

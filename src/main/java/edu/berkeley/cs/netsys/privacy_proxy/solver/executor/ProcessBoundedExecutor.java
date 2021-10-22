@@ -1,24 +1,25 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.executor;
 
+import com.google.common.collect.ImmutableList;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTrace;
 import com.microsoft.z3.Status;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 public class ProcessBoundedExecutor extends SMTExecutor {
     private final Schema schema;
-    private final Collection<Query> views;
+    private final ImmutableList<Policy> policies;
     private final QueryTrace queries;
     private ProcessSMTExecutor executor = null;
     private boolean shuttingDown = false;
 
-    public ProcessBoundedExecutor(String name, CountDownLatch latch, Schema schema, Collection<Query> views, QueryTrace queries) {
+    public ProcessBoundedExecutor(String name, CountDownLatch latch, Schema schema, ImmutableList<Policy> policies, QueryTrace queries) {
         super(name, latch, true, false, false, false);
         this.schema = schema;
-        this.views = views;
+        this.policies = policies;
         this.queries = queries;
     }
 
@@ -31,7 +32,7 @@ public class ProcessBoundedExecutor extends SMTExecutor {
 
         while (!shuttingDown) {
             System.err.println(bounds);
-            DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, views, bounds, true);
+            DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policies, bounds, true);
             String smt = boundedDeterminacyFormula.generateSMT(queries);
 
             CountDownLatch latch = new CountDownLatch(1);
