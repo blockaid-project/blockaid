@@ -1,7 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 
-import cache.trace.QueryTrace;
-import cache.trace.QueryTraceEntry;
+import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTrace;
+import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -21,11 +21,11 @@ import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.*;
 import org.apache.calcite.util.Pair;
-import policy_checker.AppCacheSpec;
-import policy_checker.Policy;
-import policy_checker.QueryChecker;
-import solver.*;
-import sql.*;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.AppCacheSpec;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
+import edu.berkeley.cs.netsys.privacy_proxy.sql.*;
 
 import java.io.InputStream;
 import java.io.Reader;
@@ -40,9 +40,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static util.Logger.printMessage;
-import static util.Logger.printStylizedMessage;
-import static util.TerminalColor.*;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMessage;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class PrivacyConnection implements Connection {
   private final Connection direct_connection;

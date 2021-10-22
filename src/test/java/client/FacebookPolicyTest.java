@@ -6,7 +6,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import server.EndToEndTest;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -34,7 +33,8 @@ public class FacebookPolicyTest {
     }
 
     private String readSchemaSQL() throws Exception {
-        java.net.URL url = EndToEndTest.class.getResource("/FacebookPolicyTest/schema.sql");
+        // TODO(zhangwen): is this right?
+        java.net.URL url = FacebookPolicyTest.class.getResource("/FacebookPolicyTest/schema.sql");
         java.nio.file.Path resPath = java.nio.file.Paths.get(url.toURI());
         String sql = new String(java.nio.file.Files.readAllBytes(resPath), StandardCharsets.UTF_8);
 
@@ -57,13 +57,13 @@ public class FacebookPolicyTest {
 
     @Before
     public void setupDb() throws Exception {
-        java.net.URL url = EndToEndTest.class.getResource("/FacebookPolicyTest/policies.sql");
+        java.net.URL url = FacebookPolicyTest.class.getResource("/FacebookPolicyTest/policies.sql");
         java.nio.file.Path resPath = java.nio.file.Paths.get(url.toURI());
-        java.net.URL pk_url = EndToEndTest.class.getResource("/FacebookPolicyTest/pk.txt");
+        java.net.URL pk_url = FacebookPolicyTest.class.getResource("/FacebookPolicyTest/pk.txt");
         java.nio.file.Path pk_resPath = java.nio.file.Paths.get(pk_url.toURI());
-        java.net.URL fk_url = EndToEndTest.class.getResource("/FacebookPolicyTest/fk.txt");
+        java.net.URL fk_url = FacebookPolicyTest.class.getResource("/FacebookPolicyTest/fk.txt");
         java.nio.file.Path fk_resPath = java.nio.file.Paths.get(fk_url.toURI());
-        java.net.URL deps_url = EndToEndTest.class.getResource("/FacebookPolicyTest/deps.txt");
+        java.net.URL deps_url = FacebookPolicyTest.class.getResource("/FacebookPolicyTest/deps.txt");
         java.nio.file.Path deps_resPath = java.nio.file.Paths.get(deps_url.toURI());
 
         String dbFile = tempFolder.newFile("Db").getPath();
