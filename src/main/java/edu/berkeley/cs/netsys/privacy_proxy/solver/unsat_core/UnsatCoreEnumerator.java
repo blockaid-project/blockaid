@@ -5,9 +5,6 @@ import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 

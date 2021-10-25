@@ -8,6 +8,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryT
 import com.google.common.collect.*;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.QuantifierOption;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
@@ -28,7 +29,6 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class QueryChecker {
     public static boolean PRUNE_TRACE = true;
-    public static boolean UNNAMED_EQUALITY = true;
 
     public enum PrecheckSetting {
         DISABLED,
@@ -51,8 +51,6 @@ public class QueryChecker {
     private final SchemaPlusWithKey rawSchema;
     private final List<Policy> policySet;
 
-    private final Schema customSortsSchema;
-    private final Schema theorySchema;
     private final ImmutableList<Schema> allSchemata;
 
     private final SMTPortfolioRunner runner;
@@ -73,9 +71,13 @@ public class QueryChecker {
         this.rawSchema = rawSchema;
         this.policySet = policySet;
 
-        this.customSortsSchema = new Schema(Z3ContextWrapper.makeCustomSortsContext(), rawSchema, dependencies);
-        this.theorySchema = new Schema(
-                BOUNDED_USE_TYEORY ? Z3ContextWrapper.makeTheoryContext() : Z3ContextWrapper.makeCustomSortsContext(),
+        Schema customSortsSchema = new Schema(Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.USE_QUANTIFIERS),
+                rawSchema, dependencies);
+        Schema theorySchema = new Schema(
+                switch (BOUNDED_FORMULA_TYPE) {
+                    case THEORY -> Z3ContextWrapper.makeTheoryContext();
+                    case CUSTOM_SORTS -> Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.QUANTIFIER_FREE);
+                },
                 rawSchema, dependencies);
         this.allSchemata = ImmutableList.of(customSortsSchema, theorySchema);
 

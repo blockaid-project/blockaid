@@ -107,7 +107,7 @@ public class DiasporaTest {
     }
 
     @Test
-    public void testMyProfile() throws ClassNotFoundException, SQLException {
+    public void testProfile() throws ClassNotFoundException, SQLException {
         PQuery[] queries = new PQuery[]{
                 new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?", 45000034, 1),
                 new PQuery("SELECT  `people`.* FROM `people` WHERE `people`.`guid` = ? LIMIT ?", "30c2ef608e5c0139d94f011df6dc47b7", 1),
@@ -123,7 +123,7 @@ public class DiasporaTest {
     }
 
     @Test
-    public void testMyProfileStream() throws ClassNotFoundException, SQLException {
+    public void testProfileStream() throws ClassNotFoundException, SQLException {
         PQuery[] queries = new PQuery[]{
                 new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?", 45000034, 1),
                 new PQuery("SELECT  `people`.* FROM `people` WHERE `people`.`guid` = ? LIMIT ?", "30c2ef608e5c0139d94f011df6dc47b7", 1),
@@ -131,6 +131,27 @@ public class DiasporaTest {
                 new PQuery("SELECT  DISTINCT posts.* FROM `posts` LEFT OUTER JOIN share_visibilities ON share_visibilities.shareable_id = posts.id AND share_visibilities.shareable_type = 'Post' WHERE `posts`.`author_id` = ? AND (`share_visibilities`.`user_id` = 45000034 OR `posts`.`public` = 1) AND (posts.created_at < '2021-10-17 04:22:41') AND `posts`.`type` IN (?, ?) ORDER BY posts.created_at desc, posts.created_at DESC, posts.id DESC LIMIT ?", 26000034, "StatusMessage", "Reshare", 15),
         };
         testQueries(queries, 45000034, 1);
+    }
+
+    @Test
+    public void testNotification() throws ClassNotFoundException, SQLException {
+        PQuery[] queries = new PQuery[]{
+                new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?", 45000034, 1),
+                new PQuery("SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = ?", 45000034),
+                new PQuery("SELECT  `notifications`.* FROM `notifications` WHERE `notifications`.`recipient_id` = ? ORDER BY updated_at desc LIMIT ? OFFSET ?", 45000034, 10, 0),
+                new PQuery("SELECT `people`.* FROM `people` WHERE `people`.`id` IN (?, ?)", 26000034, 26000003),
+                new PQuery("SELECT `posts`.* FROM `posts` WHERE `posts`.`id` = ?", 33000073),
+                new PQuery("SELECT `notification_actors`.* FROM `notification_actors` WHERE `notification_actors`.`notification_id` IN (?, ?, ?)", 20000153, 20000151, 20000147),
+                new PQuery("SELECT `people`.* FROM `people` WHERE `people`.`id` IN (?, ?, ?)", 26000003, 26000001, 26000034),
+                new PQuery("SELECT profiles.id, profiles.diaspora_handle, profiles.first_name, profiles.last_name, profiles.image_url, profiles.image_url_small, profiles.image_url_medium, profiles.searchable, profiles.person_id, profiles.created_at, profiles.updated_at, profiles.full_name, profiles.nsfw, profiles.public_details FROM `profiles` WHERE `profiles`.`person_id` IN (?, ?, ?)", 26000001, 26000003, 26000034),
+                new PQuery("SELECT COUNT(*) FROM `notifications` WHERE `notifications`.`recipient_id` = ? AND `notifications`.`unread` = ?", 45000034, true),
+                new PQuery("SELECT `notifications`.* FROM `notifications` WHERE `notifications`.`recipient_id` = ? AND `notifications`.`unread` = ?", 45000034, true),
+                new PQuery("SELECT  `people`.* FROM `people` WHERE `people`.`owner_id` = ? LIMIT ?", 45000034, 1),
+                new PQuery("SELECT  `people`.* FROM `people` WHERE `people`.`id` = ? LIMIT ?", 26000003, 1),
+                new PQuery("SELECT  profiles.id, profiles.diaspora_handle, profiles.first_name, profiles.last_name, profiles.image_url, profiles.image_url_small, profiles.image_url_medium, profiles.searchable, profiles.person_id, profiles.created_at, profiles.updated_at, profiles.full_name, profiles.nsfw, profiles.public_details FROM `profiles` WHERE `profiles`.`person_id` = ? LIMIT ?", 26000003, 1),
+                new PQuery("SELECT `mentions`.* FROM `mentions` WHERE `mentions`.`mentions_container_id` = ? AND `mentions`.`mentions_container_type` = ?", 33000073, "Post"),
+        };
+        testQueries(queries, 45000034, 10);
     }
 
     @Test

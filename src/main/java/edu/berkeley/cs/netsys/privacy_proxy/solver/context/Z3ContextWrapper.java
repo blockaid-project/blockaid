@@ -24,8 +24,8 @@ public abstract class Z3ContextWrapper {
         this.qeLight = rawContext.mkTactic("qe-light");
     }
 
-    public static Z3ContextWrapper makeCustomSortsContext() {
-        return new Z3CustomSortsContext();
+    public static Z3ContextWrapper makeCustomSortsContext(QuantifierOption option) {
+        return new Z3CustomSortsContext(option);
     }
 
     public static Z3ContextWrapper makeTheoryContext() {
@@ -133,6 +133,11 @@ public abstract class Z3ContextWrapper {
 
     public abstract Solver mkSolver();
     public abstract Solver mkSolver(Symbol symbol);
+
+    // Make solver for quantifier-free formulas.
+    public Solver mkQfSolver() {
+        return mkSolver(); // By default, return a regular solver.
+    }
 
     public abstract Sort getCustomIntSort();
     public abstract Sort getCustomBoolSort();

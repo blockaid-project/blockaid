@@ -11,7 +11,6 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core.UnsatCoreEnumerato
 import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
-import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
 import edu.berkeley.cs.netsys.privacy_proxy.util.UnionFind;
 
 import java.util.*;
@@ -20,10 +19,12 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class DecisionTemplateGenerator {
     private final QueryChecker checker;
+    private final Schema unboundedSchema;
     private final Schema boundedSchema;
     private final ReturnedRowUnsatCoreEnumerator rruce;
     private final UnsatCoreFormulaBuilder unboundedUcBuilder;
@@ -32,6 +33,7 @@ public class DecisionTemplateGenerator {
     public DecisionTemplateGenerator(QueryChecker checker, Schema unboundedSchema, Schema boundedSchema,
                                      ImmutableList<Policy> policies, DeterminacyFormula unboundedFormula) {
         this.checker = checker;
+        this.unboundedSchema = unboundedSchema;
         this.boundedSchema = boundedSchema;
         this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, unboundedSchema, boundedSchema, policies);
         this.unboundedUcBuilder = new UnsatCoreFormulaBuilder(unboundedFormula, policies);
@@ -40,21 +42,29 @@ public class DecisionTemplateGenerator {
 
     // Returns empty if formula is not determined UNSAT.
     public Optional<Collection<DecisionTemplate>> generate(UnmodifiableLinearQueryTrace trace) {
-        // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
-        Optional<ReturnedRowUnsatCoreEnumerator.Core> oCore = rruce.getInitialRRCore(trace);
-        if (oCore.isEmpty()) {
-            return Optional.empty();
-        }
-
-        for (int slack = 1; slack <= 3; ++slack) {
-            ReturnedRowUnsatCoreEnumerator.Core core = oCore.get();
-            Optional<DecisionTemplate> odt = generate(trace, core.rrCore(), core.preambleCore(), slack);
-            if (odt.isPresent()) {
-                return Optional.of(List.of(odt.get()));
+        Z3ContextWrapper unboundedContext = unboundedSchema.getContext(), boundedContext = boundedSchema.getContext();
+        unboundedContext.pushTrackConsts();
+        boundedContext.pushTrackConsts();
+        try {
+            // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
+            Optional<ReturnedRowUnsatCoreEnumerator.Core> oCore = rruce.getInitialRRCore(trace);
+            if (oCore.isEmpty()) {
+                return Optional.empty();
             }
-        }
 
-        return Optional.empty();
+            for (int slack = 1; slack <= 3; ++slack) {
+                ReturnedRowUnsatCoreEnumerator.Core core = oCore.get();
+                Optional<DecisionTemplate> odt = generate(trace, core.rrCore(), core.preambleCore(), slack);
+                if (odt.isPresent()) {
+                    return Optional.of(List.of(odt.get()));
+                }
+            }
+
+            return Optional.empty();
+        } finally {
+            boundedContext.popTrackConsts();
+            unboundedContext.popTrackConsts();
+        }
     }
 
     private Optional<DecisionTemplate> generate(UnmodifiableLinearQueryTrace trace,
@@ -62,20 +72,19 @@ public class DecisionTemplateGenerator {
                                                 Set<PreambleLabel> preambleCore,
                                                 int boundSlack) {
         Set<ReturnedRowLabel> rrCore = rruce.minimizeRRCore(trace, initialRRCore, preambleCore, boundSlack);
-//        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + initialRRCore + ANSI_RESET);
+        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCore + ANSI_RESET);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         // Reusing the bounded formula builder to avoid making the bounded formula again.
         UnsatCoreFormulaBuilder boundedUcBuilder = rruce.getFormulaBuilder();
 
-        Z3ContextWrapper context = boundedSchema.getContext();
+        Z3ContextWrapper boundedContext = boundedSchema.getContext();
         ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
                 .map(rrl -> new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()))
                 .collect(ImmutableList.toImmutableList());
         SubQueryTrace sqt = trace.getSubTrace(toKeep);
 
         // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
-        context.pushTrackConsts();
         UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
 //                UnsatCoreFormulaBuilder.Option.POSITIVE);
         ImmutableSet<Operand> allOperandsOld =
@@ -87,7 +96,7 @@ public class DecisionTemplateGenerator {
         Solver solver = rruce.getSolver();
 
 //        Set<Label> paramsCore;
-//        try (FindMinimalSat fms = new FindMinimalSat(context, solver)) {
+//        try (FindMinimalSat fms = new FindMinimalSat(boundedContext, solver)) {
 //            paramsCore = fms.compute(fs);
 //        }
 
@@ -97,13 +106,13 @@ public class DecisionTemplateGenerator {
         Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
         Set<Label> paramsCore;
         try (UnsatCoreEnumerator<Label> uce =
-                     new UnsatCoreEnumerator<>(context, solver, labeledExprs, Order.INCREASING)) {
+                     new UnsatCoreEnumerator<>(boundedContext, solver, labeledExprs, Order.INCREASING)) {
             printMessage("total    #labels =\t" + labeledExprs.size());
             Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
             printMessage("starting #labels =\t" + startingUnsatCore.size() + "\t" + startingUnsatCore);
 
             long startNs = System.nanoTime();
-            Solver thisSolver = context.mkSolver();
+            Solver thisSolver = boundedContext.mkSolver();
             for (Label l : startingUnsatCore) {
                 thisSolver.add(labeledExprs.get(l));
             }
@@ -112,7 +121,7 @@ public class DecisionTemplateGenerator {
             for (Map.Entry<Label, BoolExpr> entry : labeledExprs.entrySet()) {
                 Label l = entry.getKey();
                 if (startingUnsatCore.contains(l)
-                        || thisSolver.check(context.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
+                        || thisSolver.check(boundedContext.mkNot(entry.getValue())) == Status.UNSATISFIABLE) {
                     consequence.add(l);
                 }
             }
@@ -123,7 +132,6 @@ public class DecisionTemplateGenerator {
 
             paramsCore = uce.next().get();
         }
-        context.popTrackConsts();
         printMessage("final #labels =\t" + paramsCore.size() + "\t" + paramsCore);
 
         // Step 4: Make decision template.
@@ -136,9 +144,9 @@ public class DecisionTemplateGenerator {
         System.out.println("\t\t| Validate:");
         String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
         if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
-            Logger.printStylizedMessage("validation failed (slack = " + boundSlack + ")", ANSI_RED_BACKGROUND);
-            System.out.println(dt);
-            System.out.println(coreLabelsOld);
+            printStylizedMessage("validation failed (slack = " + boundSlack + ")", ANSI_RED_BACKGROUND);
+            printMessage(dt.toString());
+            printMessage(coreLabelsOld.toString());
             return Optional.empty();
         }
 

@@ -18,6 +18,7 @@ public class TraceCache {
         }
     }
 
+    // FIXME(zhangwen): de-duplicate decision templates -- duplicates can arise when multiple threads insert the same template concurrently.
     private final ArrayListMultimap<CacheKey, DecisionTemplate> compliantCache = ArrayListMultimap.create();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 

@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
+import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
 
 import java.sql.Date;
@@ -10,6 +11,7 @@ import java.util.stream.Collectors;
 
 class CustomSorts {
     private final Z3CustomSortsContext context;
+    private final QuantifierOption quantifierOption;
 
     final Sort dateSort;
     final Sort tsSort;
@@ -22,6 +24,7 @@ class CustomSorts {
     private final List<Values> valuesStack;
 
     final FuncDecl intLt;
+    final ImmutableList<BoolExpr> intLtAxioms;
 
     private static final Function<Values, Map<Date, Expr>> PICK_DATE = v -> v.dateValues;
     private static final Function<Values, Map<Timestamp, Expr>> PICK_TS = v -> v.tsValues;
@@ -41,17 +44,19 @@ class CustomSorts {
         private final Map<Expr, Object> expr2Obj = new HashMap<>();
     }
 
-    CustomSorts(Z3CustomSortsContext context) {
+    CustomSorts(Z3CustomSortsContext context, QuantifierOption qo) {
         this.context = context;
+        this.quantifierOption = qo;
+        Context rawContext = context.rawContext;
 
-        intSort = context.rawContext.mkUninterpretedSort("CS!INT");
+        intSort = rawContext.mkUninterpretedSort("CS!INT");
 //            dateSort = context.mkUninterpretedSort("CS!DATE");
 //            tsSort = context.mkUninterpretedSort("CS!TS");
         dateSort = intSort;
         tsSort = intSort;
-        realSort = context.rawContext.mkUninterpretedSort("CS!REAL");
-        stringSort = context.rawContext.mkUninterpretedSort("CS!STRING");
-        boolSort = context.rawContext.mkUninterpretedSort("CS!BOOL");
+        realSort = rawContext.mkUninterpretedSort("CS!REAL");
+        stringSort = rawContext.mkUninterpretedSort("CS!STRING");
+        boolSort = rawContext.mkUninterpretedSort("CS!BOOL");
 
         // dateSort and tsSort are currently the same sort, so we don't declare them.
         this.sortDeclarationSMT = "(declare-sort " + realSort.getSExpr() + " 0)\n" +
@@ -63,17 +68,21 @@ class CustomSorts {
         valuesStack.add(new Values());
 
         intLt = context.mkFuncDecl("lt", new Sort[]{intSort, intSort}, context.rawContext.getBoolSort());
-//            {
-//                Expr x = mkConst("x", intSort), y = mkConst("y", intSort), z = mkConst("z", intSort);
-//                BoolExpr trans = mkForall(
-//                        new Expr[]{x, y, z},
-//                        mkImplies(
-//                                mkAnd((BoolExpr) intLt.apply(x, y), (BoolExpr) intLt.apply(y, z)),
-//                                (BoolExpr) intLt.apply(x, z)
-//                        ), 1, null, null, null, null
-//                );
-//                intLtAxioms = ImmutableList.of(trans);
-//            }
+        intLtAxioms = switch (quantifierOption) {
+            case QUANTIFIER_FREE -> ImmutableList.of(); // No axioms, which require quantifiers.
+            case USE_QUANTIFIERS -> {
+                Expr x = rawContext.mkConst("x", intSort), y = rawContext.mkConst("y", intSort),
+                        z = rawContext.mkConst("z", intSort);
+                BoolExpr trans = rawContext.mkForall(
+                        new Expr[]{x, y, z},
+                        rawContext.mkImplies(
+                                rawContext.mkAnd((BoolExpr) intLt.apply(x, y), (BoolExpr) intLt.apply(y, z)),
+                                (BoolExpr) intLt.apply(x, z)
+                        ), 1, null, null, null, null
+                );
+                yield ImmutableList.of(trans);
+            }
+        };
     }
 
     void push() {
@@ -147,12 +156,23 @@ class CustomSorts {
         ArrayList<T> keys = new ArrayList<>(exprs.keySet());
         Collections.sort(keys);
         ArrayList<BoolExpr> res = new ArrayList<>();
-        // Encodes transitivity of less-than.  Should use a forall axiom, but that breaks QF bounded formulas.
-        for (int i = 0; i < keys.size(); ++i) {
-            Expr thisElem = exprs.get(keys.get(i));
-            for (int j = i + 1; j < keys.size(); ++j) {
-                Expr otherElem = exprs.get(keys.get(j));
-                res.add((BoolExpr) intLt.apply(thisElem, otherElem));
+        switch (quantifierOption) {
+            case QUANTIFIER_FREE -> {
+                // In the quantifier-free case, there's no transitivity axiom imposed on our less-than predicate.
+                // Therefore, add a less-than constraint for every pair of values.
+                for (int i = 0; i < keys.size(); ++i) {
+                    Expr thisElem = exprs.get(keys.get(i));
+                    for (int j = i + 1; j < keys.size(); ++j) {
+                        Expr otherElem = exprs.get(keys.get(j));
+                        res.add((BoolExpr) intLt.apply(thisElem, otherElem));
+                    }
+                }
+            }
+            case USE_QUANTIFIERS -> {
+                for (int i = 0; i < keys.size() - 1; ++i) {
+                    Expr thisElem = exprs.get(keys.get(i)), nextElem = exprs.get(keys.get(i + 1));
+                    res.add((BoolExpr) intLt.apply(thisElem, nextElem));
+                }
             }
         }
         return res;
@@ -181,7 +201,7 @@ class CustomSorts {
         prepareSolverForSort(solver, PICK_REAL);
         prepareSolverForSort(solver, PICK_STRING);
         prepareSolverForSort(solver, PICK_BOOL);
-//            solver.add(intLtAxioms.toArray(new BoolExpr[0]));
+        solver.add(intLtAxioms.toArray(new BoolExpr[0]));
         return solver;
     }
 
@@ -199,6 +219,9 @@ class CustomSorts {
         prepareSortValues(sb, PICK_REAL);
         prepareSortValues(sb, PICK_STRING);
         prepareSortValues(sb, PICK_BOOL);
+        for (BoolExpr axiom : intLtAxioms) {
+            sb.append("(assert ").append(axiom.getSExpr()).append(")\n");
+        }
         return sb.toString();
     }
 

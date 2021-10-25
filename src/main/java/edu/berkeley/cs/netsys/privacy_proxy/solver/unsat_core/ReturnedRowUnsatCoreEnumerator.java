@@ -124,9 +124,8 @@ public class ReturnedRowUnsatCoreEnumerator {
                         .collect(ImmutableList.toImmutableList())
         );
 
-        long startMs = System.currentTimeMillis();
-        Z3ContextWrapper context = boundedSchema.getContext();
-        context.pushTrackConsts();
+        long startNs = System.nanoTime();
+        Z3ContextWrapper boundedContext = boundedSchema.getContext();
         try {
             CountingBoundEstimator cbe = new CountingBoundEstimator();
             UnsatCoreBoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
@@ -137,11 +136,10 @@ public class ReturnedRowUnsatCoreEnumerator {
                     boundedSchema, policies, slackBounds,
                     true, TextOption.NO_TEXT, null, preambleCore);
             this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
-            System.out.println("\t\t| Bounded RRL core 1:\t" + (System.currentTimeMillis() - startMs));
+            printMessage("\t\t| Bounded RRL core 1:\t" + (System.nanoTime() - startNs) / 1000000);
 
             UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
-//            solver = context.mkSolver(context.mkSymbol("QF_UF"));
-            solver = context.mkSolver();
+            solver = boundedContext.mkQfSolver();
 
             if (subTrace.size() == 1) { // Only the current query is in the trace.  It doesn't depend on any previous!
                 // However, only return after making a solver, which is expected by subsequent callers to `getSolver()`.
@@ -150,20 +148,19 @@ public class ReturnedRowUnsatCoreEnumerator {
 
             solver.push();
             solver.add(fs.getBackground().toArray(new BoolExpr[0]));
-            System.out.println("\t\t| Bounded RRL core 2:\t" + (System.currentTimeMillis() - startMs));
+            printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000);
             try (UnsatCoreEnumerator<ReturnedRowLabel> uce
-                         = new UnsatCoreEnumerator<>(context, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
-                System.out.println("\t\t| Bounded RRL core 3:\t" + (System.currentTimeMillis() - startMs));
+                         = new UnsatCoreEnumerator<>(boundedContext, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
+                printMessage("\t\t| Bounded RRL core 3:\t" + (System.nanoTime() - startNs) / 1000000);
                 Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
-                System.out.println("\t\t| Bounded RRL core 4:\t" + (System.currentTimeMillis() - startMs));
+                printMessage("\t\t| Bounded RRL core 4:\t" + (System.nanoTime() - startNs) / 1000000);
                 s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, subTrace)).collect(Collectors.toSet());
                 return s;
             } finally {
                 solver.pop();
             }
         } finally {
-            context.popTrackConsts();
-            System.out.println("\t\t| Bounded RRL core:\t" + (System.currentTimeMillis() - startMs));
+            printMessage("\t\t| Bounded RRL core:\t" + (System.nanoTime() - startNs) / 1000000);
         }
     }
 

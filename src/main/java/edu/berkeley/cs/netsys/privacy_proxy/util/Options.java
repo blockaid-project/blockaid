@@ -37,9 +37,54 @@ public class Options {
     /* Disable quantifier elimination optimization. */
     public static final boolean DISABLE_QE = Objects.equals(System.getProperty("privoxy.disable_qe"), "true");
 
-    /* Disable preamble pruning in decision template generation. */
-    public static final boolean DISABLE_PREAMBLE_PRUNE = Objects.equals(System.getProperty("privoxy.disable_preamble_prune"), "true");
+    public enum OnOffType {
+        ON,
+        OFF;
+    }
 
-    /* Use ints and bools in bounded formula. */
-    public static final boolean BOUNDED_USE_TYEORY = Objects.equals(System.getProperty("privoxy.bounded_use_theory"), "true");
+    private static OnOffType getOnOffProperty(String key, OnOffType def) {
+        String value = System.getProperty(key);
+        if (value == null) {
+            return def;
+        }
+        return switch (value) {
+            case "on" -> OnOffType.ON;
+            case "off" -> OnOffType.OFF;
+            default -> throw new IllegalArgumentException(
+                    "unrecognized option for " + key + " (must be on/off): " + value);
+        };
+    }
+
+    /* Disable preamble pruning in decision template generation. */
+    /**
+     * FIXME(zhangwen): Preamble pruning is now disabled by default because it may necessitate dis-equalities in
+     *  decision templates, which is currently not supported.  Here's an example:
+     *  - Imported dependency: If I receive a notification about a post, then (1) then post if public,
+     *      (2) the post is shared with me, or (3) the post is authored by me.
+     *  - Primary key: `posts`.`id`, `people`.`id`.
+     *  - Views: I'm allowed to view mentions on posts shared with me.
+     *  - Trace: (1) My person ID is `x`,  (2) I received a notification about post `y`, (2) post `y`
+     *      is _NOT_ public and its author is _NOT_ `y`.
+     *  The two dis-equalities, in conjunction with te imported dependency, imply that the post must be
+     *  shared with me, and therefore I'm allowed to view its mentions.  The dis-equalities would not have been
+     *  necessary if we had kept the views that (1) allow viewing my own posts, and (2) allow viewing public posts.
+     */
+    public static final OnOffType PRUNE_PREAMBLE = getOnOffProperty("privoxy.prune_preamble", OnOffType.OFF);
+
+    public enum BoundedFormulaType {
+        THEORY, // Use ints and bools for database column types.
+        CUSTOM_SORTS; // Use custom sorts (like in unbounded formula).
+
+        private static BoundedFormulaType parse(String s) {
+            return switch (s) {
+                case "theory" -> THEORY;
+                case "custom_sorts" -> CUSTOM_SORTS;
+                default -> throw new IllegalArgumentException("unrecognized bounded formula type: " + s);
+            };
+        }
+    }
+
+    /* Use custom sorts (instead of ints and bools) in bounded formula. */
+    public static final BoundedFormulaType BOUNDED_FORMULA_TYPE =
+            BoundedFormulaType.parse(System.getProperty("privoxy.bounded_formula_type", "theory"));
 }

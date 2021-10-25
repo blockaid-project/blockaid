@@ -320,8 +320,7 @@ public class UnsatCoreFormulaBuilder {
                                       Map<Expr, Operand> expr2Operand,
                                       Set<Expr> pkValuedExprs,
                                       Collection<BoolExpr> returnedRowExprs) {
-        Solver solver = context.mkSolver();
-//        Solver solver = context.mkSolver(context.mkSymbol("QF_UF"));
+        Solver solver = context.mkQfSolver();
         solver.add(returnedRowExprs.toArray(new BoolExpr[0]));
 
         for (Object v : ecs.keySet()) {

@@ -84,6 +84,12 @@ class Z3TheoryContext extends Z3ContextWrapper{
     }
 
     @Override
+    public Solver mkQfSolver() {
+        // FIXME(zhangwen): does this make a difference?
+        return mkSolver(rawContext.mkSymbol("QF_LIA"));
+    }
+
+    @Override
     public Sort getDateSort() {
         return rawContext.getIntSort();
     }

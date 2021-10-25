@@ -15,10 +15,10 @@ class Z3CustomSortsContext extends Z3ContextWrapper{
     private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
 
-    Z3CustomSortsContext() {
+    Z3CustomSortsContext(QuantifierOption option) {
         this.trackedDeclStack = new ArrayList<>();
         trackedDeclStack.add(new BaseTrackedDecls());
-        this.customSorts = new CustomSorts(this);
+        this.customSorts = new CustomSorts(this, option);
     }
 
     @Override
@@ -104,6 +104,11 @@ class Z3CustomSortsContext extends Z3ContextWrapper{
     @Override
     public Solver mkSolver(Symbol symbol) {
         return customSorts.prepareSolver(rawContext.mkSolver(symbol));
+    }
+
+    @Override
+    public Solver mkQfSolver() {
+        return mkSolver(rawContext.mkSymbol("QF_UF"));
     }
 
     @Override

@@ -3,16 +3,18 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Lists;
 import com.microsoft.z3.BoolExpr;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_PREAMBLE_PRUNE;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 
 public class BoundedDeterminacyFormula extends DeterminacyFormula {
     public BoundedDeterminacyFormula(Schema schema, ImmutableList<Policy> policies, Map<String, Integer> bounds, boolean splitProducts) {
@@ -28,7 +30,7 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
             List<BoolExpr> clauses = new ArrayList<>();
 
             checkArgument(inst1.getConstraints().keySet().equals(inst2.getConstraints().keySet()));
-            SubPreamble sub = selectedPreamble == null || DISABLE_PREAMBLE_PRUNE
+            SubPreamble sub = selectedPreamble == null || PRUNE_PREAMBLE == Options.OnOffType.OFF
                     ? SubPreamble.all(inst1, inst2, schema.getPolicyQueries(policies))
                     : SubPreamble.fromLabels(schema, selectedPreamble);
 
@@ -65,5 +67,16 @@ public class BoundedDeterminacyFormula extends DeterminacyFormula {
             }
             return clauses;
         }, text);
+    }
+
+    @Override
+    protected Iterable<BoolExpr> generateNotContains(Query query) {
+        // Keep the formula quantifier-free.
+        Tuple extHeadTup = query.makeFreshHead();
+        List<BoolExpr> body = Lists.newArrayList(query.apply(inst1).doesContainExpr(extHeadTup));
+        body.add(context.mkNot(
+                context.mkAnd(query.apply(inst2).doesContainExpr(extHeadTup))
+        ));
+        return body;
     }
 }
