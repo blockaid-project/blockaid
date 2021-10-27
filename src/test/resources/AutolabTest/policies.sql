@@ -113,5 +113,3 @@ SELECT problems.* FROM problems, users WHERE users.id = _MY_UID AND users.admini
 SELECT risk_conditions.* FROM risk_conditions, users WHERE users.id = _MY_UID AND users.administrator = true;
 SELECT watchlist_instances.* FROM watchlist_instances, users WHERE users.id = _MY_UID AND users.administrator = true;
 SELECT autograders.* FROM autograders, users WHERE users.id = _MY_UID AND users.administrator = true;
-
--- TODO: administrator has access to everything.
