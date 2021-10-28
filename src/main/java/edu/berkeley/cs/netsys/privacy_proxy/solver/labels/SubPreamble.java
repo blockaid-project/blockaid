@@ -1,31 +1,34 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.labels;
 
-import edu.berkeley.cs.netsys.privacy_proxy.solver.Constraint;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.Instance;
+import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.Dependency;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public record SubPreamble(Collection<Query> views, Collection<Constraint> constraints) {
+public record SubPreamble(Collection<Query> views, Collection<Dependency> dependencies) {
+    public static SubPreamble fromPolicies(Schema schema, Collection<Policy> policies,
+                                           Collection<Dependency> dependencies) {
+        List<Query> views = policies.stream().map(p -> p.getSolverQuery(schema)).collect(Collectors.toList());
+        return new SubPreamble(views, dependencies);
+    }
+
     public static SubPreamble fromLabels(Schema schema, Iterable<PreambleLabel> labels) {
-        ArrayList<Query> views = new ArrayList<>();
-        ArrayList<Constraint> constraints = new ArrayList<>();
+        ArrayList<Policy> policies = new ArrayList<>();
+        ArrayList<Dependency> dependencies = new ArrayList<>();
         for (PreambleLabel l : labels) {
             switch (l.getKind()) {
-                case VIEW -> views.add(((ViewLabel) l).policy().getSolverQuery(schema));
-                case CONSTRAINT -> constraints.add(((ConstraintLabel) l).constraint());
+                case VIEW -> policies.add(((ViewLabel) l).policy());
+                case DEPENDENCY -> dependencies.add(((DependencyLabel) l).dependency());
                 default -> throw new IllegalArgumentException("unrecognized preamble label: " + l);
             }
         }
-        return new SubPreamble(views, constraints);
-    }
-
-    public static SubPreamble all(Instance inst1, Instance inst2, Collection<Query> views) {
-        checkArgument(inst1.getConstraints().keySet().equals(inst2.getConstraints().keySet()));
-        return new SubPreamble(views, inst1.getConstraints().keySet());
+        return SubPreamble.fromPolicies(schema, policies, dependencies);
     }
 }

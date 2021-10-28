@@ -24,6 +24,10 @@ public class Policy {
         useSuperset = false;
     }
 
+    public ParsedPSJ getParsedPSJ() {
+        return parsedPSJ;
+    }
+
     public Set<String> getProjectColumns() {
         return new HashSet<>(parsedPSJ.getProjectColumns());
     }

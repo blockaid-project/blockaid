@@ -16,6 +16,8 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.ProcessSMTExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.SMTExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.VampireUCoreExecutor;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMessage;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class ReturnedRowUnsatCoreEnumerator {
@@ -107,7 +110,9 @@ public class ReturnedRowUnsatCoreEnumerator {
 
         printMessage("Winner:\t" + winner);
         printStylizedMessage(smallestRRCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
-        printStylizedMessage(preambleCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
+        if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
+            printStylizedMessage(preambleCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
+        }
 
         return Optional.of(new Core(smallestRRCore, preambleCore));
     }
@@ -132,9 +137,26 @@ public class ReturnedRowUnsatCoreEnumerator {
             Map<String, Integer> bounds = boundEstimator.calculateBounds(boundedSchema, subTrace);
 
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + boundSlack);
+
+            // For coarse preamble pruning, we don't actually prune the views and dependencies.
+            // We keep the entire preamble and instead set the bounds of irrelevant tables to zero.
+            // Views and dependencies that rely on irrelevant tables should then result in trivial formulas.
+            if (PRUNE_PREAMBLE == Options.PrunePreambleType.COARSE) {
+                Set<String> relevantTables = computeRelevantTables(boundedSchema, subTrace);
+                printMessage(() -> "Relevant tables:\t" + relevantTables);
+                slackBounds = Maps.transformEntries(slackBounds,
+                        (table, bound) -> relevantTables.contains(table) ? Objects.requireNonNull(bound) : 0);
+            }
+
+            SubPreamble subPreamble = switch (PRUNE_PREAMBLE) {
+                case UNSAT_CORE -> SubPreamble.fromLabels(boundedSchema, preambleCore);
+                case COARSE, OFF -> null; // Keep the entire preamble.
+            };
+
             BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(
                     boundedSchema, policies, slackBounds,
-                    true, TextOption.NO_TEXT, null, preambleCore);
+                    true, TextOption.NO_TEXT, null,
+                    subPreamble);
             this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
             printMessage("\t\t| Bounded RRL core 1:\t" + (System.nanoTime() - startNs) / 1000000);
 
@@ -162,6 +184,40 @@ public class ReturnedRowUnsatCoreEnumerator {
         } finally {
             printMessage("\t\t| Bounded RRL core:\t" + (System.nanoTime() - startNs) / 1000000);
         }
+    }
+
+    /**
+     * Computes the relevant tables for a trace.  The set of relevant tables is the minimal set that satisfies:
+     * - A table that appears in the trace (either previous or current query) is relevant.
+     * - In a constraint `LHS \subseteq RHS`, if LHS references a relevant table, then all tables referenced by RHS
+     *   are relevant.
+     *
+     * @param schema the schema.
+     * @param trace the trace to compute relevant tables from.
+     * @return the set of relevant table names.
+     */
+    private static Set<String> computeRelevantTables(Schema schema, UnmodifiableLinearQueryTrace trace) {
+        HashSet<String> relevantTables = new HashSet<>();
+        for (QueryTraceEntry entry : trace.getAllEntries()) { // This includes the current query as well.
+            relevantTables.addAll(entry.getQuery().getRelations());
+        }
+
+        boolean converged;
+        do {
+            converged = true;
+            for (Dependency d : schema.getDependencies()) {
+                if (Sets.intersection(d.getFromRelations(), relevantTables).isEmpty()) {
+                    continue;
+                }
+                if (relevantTables.containsAll(d.getToRelations())) {
+                    continue;
+                }
+                converged = false;
+                relevantTables.addAll(d.getToRelations());
+            }
+        } while (!converged);
+
+        return relevantTables;
     }
 
     // MUST be called only after `minimizeRRCore`.

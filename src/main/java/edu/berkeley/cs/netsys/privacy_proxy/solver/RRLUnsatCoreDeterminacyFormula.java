@@ -8,7 +8,7 @@ import com.google.common.collect.Streams;
 import com.microsoft.z3.BoolExpr;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ConstraintLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ViewLabel;
@@ -19,13 +19,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 public class RRLUnsatCoreDeterminacyFormula {
     private final DeterminacyFormula baseFormula;
-    private final ImmutableList<Constraint> constraints;
+    private final ImmutableList<Dependency> dependencies;
     private final ImmutableList<Policy> policies;
-    private final ImmutableList<Query> views;
 
     private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)");
     private static final Pattern PREAMBLE_PATTERN = Pattern.compile("(Constraint|View)!(\\d+)");
@@ -37,19 +34,18 @@ public class RRLUnsatCoreDeterminacyFormula {
         Z3ContextWrapper context = schema.getContext();
         ArrayList<NamedBoolExpr> preamble = new ArrayList<>();
 
-        Map<Constraint, Iterable<BoolExpr>> c1 = inst1.getConstraints(), c2 = inst2.getConstraints();
-        checkArgument(c1.keySet().equals(c2.keySet()));
-        this.constraints = ImmutableList.copyOf(c1.keySet());
-        for (int i = 0; i < constraints.size(); ++i) {
-            Constraint c = constraints.get(i);
+        this.dependencies = ImmutableList.copyOf(schema.getDependencies());
+        for (int i = 0; i < dependencies.size(); ++i) {
+            Dependency d = dependencies.get(i);
             preamble.add(new NamedBoolExpr(
-                    context.mkAnd(Iterables.concat(c1.get(c), c2.get(c))),
+                    context.mkAnd(Iterables.concat(
+                            d.apply(inst1), d.apply(inst2))),
                     "Constraint!" + i
             ));
         }
 
         this.policies = policies;
-        this.views = schema.getPolicyQueries(policies);
+        ImmutableList<Query> views = schema.getPolicyQueries(policies);
         for (int i = 0; i < views.size(); ++i) {
             Query v = views.get(i);
             preamble.add(new NamedBoolExpr(
@@ -123,7 +119,7 @@ public class RRLUnsatCoreDeterminacyFormula {
 
             int i = Integer.parseInt(m.group(2));
             res.add(switch (m.group(1)) {
-                case "Constraint" -> new ConstraintLabel(constraints.get(i));
+                case "Constraint" -> new DependencyLabel(dependencies.get(i));
                 case "View" -> new ViewLabel(policies.get(i));
                 default -> throw new IllegalArgumentException("parse preamble label failed: " + m.group(0));
             });

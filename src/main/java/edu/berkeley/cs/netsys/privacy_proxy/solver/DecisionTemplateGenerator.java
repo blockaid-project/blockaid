@@ -72,7 +72,7 @@ public class DecisionTemplateGenerator {
                                                 Set<PreambleLabel> preambleCore,
                                                 int boundSlack) {
         Set<ReturnedRowLabel> rrCore = rruce.minimizeRRCore(trace, initialRRCore, preambleCore, boundSlack);
-        System.out.println(ANSI_BLUE_BACKGROUND + ANSI_RED + rrCore + ANSI_RESET);
+        printStylizedMessage(rrCore::toString, ANSI_BLUE_BACKGROUND + ANSI_RED);
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         // Reusing the bounded formula builder to avoid making the bounded formula again.

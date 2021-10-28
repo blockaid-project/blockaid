@@ -13,6 +13,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 public class PrivacyQueryUnion extends PrivacyQuery {
     private final List<PrivacyQuery> queries;
+    private final ImmutableSet<String> relations;
     private final ImmutableSet<String> allNormProjColumns;
     private final ImmutableSet<String> allNormThetaColumns;
 
@@ -37,6 +38,9 @@ public class PrivacyQueryUnion extends PrivacyQuery {
 
             paramOffset += paramCount;
         }
+        relations = queries.stream()
+                .flatMap(q -> q.getRelations().stream())
+                .collect(ImmutableSet.toImmutableSet());
         allNormProjColumns = queries.stream()
                 .flatMap(q -> q.getAllNormalizedProjectColumns().stream())
                 .collect(ImmutableSet.toImmutableSet());
@@ -76,12 +80,8 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     }
 
     @Override
-    public List<String> getRelations() {
-        List<String> result = new ArrayList<>();
-        for (PrivacyQuery query : queries) {
-            result.addAll(query.getRelations());
-        }
-        return result;
+    public ImmutableSet<String> getRelations() {
+        return relations;
     }
 
     @Override

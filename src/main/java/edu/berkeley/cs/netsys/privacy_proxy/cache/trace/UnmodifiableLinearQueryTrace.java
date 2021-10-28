@@ -13,7 +13,7 @@ import static com.google.common.base.Preconditions.checkState;
 
 public abstract class UnmodifiableLinearQueryTrace {
     public abstract Map<String, Object> getConstMap();
-    public abstract List<QueryTraceEntry> getAllEntries();
+    public abstract List<QueryTraceEntry> getAllEntries(); // Includes current query.
     public abstract QueryTraceEntry getCurrentQuery();
 
     public int size() {
@@ -58,7 +58,7 @@ public abstract class UnmodifiableLinearQueryTrace {
 
         QueryTraceEntry currQuery = getCurrentQuery();
         checkState(currQuery != null);
-        checkArgument(!pickedQueryTuples.containsKey(queryList.size() - 1)); // The current query can't be picked.
+        checkArgument(!pickedQueryTuples.containsKey(queryList.size() - 1), "the current query cannot be picked");
         QueryTraceEntry newCurrQuery = new QueryTraceEntry(currQuery);
         newQueryList.add(newCurrQuery);
         return new SubQueryTrace(newQueryList, getConstMap(), newCurrQuery, backMap);

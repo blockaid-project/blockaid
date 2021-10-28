@@ -67,7 +67,7 @@ public class QueryChecker {
     private static final ConcurrentHashMap<Properties, DecisionCache> decisionCaches = new ConcurrentHashMap<>();
 
     public QueryChecker(Properties info, ImmutableList<Policy> policySet, SchemaPlusWithKey rawSchema,
-                        List<Constraint> dependencies) {
+                        List<Dependency> dependencies) {
         this.rawSchema = rawSchema;
         this.policySet = policySet;
 

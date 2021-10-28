@@ -107,7 +107,7 @@ public class DeterminacyFormula {
         if (relationName == null) {
             return false;
         }
-        Optional<ImmutableList<String>> oPkColumns = inst.schema.getRawSchema().getPrimaryKeyColumns(relationName);
+        Optional<ImmutableList<String>> oPkColumns = inst.getSchema().getRawSchema().getPrimaryKeyColumns(relationName);
         if (oPkColumns.isEmpty()) {
             return false;
         }
@@ -115,7 +115,7 @@ public class DeterminacyFormula {
         if (pkColumns.size() != 1) {
             return false;
         }
-        List<String> columnNames = inst.schema.getColumnNames(relationName);
+        List<String> columnNames = inst.getSchema().getColumnNames(relationName);
         int pkIdx = columnNames.indexOf(pkColumns.get(0));
         checkState(pkIdx >= 0);
 
@@ -145,7 +145,7 @@ public class DeterminacyFormula {
     private static List<BoolExpr> generateChecks(Instance inst, Map<String, Map<Expr, UnionFind<Integer>>> facts) {
         ArrayList<BoolExpr> checks = new ArrayList<>();
 
-        Schema schema = inst.schema;
+        Schema schema = inst.getSchema();
         Z3ContextWrapper ctx = schema.getContext();
         for (Map.Entry<String, Map<Expr, UnionFind<Integer>>> relEntry : facts.entrySet()) {
             String relName = relEntry.getKey();

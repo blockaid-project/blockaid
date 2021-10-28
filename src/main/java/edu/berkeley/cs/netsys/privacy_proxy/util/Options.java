@@ -55,21 +55,37 @@ public class Options {
         };
     }
 
-    /* Disable preamble pruning in decision template generation. */
-    /**
-     * FIXME(zhangwen): Preamble pruning is now disabled by default because it may necessitate dis-equalities in
-     *  decision templates, which is currently not supported.  Here's an example:
-     *  - Imported dependency: If I receive a notification about a post, then (1) then post if public,
-     *      (2) the post is shared with me, or (3) the post is authored by me.
-     *  - Primary key: `posts`.`id`, `people`.`id`.
-     *  - Views: I'm allowed to view mentions on posts shared with me.
-     *  - Trace: (1) My person ID is `x`,  (2) I received a notification about post `y`, (2) post `y`
-     *      is _NOT_ public and its author is _NOT_ `y`.
-     *  The two dis-equalities, in conjunction with te imported dependency, imply that the post must be
-     *  shared with me, and therefore I'm allowed to view its mentions.  The dis-equalities would not have been
-     *  necessary if we had kept the views that (1) allow viewing my own posts, and (2) allow viewing public posts.
-     */
-    public static final OnOffType PRUNE_PREAMBLE = getOnOffProperty("privoxy.prune_preamble", OnOffType.OFF);
+    public enum PrunePreambleType {
+        OFF, // No preamble pruning.
+        COARSE, // Coarse pruning based on relevant tables.
+        UNSAT_CORE; // Prune according to unsat core (i.e., only keep parts of preamble used to prove compliance).
+
+        /**
+         * FIXME(zhangwen): Unsat core-baseed pruning t may necessitate dis-equalities in
+         *  decision templates, which is currently not supported.  Here's an example:
+         *  - Imported dependency: If I receive a notification about a post, then (1) then post if public,
+         *      (2) the post is shared with me, or (3) the post is authored by me.
+         *  - Primary key: `posts`.`id`, `people`.`id`.
+         *  - Views: I'm allowed to view mentions on posts shared with me.
+         *  - Trace: (1) My person ID is `x`,  (2) I received a notification about post `y`, (2) post `y`
+         *      is _NOT_ public and its author is _NOT_ `y`.
+         *  The two dis-equalities, in conjunction with te imported dependency, imply that the post must be
+         *  shared with me, and therefore I'm allowed to view its mentions.  The dis-equalities would not have been
+         *  necessary if we had kept the views that (1) allow viewing my own posts, and (2) allow viewing public posts.
+         */
+
+        private static PrunePreambleType parse(String s) {
+            return switch (s) {
+                case "off" -> OFF;
+                case "coarse" -> COARSE;
+                case "unsat_core" -> UNSAT_CORE;
+                default -> throw new IllegalArgumentException("unrecognized prune preamble option: " + s);
+            };
+        }
+    }
+
+    /* Preamble pruning in decision template minimization. */
+    public static final PrunePreambleType PRUNE_PREAMBLE = PrunePreambleType.parse(System.getProperty("privoxy.prune_preamble"));
 
     public enum BoundedFormulaType {
         THEORY, // Use ints and bools for database column types.

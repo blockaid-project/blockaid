@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.sql.preprocess;
 
+import com.google.common.collect.ImmutableSet;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
@@ -45,7 +46,7 @@ class PrivacyQueryEmptyRBWrapper extends PrivacyQuery {
     }
 
     @Override
-    public List<String> getRelations() {
+    public ImmutableSet<String> getRelations() {
         return pq.getRelations();
     }
 

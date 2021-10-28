@@ -1,6 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.sql;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import org.apache.calcite.sql.*;
@@ -17,7 +18,10 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class ParsedPSJ {
+    // TODO(zhangwen): make most of these fields immutable.
     private final List<String> relations;
+    private final ImmutableSet<String> relationSet; // Set of relations referenced in this PSJ query.
+
     private boolean hasRelAlias = false;
     private final Map<String, Integer> relAliasToIdx;
     private final List<String> projectColumns;
@@ -150,12 +154,15 @@ public class ParsedPSJ {
             info.parameterOffset = parameterOffset;
             parameterOffset += info.parameterCount;
         }
+
+        relationSet = ImmutableSet.copyOf(relations);
     }
 
     private ParsedPSJ(List<String> relations, boolean hasRelAlias, Map<String, Integer> relAliasToIdx,
                      List<String> projectColumns, List<Object> parameters,
                      List<String> paramNames, List<SqlBasicCall> theta, boolean trivialWhereClause) {
         this.relations = relations;
+        this.relationSet = ImmutableSet.copyOf(relations);
         this.hasRelAlias = hasRelAlias;
         this.relAliasToIdx = relAliasToIdx;
         this.projectColumns = new ArrayList<>();
@@ -416,8 +423,8 @@ public class ParsedPSJ {
         return thetaColumns.stream().map(this::normalizeColumn).collect(Collectors.toList());
     }
 
-    public List<String> getRelations() {
-        return relations;
+    public ImmutableSet<String> getRelations() {
+        return relationSet;
     }
 
     private BoolExpr getPredicate(Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {

@@ -146,7 +146,7 @@ public class PrivacyConnection implements Connection {
 
     this.cacheSpecs = cacheSpec.lines().map(AppCacheSpec::fromSpecString).collect(ImmutableList.toImmutableList());
 
-    ArrayList<Constraint> dependencies = new ArrayList<>();
+    ArrayList<Dependency> dependencies = new ArrayList<>();
     pks.lines().map(this::parsePk).forEach(dependencies::add);
     fks.lines().map(this::parseFk).forEach(dependencies::add);
     for (String line : deps.lines().collect(Collectors.toList())) {
@@ -163,10 +163,10 @@ public class PrivacyConnection implements Connection {
     queryCount = 0;
   }
 
-  private UniqueConstraint parsePk(String s) {
+  private UniqueDependency parsePk(String s) {
     String[] parts = s.toUpperCase().split(":", 2);
     String[] columns = parts[1].split(",");
-    return new UniqueConstraint(parts[0], Arrays.asList(columns));
+    return new UniqueDependency(parts[0], Arrays.asList(columns));
   }
 
   private ForeignKeyDependency parseFk(String s) {

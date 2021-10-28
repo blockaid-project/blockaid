@@ -43,35 +43,6 @@ public abstract class PSJ extends Query {
         return headTypeSelector(args.toArray(new Sort[0][]));
     }
 
-    private static class Equality {
-        private final Expr lhs;
-        private final Expr rhs;
-
-        public Equality(Expr lhs, Expr rhs) {
-            this.lhs = lhs;
-            this.rhs = rhs;
-        }
-
-        @Override
-        public String toString() {
-            return "Equality{" +
-                    "lhs=" + lhs +
-                    ", rhs=" + rhs +
-                    '}';
-        }
-    }
-
-    private static Stream<Equality> extractEqFromConj(Expr predicate) {
-        if (predicate.isEq()) {
-            Expr[] eqArgs = predicate.getArgs();
-            return Stream.of(new Equality(eqArgs[0], eqArgs[1]));
-        }
-        if (!predicate.isAnd()) {
-            return Stream.empty();
-        }
-        return Arrays.stream(predicate.getArgs()).flatMap(PSJ::extractEqFromConj);
-    }
-
     // Returns a formula stating that tuple is in the output of this query on the instance.
     @Override
     public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {

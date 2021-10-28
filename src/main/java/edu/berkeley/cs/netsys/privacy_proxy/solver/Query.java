@@ -27,10 +27,11 @@ public abstract class Query {
     }
 
     public Relation apply(Instance instance) {
+        Schema schema = instance.getSchema();
         if (instance.isConcrete) {
-            return new ConcreteRelation(instance.schema, headTypes(), generateTuples(instance), generateExists(instance));
+            return new ConcreteRelation(schema, headTypes(), generateTuples(instance), generateExists(instance));
         } else {
-            return new GeneralRelation(instance.schema, (Expr... exprs) -> doesContain(instance, new Tuple(instance.schema, exprs)), headTypes());
+            return new GeneralRelation(schema, (Expr... exprs) -> doesContain(instance, new Tuple(schema, exprs)), headTypes());
         }
     }
 

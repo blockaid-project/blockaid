@@ -12,10 +12,6 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     private final ImmutableSet<String> allNormProjColumns;
     private final ImmutableSet<String> allNormThetaColumns;
 
-    public PrivacyQuerySelect(ParserResult parsedSql, SchemaPlusWithKey schema) {
-        this(parsedSql, schema, Collections.emptyList(), Collections.emptyList());
-    }
-
     /**
      * Takes "ownership" of arguments.
      */
@@ -62,8 +58,8 @@ public class PrivacyQuerySelect extends PrivacyQuery {
     }
 
     @Override
-    public List<String> getRelations() {
-        return new ArrayList<>(parsedPSJ.getRelations());
+    public ImmutableSet<String> getRelations() {
+        return parsedPSJ.getRelations();
     }
 
     @Override

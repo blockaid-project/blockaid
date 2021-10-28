@@ -33,13 +33,12 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
             Instance instance = schema.makeConcreteInstance("inst", bounds,
                     queries.computeKnownRows(schema));
 
-            Map<Constraint, Iterable<BoolExpr>> constraints = instance.getConstraints();
-            Map<BoolExpr, Constraint> dependencyLabels = new HashMap<>();
+            Map<BoolExpr, Dependency> dependencyLabels = new HashMap<>();
             int i = 0;
-            for (Map.Entry<Constraint, Iterable<BoolExpr>> constraint : constraints.entrySet()) {
+            for (Dependency d : schema.getDependencies()) {
                 String name = "dependency!" + (i++);
-                assertions.add(new NamedBoolExpr(context.mkAnd(constraint.getValue()), name));
-                dependencyLabels.put(context.mkBoolConst(name), constraint.getKey());
+                assertions.add(new NamedBoolExpr(context.mkAnd(d.apply(instance)), name));
+                dependencyLabels.put(context.mkBoolConst(name), d);
             }
 
             // add query constraints with labels
@@ -81,10 +80,8 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
                 Set<String> toIncrement = new HashSet<>();
                 for (BoolExpr expr : core) {
                     if (dependencyLabels.containsKey(expr)) {
-                        Constraint dependency = dependencyLabels.get(expr);
-                        if (dependency instanceof Dependency d) {
-                            toIncrement.addAll(d.getToRelations());
-                        }
+                        Dependency dependency = dependencyLabels.get(expr);
+                        toIncrement.addAll(dependency.getToRelations());
                     }
                 }
 

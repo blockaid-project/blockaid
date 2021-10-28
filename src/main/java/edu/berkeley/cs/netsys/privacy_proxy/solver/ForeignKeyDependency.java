@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Sort;
 
@@ -19,7 +20,7 @@ public record ForeignKeyDependency(String fromRelation, String fromColumn,
 
     @Override
     public Iterable<BoolExpr> apply(Instance instance) {
-        Schema schema = instance.schema;
+        Schema schema = instance.getSchema();
         int fromIndex = schema.getColumnNames(fromRelation).indexOf(fromColumn);
         checkArgument(fromIndex >= 0);
         int toIndex = schema.getColumnNames(toRelation).indexOf(toColumn);
@@ -58,11 +59,11 @@ public record ForeignKeyDependency(String fromRelation, String fromColumn,
     }
 
     @Override
-    public List<String> getFromRelations() {
-        return Collections.singletonList(fromRelation);
+    public ImmutableSet<String> getFromRelations() {
+        return ImmutableSet.of(fromRelation);
     }
     @Override
-    public List<String> getToRelations() {
-        return Collections.singletonList(toRelation);
+    public ImmutableSet<String> getToRelations() {
+        return ImmutableSet.of(toRelation);
     }
 }

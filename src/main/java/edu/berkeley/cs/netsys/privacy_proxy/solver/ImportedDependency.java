@@ -1,6 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.*;
 
@@ -25,18 +26,18 @@ public class ImportedDependency implements Dependency {
     }
 
     @Override
-    public List<String> getFromRelations() {
+    public ImmutableSet<String> getFromRelations() {
         return q1.getRelations();
     }
 
     @Override
-    public List<String> getToRelations() {
+    public ImmutableSet<String> getToRelations() {
         return q2.getRelations();
     }
 
     @Override
     public Iterable<BoolExpr> apply(Instance instance) {
-        Schema schema = instance.schema;
+        Schema schema = instance.getSchema();
         Query solverQuery1 = q1.getSolverQuery(schema);
         Query solverQuery2 = q2.getSolverQuery(schema);
 

@@ -25,11 +25,11 @@ public class Schema {
     private final Z3ContextWrapper context;
     private final SchemaPlusWithKey rawSchema;
     private final ImmutableMap<String, ImmutableList<Column>> relations;
-    private final List<Constraint> dependencies;
+    private final List<Dependency> dependencies;
 
     private final LoadingCache<ImmutableList<Policy>, ImmutableList<Query>> policyQueries;
 
-    public Schema(Z3ContextWrapper context, SchemaPlusWithKey rawSchema, List<Constraint> dependencies) {
+    public Schema(Z3ContextWrapper context, SchemaPlusWithKey rawSchema, List<Dependency> dependencies) {
         this.context = checkNotNull(context);
         this.rawSchema = checkNotNull(rawSchema);
         this.dependencies = checkNotNull(dependencies);
@@ -97,13 +97,13 @@ public class Schema {
         return context;
     }
 
-    public List<Constraint> getDependencies() {
+    public List<Dependency> getDependencies() {
         return dependencies;
     }
 
     public Instance makeFreshInstance(String instancePrefix) {
         Instance instance = new Instance(instancePrefix, this, false);
-        Map<Constraint, Iterable<BoolExpr>> constraints = new HashMap<>();
+        Map<Dependency, Iterable<BoolExpr>> constraints = new HashMap<>();
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -113,13 +113,6 @@ public class Schema {
                     context.getBoolSort());
             instance.put(relationName, new GeneralRelation(this, new Z3Function(func), colTypes));
         }
-
-        // Apply dependencies.
-        for (Constraint d : dependencies) {
-            constraints.put(d, d.apply(instance));
-        }
-
-        instance.setConstraints(constraints);
         return instance;
     }
 
@@ -179,12 +172,6 @@ public class Schema {
             }
             instance.put(relationName, new ConcreteRelation(this, colTypes, tuples, exists));
         }
-
-        Map<Constraint, Iterable<BoolExpr>> constraints = new HashMap<>();
-        for (Constraint d : dependencies) {
-            constraints.put(d, d.apply(instance));
-        }
-        instance.setConstraints(constraints);
         return instance;
     }
 

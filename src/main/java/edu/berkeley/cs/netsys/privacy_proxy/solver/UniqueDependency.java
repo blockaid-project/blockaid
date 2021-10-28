@@ -11,12 +11,12 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.*;
 
-public class UniqueConstraint implements Constraint {
+public class UniqueDependency implements Dependency {
     private final String relationName;
     private final ImmutableSet<String> columnNames;
     private final ImmutableList<String> relevantColumns;
 
-    public UniqueConstraint(String relationName, Collection<String> columnNames) {
+    public UniqueDependency(String relationName, Collection<String> columnNames) {
         this.relationName = checkNotNull(relationName);
         checkArgument(!columnNames.isEmpty());
         this.columnNames = ImmutableSet.copyOf(columnNames);
@@ -39,11 +39,22 @@ public class UniqueConstraint implements Constraint {
         return relevantColumns;
     }
 
+    @Override
+    public ImmutableSet<String> getFromRelations() {
+        return ImmutableSet.of(relationName);
+    }
+
+    @Override
+    public ImmutableSet<String> getToRelations() {
+        // The right-hand side is the "empty" query, which doesn't reference any relations.
+        return ImmutableSet.of();
+    }
+
     private Iterable<BoolExpr> applyGeneral(Instance instance) {
         Z3ContextWrapper context = instance.getContext();
 
         Relation relation = instance.get(this.relationName);
-        Schema schema = instance.schema;
+        Schema schema = instance.getSchema();
         Tuple tup1 = schema.makeFreshQuantifiedTuple(relationName);
         Tuple tup2 = schema.makeFreshQuantifiedTuple(relationName);
 
@@ -72,7 +83,7 @@ public class UniqueConstraint implements Constraint {
         Z3ContextWrapper context = instance.getContext();
 
         ConcreteRelation relation = (ConcreteRelation) instance.get(this.relationName);
-        Schema schema = instance.schema;
+        Schema schema = instance.getSchema();
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
         checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);

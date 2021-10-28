@@ -1,6 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.sql;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 
@@ -15,20 +16,17 @@ public abstract class PrivacyQuery {
      * For making wrapper.  Doesn't copy the privacy query.
      * @param pq the privacy query to wrap over.
      */
-    protected PrivacyQuery(PrivacyQuery pq)
-    {
+    protected PrivacyQuery(PrivacyQuery pq) {
         this.parserResult = pq.parserResult;
         this.parameters = pq.parameters;
         this.paramNames = pq.paramNames;
     }
 
-    public PrivacyQuery(ParserResult parserResult)
-    {
+    public PrivacyQuery(ParserResult parserResult) {
         this(parserResult, Collections.emptyList(), Collections.emptyList());
     }
 
-    public PrivacyQuery(ParserResult parserResult, List<Object> parameters, List<String> paramNames)
-    {
+    public PrivacyQuery(ParserResult parserResult, List<Object> parameters, List<String> paramNames) {
         this.parserResult = parserResult;
         this.parameters = ImmutableList.copyOf(parameters);
         this.paramNames = ImmutableList.copyOf(paramNames);
@@ -58,13 +56,19 @@ public abstract class PrivacyQuery {
         return result;
     }
 
-    abstract public Set<String> getAllNormalizedProjectColumns();
-    abstract public Set<String> getProjectColumnsByIdx(int colIdx);
-    abstract public Set<String> getNormalizedProjectColumnsByIdx(int colIdx);
-    abstract public List<String> getThetaColumns();
-    abstract public Set<String> getAllNormalizedThetaColumns();
-    abstract public List<String> getRelations();
-    abstract public Query getSolverQuery(Schema schema);
-    abstract public Query getSolverQuery(Schema schema, String paramPrefix, int offset);
-    abstract public List<Boolean> getResultBitmap();
+    public abstract Set<String> getAllNormalizedProjectColumns();
+    public abstract Set<String> getProjectColumnsByIdx(int colIdx);
+    public abstract Set<String> getNormalizedProjectColumnsByIdx(int colIdx);
+    public abstract List<String> getThetaColumns();
+    public abstract Set<String> getAllNormalizedThetaColumns();
+
+    /**
+     * Gets all relations referenced by this query.
+     * @return an immutable set of all relations referenced by this query.
+     */
+    public abstract ImmutableSet<String> getRelations();
+
+    public abstract Query getSolverQuery(Schema schema);
+    public abstract Query getSolverQuery(Schema schema, String paramPrefix, int offset);
+    public abstract List<Boolean> getResultBitmap();
 }
