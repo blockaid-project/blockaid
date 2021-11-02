@@ -6,12 +6,12 @@ import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public abstract class AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
+public abstract class AbstractUnsatCoreEnumerator<L, C extends Z3ContextWrapper<?, ?, ?, ?>> implements AutoCloseable {
     private Collection<L> labels;
-    private final MapSolver<L> ms;
+    private final MapSolver<L, C> ms;
     private final Order order;
 
-    public AbstractUnsatCoreEnumerator(Z3ContextWrapper context, Collection<L> labels, Order order) {
+    public AbstractUnsatCoreEnumerator(C context, Collection<L> labels, Order order) {
         this.labels = labels;
         this.ms = new MapSolver<>(context, labels, order);
         this.order = order;

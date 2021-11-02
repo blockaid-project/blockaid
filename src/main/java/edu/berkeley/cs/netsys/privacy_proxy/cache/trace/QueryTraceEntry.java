@@ -3,7 +3,6 @@ package edu.berkeley.cs.netsys.privacy_proxy.cache.trace;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.ParserResult;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;

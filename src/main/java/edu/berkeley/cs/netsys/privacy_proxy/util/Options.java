@@ -8,7 +8,7 @@ public class Options {
     public static final int CONTAINMENT_USE_QUANTIFIER_THRESHOLD = Integer.parseInt(System.getProperty("privoxy.containment_use_quantifier_threshold", Integer.toString(Integer.MAX_VALUE)));
 
     /* Cache compliant queries using decision templates. */
-    public static boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
+    public static final boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
 
     /* Generate decision templates but don't store them. */
     public static final boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("privoxy.cache_no_retain"), "true");
@@ -39,7 +39,7 @@ public class Options {
 
     public enum OnOffType {
         ON,
-        OFF;
+        OFF
     }
 
     private static OnOffType getOnOffProperty(String key, OnOffType def) {

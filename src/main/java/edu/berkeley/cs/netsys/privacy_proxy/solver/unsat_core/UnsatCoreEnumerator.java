@@ -11,14 +11,14 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
-public class UnsatCoreEnumerator<L> extends AbstractUnsatCoreEnumerator<L> implements AutoCloseable {
-    private final Z3ContextWrapper context;
+public class UnsatCoreEnumerator<L, C extends Z3ContextWrapper<?, ?, ?, ?>> extends AbstractUnsatCoreEnumerator<L, C> implements AutoCloseable {
+    private final C context;
     private final Solver solver;
     private final ImmutableMap<L, BoolExpr> label2BoolConst;
     private final ImmutableMap<BoolExpr, L> boolConst2Label;
 
     // Sets solver to minimize unsat cores.
-    public UnsatCoreEnumerator(Z3ContextWrapper context, Solver solver, Map<L, BoolExpr> labeledExprs, Order order) {
+    public UnsatCoreEnumerator(C context, Solver solver, Map<L, BoolExpr> labeledExprs, Order order) {
         super(context, labeledExprs.keySet(), order);
 
         this.context = context;

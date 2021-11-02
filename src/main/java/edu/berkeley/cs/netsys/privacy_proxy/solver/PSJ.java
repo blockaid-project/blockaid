@@ -95,7 +95,7 @@ public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<
 
     @Override
     public List<Tuple<C>> generateTuples(Instance<C> instance) {
-        checkArgument(instance.isConcrete);
+        checkArgument(instance.isBounded());
 
         List<Tuple<C>> tuples = new ArrayList<>();
         visitJoins(instance, (List<Tuple<C>> ts, List<BoolExpr> es) -> tuples.add(headSelector(ts)));
@@ -104,7 +104,7 @@ public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<
 
     @Override
     public List<BoolExpr> generateExists(Instance<C> instance) {
-        checkArgument(instance.isConcrete);
+        checkArgument(instance.isBounded());
 
         C context = instance.getContext();
         List<BoolExpr> exprs = new ArrayList<>();

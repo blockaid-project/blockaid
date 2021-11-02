@@ -3,6 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.*;
 
 import java.util.*;
@@ -36,10 +37,10 @@ public class ImportedDependency implements Dependency {
     }
 
     @Override
-    public Iterable<BoolExpr> apply(Instance instance) {
-        Schema schema = instance.getSchema();
-        Query solverQuery1 = q1.getSolverQuery(schema);
-        Query solverQuery2 = q2.getSolverQuery(schema);
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Iterable<BoolExpr> apply(Instance<C> instance) {
+        Schema<C> schema = instance.getSchema();
+        Query<C> solverQuery1 = q1.getSolverQuery(schema);
+        Query<C> solverQuery2 = q2.getSolverQuery(schema);
 
         return solverQuery1.apply(instance).isContainedInExpr(solverQuery2.apply(instance));
     }

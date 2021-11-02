@@ -5,18 +5,19 @@ import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTrace;
 import com.microsoft.z3.Status;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
-public class ProcessBoundedExecutor extends SMTExecutor {
-    private final Schema schema;
+public class ProcessBoundedExecutor<C extends Z3ContextWrapper<?, ?, ?, ?>> extends SMTExecutor {
+    private final Schema<C> schema;
     private final ImmutableList<Policy> policies;
     private final QueryTrace queries;
     private ProcessSMTExecutor executor = null;
     private boolean shuttingDown = false;
 
-    public ProcessBoundedExecutor(String name, CountDownLatch latch, Schema schema, ImmutableList<Policy> policies, QueryTrace queries) {
+    public ProcessBoundedExecutor(String name, CountDownLatch latch, Schema<C> schema, ImmutableList<Policy> policies, QueryTrace queries) {
         super(name, latch, true, false, false, false);
         this.schema = schema;
         this.policies = policies;
@@ -26,13 +27,13 @@ public class ProcessBoundedExecutor extends SMTExecutor {
     @Override
     protected Status doRunNormal() throws InterruptedException {
         // this sucks - this executor cannot exit even if we get a fast unsat, until initial bound estimation is done
-         BoundEstimator boundEstimator = new UnsatCoreBoundEstimator(new FixedBoundEstimator(0));
+         BoundEstimator<C> boundEstimator = new UnsatCoreBoundEstimator<>(new FixedBoundEstimator<>(0));
 //        BoundEstimator boundEstimator = new FixedBoundEstimator(0);
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
 
         while (!shuttingDown) {
             System.err.println(bounds);
-            DeterminacyFormula boundedDeterminacyFormula = new BoundedDeterminacyFormula(schema, policies, bounds, true);
+            DeterminacyFormula<C, BoundedInstance<C>> boundedDeterminacyFormula = new BoundedDeterminacyFormula<>(schema, policies, bounds, true);
             String smt = boundedDeterminacyFormula.generateSMT(queries);
 
             CountDownLatch latch = new CountDownLatch(1);

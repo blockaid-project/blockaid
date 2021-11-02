@@ -1,38 +1,34 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.BoolSort;
+import com.microsoft.z3.Expr;
 import com.microsoft.z3.FuncDecl;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
+// TODO(zhangwen): separate class for unbounded instances?
 public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     private final String name;
     private final Schema<C> schema;
-    final boolean isConcrete;
-    // TODO(zhangwen): make these immutable.
-    private final Map<String, Relation<C>> name2Rel;
-    private final Map<FuncDecl<BoolSort>, String> funcDecl2RelName;
+    private final boolean isBounded;
+    private final ImmutableMap<String, Relation<C>> name2Rel;
+    private final ImmutableMap<FuncDecl<BoolSort>, String> funcDecl2RelName;
 
-    Instance(String name, Schema<C> schema, boolean isConcrete) {
+    Instance(String name, Schema<C> schema, boolean isBounded, ImmutableMap<String, Relation<C>> name2Rel,
+             ImmutableMap<FuncDecl<BoolSort>, String> funcDecl2RelName) {
         this.name = name;
         this.schema = checkNotNull(schema);
-        this.isConcrete = isConcrete;
-        this.name2Rel = new HashMap<>();
-        this.funcDecl2RelName = new HashMap<>();
+        this.isBounded = isBounded;
+        this.name2Rel = name2Rel;
+        this.funcDecl2RelName = funcDecl2RelName;
     }
 
-    public void put(String relName, Relation<C> rel) {
-        if (rel instanceof GeneralRelation genRel) {
-            RelationFunction f = genRel.getFunction();
-            if (f instanceof Z3Function z3f) {
-                funcDecl2RelName.put(z3f.getFunctionDecl(), relName);
-            }
-        }
-        name2Rel.put(relName, rel);
+    public boolean isBounded() {
+        return isBounded;
     }
 
     public Relation<C> get(String relName) {
@@ -53,5 +49,51 @@ public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
 
     public C getContext() {
         return schema.getContext();
+    }
+
+    static class Builder<C extends Z3ContextWrapper<?, ?, ?, ?>> {
+        private final String name;
+        private final Schema<C> schema;
+        private final ImmutableMap.Builder<String, Relation<C>> name2RelBuilder;
+        private final ImmutableMap.Builder<FuncDecl<BoolSort>, String> funcDecl2RelNameBuilder;
+
+        /**
+         * Variables that constitute the contents of a BOUNDED instance (including "exists" variables).
+         * TODO(zhangwen): adding vars explicitly is error-prone; extract from isntance directly?
+         * TODO(zhangwen): have a separate bounded builder?
+         */
+        private final ImmutableList.Builder<Expr<?>> dbVarsBuilder;
+
+        Builder(String name, Schema<C> schema) {
+            this.name = name;
+            this.schema = schema;
+            this.name2RelBuilder = new ImmutableMap.Builder<>();
+            this.funcDecl2RelNameBuilder = new ImmutableMap.Builder<>();
+            this.dbVarsBuilder = new ImmutableList.Builder<>();
+        }
+
+        public void put(String relName, Relation<C> rel) {
+            if (rel instanceof GeneralRelation genRel) {
+                RelationFunction f = genRel.getFunction();
+                if (f instanceof Z3Function z3f) {
+                    funcDecl2RelNameBuilder.put(z3f.functionDecl(), relName);
+                }
+            }
+            name2RelBuilder.put(relName, rel);
+        }
+
+        public void addDbVar(Expr<?> variable) {
+            dbVarsBuilder.add(variable);
+        }
+
+        public Instance<C> buildUnbounded() {
+            ImmutableList<Expr<?>> dbVars = dbVarsBuilder.build();
+            checkState(dbVars.isEmpty(), "unbounded formula shouldn't have dbVars");
+            return new Instance<>(name, schema, false, name2RelBuilder.build(), funcDecl2RelNameBuilder.build());
+        }
+
+        public BoundedInstance<C> buildBounded() {
+            return new BoundedInstance<>(name, schema, name2RelBuilder.build(), funcDecl2RelNameBuilder.build(), dbVarsBuilder.build());
+        }
     }
 }

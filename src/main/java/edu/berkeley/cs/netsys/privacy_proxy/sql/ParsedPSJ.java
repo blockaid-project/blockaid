@@ -479,13 +479,13 @@ public class ParsedPSJ {
     }
 
     private class SolverQuery<C extends Z3ContextWrapper<?, ?, ?, ?>> extends PSJ<C> {
-        int[] projectRelationIndex;
-        int[] projectColumnIndex;
-        int[] thetaRelationIndex;
-        int[] thetaColumnIndex;
-        Schema<C> schema;
-        String prefix;
-        int parameterOffset;
+        final int[] projectRelationIndex;
+        final int[] projectColumnIndex;
+        final int[] thetaRelationIndex;
+        final int[] thetaColumnIndex;
+        final Schema<C> schema;
+        final String prefix;
+        final int parameterOffset;
 
         private SolverQuery(Schema<C> schema, String prefix, int parameterOffset) {
             super(schema, relations);

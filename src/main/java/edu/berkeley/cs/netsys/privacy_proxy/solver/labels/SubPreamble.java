@@ -11,8 +11,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 public record SubPreamble<C extends Z3ContextWrapper<?, ?, ?, ?>>(Collection<Query<C>> views, Collection<Dependency> dependencies) {
     public static <C extends Z3ContextWrapper<?, ?, ?, ?>> SubPreamble<C> fromPolicies(
             Schema<C> schema, Collection<Policy> policies, Collection<Dependency> dependencies) {

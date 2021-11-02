@@ -3,9 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 import org.apache.calcite.avatica.DriverVersion;
 
 import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;

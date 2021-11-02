@@ -3,9 +3,6 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.labels;
 import java.util.Collection;
 import java.util.List;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
-
 public record EqualityLabel(Operand lhs, Operand rhs) implements Label {
     @Override
     public String toString() {

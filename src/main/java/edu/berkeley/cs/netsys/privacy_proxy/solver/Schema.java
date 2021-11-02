@@ -102,7 +102,7 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     }
 
     public Instance<C> makeFreshInstance(String instancePrefix) {
-        Instance<C> instance = new Instance<>(instancePrefix, this, false);
+        Instance.Builder<C> instBuilder = new Instance.Builder<>(instancePrefix, this);
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -110,22 +110,22 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
             Sort[] colTypes = columns.stream().map(Column::type).toArray(Sort[]::new);
             FuncDecl<BoolSort> func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName, colTypes,
                     context.getBoolSort());
-            instance.put(relationName, new GeneralRelation<>(this, new Z3Function(func), colTypes));
+            instBuilder.put(relationName, new GeneralRelation<>(this, new Z3Function(func), colTypes));
         }
-        return instance;
+        return instBuilder.buildUnbounded();
     }
 
     /**
-     * Creates a concrete database instance of this schema.
+     * Creates a bounded database instance of this schema.
      * @param instancePrefix identifies this instance.
      * @param bounds maps table name to upper bound on size (number of rows).
      * @param table2KnownRows maps table name to distinct known partial rows of the table; each row is represented as
      *                        a map from column name to value.
      * @return a concrete instance.
      */
-    public Instance<C> makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds,
-                                         ListMultimap<String, Map<String, Object>> table2KnownRows) {
-        Instance<C> instance = new Instance<>(instancePrefix, this, true);
+    public BoundedInstance<C> makeBoundedInstance(String instancePrefix, Map<String, Integer> bounds,
+                                           ListMultimap<String, Map<String, Object>> table2KnownRows) {
+        Instance.Builder<C> instBuilder = new Instance.Builder<>(instancePrefix, this);
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -152,7 +152,9 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                         // TODO(zhangwen): This ignores a known NULL value, which is safe to do; fix?
                         values.add(context.getExprForValue(knownValue));
                     } else {
-                        values.add(context.mkConst(prefix + "_" + i + "_" + col.name(), col.type()));
+                        Expr<?> thisVar = context.mkConst(prefix + "_" + i + "_" + col.name(), col.type());
+                        instBuilder.addDbVar(thisVar);
+                        values.add(thisVar);
                     }
                 }
                 tuples.add(new Tuple<>(this, values.stream()));
@@ -164,18 +166,23 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
             for (; i < numTuples; ++i) {
                 List<Expr<?>> values = new ArrayList<>();
                 for (Column col : columns) {
-                    values.add(context.mkConst(prefix + "_" + i + "_" + col.name(), col.type()));
+                    Expr<?> thisVar = context.mkConst(prefix + "_" + i + "_" + col.name(), col.type());
+                    instBuilder.addDbVar(thisVar);
+                    values.add(thisVar);
                 }
                 tuples.add(new Tuple<>(this, values));
-                exists.add(context.mkBoolConst(prefix + "_" + i + "_exists"));
+
+                BoolExpr existsVar = context.mkBoolConst(prefix + "_" + i + "_exists");
+                instBuilder.addDbVar(existsVar);
+                exists.add(existsVar);
             }
-            instance.put(relationName, new ConcreteRelation<>(this, colTypes, tuples, exists));
+            instBuilder.put(relationName, new ConcreteRelation<>(this, colTypes, tuples, exists));
         }
-        return instance;
+        return instBuilder.buildBounded();
     }
 
-    public Instance<C> makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
-        return makeConcreteInstance(instancePrefix, bounds, null);
+    public Instance<C> makeBoundedInstance(String instancePrefix, Map<String, Integer> bounds) {
+        return makeBoundedInstance(instancePrefix, bounds, null);
     }
 
     public List<String> getRelationNames() {

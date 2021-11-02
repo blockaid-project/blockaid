@@ -3,8 +3,9 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Lists;
+import com.google.common.collect.Streams;
 import com.microsoft.z3.BoolExpr;
+import com.microsoft.z3.Expr;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
@@ -13,7 +14,9 @@ import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> extends DeterminacyFormula<C> {
+public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> extends DeterminacyFormula<C, BoundedInstance<C>> {
+    private final ImmutableList<Expr<?>> allDbVars;
+
     public BoundedDeterminacyFormula(Schema<C> schema, ImmutableList<Policy> policies,
                                      Map<String, Integer> bounds, boolean splitProducts) {
         this(schema, policies, bounds, splitProducts, TextOption.USE_TEXT, null, null);
@@ -24,12 +27,12 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
                                      ListMultimap<String, Map<String, Object>> table2KnownRows,
                                      SubPreamble<C> subPreamble) {
         super(schema,
-                (Integer instNum) -> schema.makeConcreteInstance("instance" + instNum, bounds, table2KnownRows),
-                (Instance<C> inst1, Instance<C> inst2) -> {
-                    checkArgument(inst1.getSchema() == schema);
-                    checkArgument(inst2.getSchema() == schema);
+                (Integer instNum) -> schema.makeBoundedInstance("instance" + instNum, bounds, table2KnownRows),
+                (BoundedInstance<C> inst1, BoundedInstance<C> inst2) -> {
+                    checkArgument(inst1.getSchema() == schema && inst1.isBounded());
+                    checkArgument(inst2.getSchema() == schema && inst2.isBounded());
 
-                    var context = schema.getContext();
+                    C context = schema.getContext();
                     List<BoolExpr> clauses = new ArrayList<>();
 
                     SubPreamble<C> sub = subPreamble != null
@@ -69,16 +72,14 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
                     }
                     return clauses;
                 }, text);
+
+        this.allDbVars = Streams.concat(
+                inst1.getAllVars().stream(),
+                inst2.getAllVars().stream()
+        ).collect(ImmutableList.toImmutableList());
     }
 
-    @Override
-    protected Iterable<BoolExpr> generateNotContains(Query<C> query) {
-        // Keep the formula quantifier-free.
-        Tuple<C> extHeadTup = query.makeFreshHead();
-        List<BoolExpr> body = Lists.newArrayList(query.apply(inst1).doesContainExpr(extHeadTup));
-        body.add(context.mkNot(
-                context.mkAnd(query.apply(inst2).doesContainExpr(extHeadTup))
-        ));
-        return body;
+    public ImmutableList<Expr<?>> getAllDbVars() {
+        return allDbVars;
     }
 }

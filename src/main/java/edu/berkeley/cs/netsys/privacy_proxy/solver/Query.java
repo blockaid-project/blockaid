@@ -29,8 +29,8 @@ public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     }
 
     public Relation<C> apply(Instance<C> instance) {
-        var schema = instance.getSchema();
-        if (instance.isConcrete) {
+        Schema<C> schema = instance.getSchema();
+        if (instance.isBounded()) {
             return new ConcreteRelation<>(schema, headTypes(), generateTuples(instance), generateExists(instance));
         } else {
             return new GeneralRelation<>(schema, (Expr<?>... exprs) -> doesContain(instance, new Tuple<>(schema, exprs)), headTypes());
@@ -38,8 +38,8 @@ public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     }
 
     public Tuple<C> makeHead(IntFunction<String> nameGenerator) {
-        var schema = getSchema();
-        var context = schema.getContext();
+        Schema<C> schema = getSchema();
+        C context = schema.getContext();
 
         Sort[] sorts = this.headTypes();
         int numColumns = sorts.length;
@@ -52,14 +52,14 @@ public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     }
 
     public Tuple<C> makeFreshHead() {
-        var schema = getSchema();
-        var context = schema.getContext();
+        Schema<C> schema = getSchema();
+        C context = schema.getContext();
         return new Tuple<>(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshConst("z", t)));
     }
 
     public Tuple<C> makeFreshExistentialHead() {
-        var schema = getSchema();
-        var context = schema.getContext();
+        Schema<C> schema = getSchema();
+        C context = schema.getContext();
         return new Tuple<>(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshQuantifiedConst("e", t)));
     }
 }

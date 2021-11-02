@@ -22,27 +22,28 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
-public class DecisionTemplateGenerator {
+public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, CB extends Z3ContextWrapper<?, ?, ?, ?>> {
     private final QueryChecker checker;
-    private final Schema unboundedSchema;
-    private final Schema boundedSchema;
-    private final ReturnedRowUnsatCoreEnumerator rruce;
-    private final UnsatCoreFormulaBuilder unboundedUcBuilder;
+    private final Schema<CU> unboundedSchema;
+    private final Schema<CB> boundedSchema;
+    private final ReturnedRowUnsatCoreEnumerator<CU, CB> rruce;
+    private final UnsatCoreFormulaBuilder<CU, Instance<CU>> unboundedUcBuilder;
     private final SMTPortfolioRunner runner;
 
-    public DecisionTemplateGenerator(QueryChecker checker, Schema unboundedSchema, Schema boundedSchema,
-                                     ImmutableList<Policy> policies, DeterminacyFormula unboundedFormula) {
+    public DecisionTemplateGenerator(QueryChecker checker, Schema<CU> unboundedSchema, Schema<CB> boundedSchema,
+                                     ImmutableList<Policy> policies, DeterminacyFormula<CU, Instance<CU>> unboundedFormula) {
         this.checker = checker;
         this.unboundedSchema = unboundedSchema;
         this.boundedSchema = boundedSchema;
-        this.rruce = new ReturnedRowUnsatCoreEnumerator(checker, unboundedSchema, boundedSchema, policies);
-        this.unboundedUcBuilder = new UnsatCoreFormulaBuilder(unboundedFormula, policies);
+        this.rruce = new ReturnedRowUnsatCoreEnumerator<>(checker, unboundedSchema, boundedSchema, policies);
+        this.unboundedUcBuilder = new UnsatCoreFormulaBuilder<>(unboundedFormula, policies);
         this.runner = new SMTPortfolioRunner(checker, QueryChecker.SOLVE_TIMEOUT_MS);
     }
 
     // Returns empty if formula is not determined UNSAT.
     public Optional<Collection<DecisionTemplate>> generate(UnmodifiableLinearQueryTrace trace) {
-        Z3ContextWrapper unboundedContext = unboundedSchema.getContext(), boundedContext = boundedSchema.getContext();
+        CU unboundedContext = unboundedSchema.getContext();
+        CB boundedContext = boundedSchema.getContext();
         unboundedContext.pushTrackConsts();
         boundedContext.pushTrackConsts();
         try {
@@ -76,9 +77,9 @@ public class DecisionTemplateGenerator {
 
         // Step 2: For each unsat core among query labels, enumerate unsat cores among equality labels.
         // Reusing the bounded formula builder to avoid making the bounded formula again.
-        UnsatCoreFormulaBuilder boundedUcBuilder = rruce.getFormulaBuilder();
+        UnsatCoreFormulaBuilder<CB, BoundedInstance<CB>> boundedUcBuilder = rruce.getFormulaBuilder();
 
-        Z3ContextWrapper boundedContext = boundedSchema.getContext();
+        CB boundedContext = boundedSchema.getContext();
         ImmutableList<QueryTupleIdxPair> toKeep = rrCore.stream()
                 .map(rrl -> new QueryTupleIdxPair(rrl.queryIdx(), rrl.rowIdx()))
                 .collect(ImmutableList.toImmutableList());
@@ -86,7 +87,6 @@ public class DecisionTemplateGenerator {
 
         // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
         UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
-//                UnsatCoreFormulaBuilder.Option.POSITIVE);
         ImmutableSet<Operand> allOperandsOld =
                 fs.getLabeledExprs().keySet().stream() // Get all labels.
                         .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
@@ -95,17 +95,12 @@ public class DecisionTemplateGenerator {
 
         Solver solver = rruce.getSolver();
 
-//        Set<Label> paramsCore;
-//        try (FindMinimalSat fms = new FindMinimalSat(boundedContext, solver)) {
-//            paramsCore = fms.compute(fs);
-//        }
-
         solver.add(fs.getBackground().toArray(new BoolExpr[0]));
         checker.printFormula(solver::toString, "bg");
 
         Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
         Set<Label> paramsCore;
-        try (UnsatCoreEnumerator<Label> uce =
+        try (UnsatCoreEnumerator<Label, CB> uce =
                      new UnsatCoreEnumerator<>(boundedContext, solver, labeledExprs, Order.INCREASING)) {
             printMessage("total    #labels =\t" + labeledExprs.size());
             Set<Label> startingUnsatCore = uce.getStartingUnsatCore();

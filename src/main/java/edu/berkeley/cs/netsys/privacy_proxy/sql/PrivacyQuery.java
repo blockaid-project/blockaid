@@ -2,7 +2,6 @@ package edu.berkeley.cs.netsys.privacy_proxy.sql;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.microsoft.z3.Sort;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;

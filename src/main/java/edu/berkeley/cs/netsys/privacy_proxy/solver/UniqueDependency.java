@@ -27,7 +27,7 @@ public class UniqueDependency implements Dependency {
 
     @Override
     public <C extends Z3ContextWrapper<?, ?, ?, ?>> Iterable<BoolExpr> apply(Instance<C> instance) {
-        if (instance.isConcrete) {
+        if (instance.isBounded()) {
             return applyConcrete(instance);
         } else {
             return applyGeneral(instance);

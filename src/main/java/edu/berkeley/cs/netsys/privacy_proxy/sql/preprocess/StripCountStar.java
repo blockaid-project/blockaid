@@ -43,9 +43,8 @@ public class StripCountStar implements Preprocessor {
         if (l.size() != 1) { return Optional.empty(); }
 
         SqlNode node = l.get(0);
-        if (!(node instanceof SqlBasicCall)) { return Optional.empty(); }
+        if (!(node instanceof SqlBasicCall call)) { return Optional.empty(); }
 
-        SqlBasicCall call = (SqlBasicCall) node;
         if (!call.getOperator().getName().equals("COUNT")) { return Optional.empty(); }
         SqlNode operand = call.getOperands()[0];
         if (operand.getKind() != SqlKind.IDENTIFIER) { return Optional.empty(); }

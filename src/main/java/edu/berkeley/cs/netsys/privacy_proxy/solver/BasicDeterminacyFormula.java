@@ -11,7 +11,7 @@ import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public class BasicDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> extends DeterminacyFormula<C> {
+public class BasicDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> extends DeterminacyFormula<C, Instance<C>> {
     public BasicDeterminacyFormula(Schema<C> schema, ImmutableList<Policy> policySet, TextOption textOption) {
         super(schema,
                 (Integer instNum) -> schema.makeFreshInstance("instance" + instNum),

@@ -1,7 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.DecisionTemplateGenerator;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVC4Executor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
@@ -35,7 +34,7 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
     private final ImmutableList<Policy> policies;
     private final RRLUnsatCoreDeterminacyFormula<CU> rrlFormula;
 
-    private UnsatCoreFormulaBuilder<CB> formulaBuilder = null;
+    private UnsatCoreFormulaBuilder<CB, BoundedInstance<CB>> formulaBuilder = null;
     private Solver solver = null;
 
     public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema<CU> unboundedSchema, Schema<CB> boundedSchema,
@@ -171,7 +170,7 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
                 solver.add(e);
             }
             printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000);
-            try (UnsatCoreEnumerator<ReturnedRowLabel> uce
+            try (UnsatCoreEnumerator<ReturnedRowLabel, CB> uce
                          = new UnsatCoreEnumerator<>(boundedContext, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
                 printMessage("\t\t| Bounded RRL core 3:\t" + (System.nanoTime() - startNs) / 1000000);
                 Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
@@ -221,7 +220,7 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
     }
 
     // MUST be called only after `minimizeRRCore`.
-    public UnsatCoreFormulaBuilder<CB> getFormulaBuilder() {
+    public UnsatCoreFormulaBuilder<CB, BoundedInstance<CB>> getFormulaBuilder() {
         return Objects.requireNonNull(formulaBuilder);
     }
 

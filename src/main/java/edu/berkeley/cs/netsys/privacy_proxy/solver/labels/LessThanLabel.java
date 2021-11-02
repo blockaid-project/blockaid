@@ -3,8 +3,6 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.labels;
 import java.util.Collection;
 import java.util.List;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 public record LessThanLabel(Operand lhs, Operand rhs) implements Label {
     @Override
     public String toString() {

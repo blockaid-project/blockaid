@@ -12,8 +12,8 @@ import static com.google.common.base.Preconditions.checkState;
 
 // For enumerating minimal unsat cores using the MARCO algorithm.
 // Adapted from https://github.com/Z3Prover/z3/blob/master/examples/python/mus/marco.py.
-class MapSolver<L> {
-    private final Z3ContextWrapper context;
+class MapSolver<L, C extends Z3ContextWrapper<?, ?, ?, ?>> {
+    private final C context;
     private final Solver solver;
     private final Order order; // Enumerate seeds in increasing order by size?
 
@@ -23,7 +23,7 @@ class MapSolver<L> {
 
     private int bound;
 
-    public MapSolver(Z3ContextWrapper context, Collection<L> labels, Order order) {
+    public MapSolver(C context, Collection<L> labels, Order order) {
         this.context = context;
         this.solver = context.mkRawSolver();
         this.order = order;

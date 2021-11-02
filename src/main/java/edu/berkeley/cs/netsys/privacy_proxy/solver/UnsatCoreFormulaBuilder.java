@@ -13,8 +13,8 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 
-public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>> {
-    private final DeterminacyFormula<C> baseFormula;
+public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I extends Instance<C>> {
+    private final DeterminacyFormula<C, I> baseFormula;
     private final ImmutableSet<String> relevantAttributes;
 
     // Shorthands.
@@ -24,10 +24,9 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     public enum Option {
         NORMAL,
         NO_PREAMBLE,
-        POSITIVE // preamble ==> forall tuple in Q, tuple is in Q'
     }
 
-    public UnsatCoreFormulaBuilder(DeterminacyFormula<C> baseFormula, Collection<Policy> policies) {
+    public UnsatCoreFormulaBuilder(DeterminacyFormula<C, I> baseFormula, Collection<Policy> policies) {
         this.baseFormula = baseFormula;
         this.schema = baseFormula.schema;
         this.context = baseFormula.context;
@@ -92,19 +91,18 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>> {
             }
         }
 
-        switch (option) {
-            case NORMAL, NO_PREAMBLE -> {
-                bgBuilder.addAll(antecedent);
-                bgBuilder.addAll(negatedConsequence);
-            }
-            case POSITIVE -> bgBuilder.add(context.mkImplies(
-                    context.mkAnd(antecedent),
-                    context.mkNot(context.mkAnd(negatedConsequence))
-            ));
-            default -> throw new IllegalArgumentException("unrecognized option" + option);
-        }
+        bgBuilder.addAll(antecedent);
+        bgBuilder.addAll(negatedConsequence);
+        ImmutableList<BoolExpr> background = bgBuilder.build();
 
-        return new Formulas<>(labeledExprsBuilder.build(), bgBuilder.build());
+        // TODO(zhangwen): existentially quantify the database table variables so that they don't appear in the model.
+        //  The code below doesn't work because the labeled exprs also reference the quantified variables.
+//        if (baseFormula instanceof BoundedDeterminacyFormula<C> bdf) {
+//            BoolExpr quantifiedBackground = context.myMkExists(bdf.getAllDbVars(), context.mkAnd(background));
+//            background = ImmutableList.of(quantifiedBackground);
+//        }
+
+        return new Formulas<>(labeledExprsBuilder.build(), background);
     }
 
     // Once again, assumes the entire trace is present.

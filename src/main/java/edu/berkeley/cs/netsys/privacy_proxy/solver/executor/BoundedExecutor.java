@@ -34,7 +34,7 @@ public class BoundedExecutor<C extends Z3ContextWrapper<?, ?, ?, ?>> extends SMT
         // this sucks - this executor cannot exit even if we get a fast unsat, until formula generation is done
         BoundEstimator<C> boundEstimator = new UnsatCoreBoundEstimator<>(new FixedBoundEstimator<>(0));
         Map<String, Integer> bounds = boundEstimator.calculateBounds(schema, queries);
-        DeterminacyFormula<C> boundedDeterminacyFormula = new BoundedDeterminacyFormula<>(schema, policies, bounds, true);
+        BoundedDeterminacyFormula<C> boundedDeterminacyFormula = new BoundedDeterminacyFormula<>(schema, policies, bounds, true);
 
         synchronized (this) {
             if (shuttingDown) {

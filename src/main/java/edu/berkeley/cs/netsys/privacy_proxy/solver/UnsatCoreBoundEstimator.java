@@ -30,7 +30,7 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
         for (iters = 0; ; ++iters) {
             ArrayList<NamedBoolExpr> assertions = new ArrayList<>();
 
-            Instance<C> instance = schema.makeConcreteInstance("inst", bounds,
+            Instance<C> instance = schema.makeBoundedInstance("inst", bounds,
                     queries.computeKnownRows(schema.getRawSchema()));
 
             Map<BoolExpr, Dependency> dependencyLabels = new HashMap<>();

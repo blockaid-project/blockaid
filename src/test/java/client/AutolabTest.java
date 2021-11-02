@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.Properties;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 
 public class AutolabTest {
     private static final String dbDatabaseName = "autolab_production_mod";

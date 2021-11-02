@@ -158,18 +158,10 @@ public class PrivacyDriverDiasporaMySQLTest {
 
     public static void main(String[] args) throws Exception {
         switch (args[0]) {
-            case "setup":
-                setUp();
-                break;
-            case "test":
-                runSimpleTest();
-                break;
-            case "adminTest":
-                runAdminTest();
-                break;
-            default:
-                System.err.println("invalid command line");
-                break;
+            case "setup" -> setUp();
+            case "test" -> runSimpleTest();
+            case "adminTest" -> runAdminTest();
+            default -> System.err.println("invalid command line");
         }
     }
 }

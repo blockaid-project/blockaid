@@ -20,11 +20,11 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
+public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>, I extends Instance<C>> {
     protected final C context;
     protected final Schema<C> schema;
-    protected final Instance<C> inst1;
-    protected final Instance<C> inst2;
+    protected final I inst1;
+    protected final I inst2;
 
     protected final ImmutableList<BoolExpr> preamble;
     private final @Nullable String preambleSMT;
@@ -43,7 +43,7 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         return sb.toString();
     }
 
-    protected DeterminacyFormula(Schema<C> schema, Instance<C> inst1, Instance<C> inst2, Collection<BoolExpr> preamble,
+    protected DeterminacyFormula(Schema<C> schema, I inst1, I inst2, Collection<BoolExpr> preamble,
                                  TextOption text, String preambleSMT) {
         this.schema = schema;
         this.context = schema.getContext();
@@ -57,8 +57,8 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         };
     }
 
-    protected DeterminacyFormula(Schema<C> schema, Function<Integer, Instance<C>> mkInst,
-                                 BiFunction<Instance<C>, Instance<C>, List<BoolExpr>> mkPreamble, TextOption text) {
+    protected DeterminacyFormula(Schema<C> schema, Function<Integer, I> mkInst,
+                                 BiFunction<I, I, List<BoolExpr>> mkPreamble, TextOption text) {
         this.schema = schema;
         this.context = schema.getContext();
         this.inst1 = mkInst.apply(0);
@@ -72,9 +72,8 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         };
     }
 
-    protected DeterminacyFormula(
-            Schema<C> schema, Function<Integer, Instance<C>> makeInstance,
-            BiFunction<Instance<C>, Instance<C>, List<BoolExpr>> mkPreamble)
+    protected DeterminacyFormula(Schema<C> schema, Function<Integer, I> makeInstance,
+            BiFunction<I, I, List<BoolExpr>> mkPreamble)
     {
         this(schema, makeInstance, mkPreamble, TextOption.USE_TEXT);
     }

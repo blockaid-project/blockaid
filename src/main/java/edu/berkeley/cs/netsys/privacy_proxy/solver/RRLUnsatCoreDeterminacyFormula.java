@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
-    private final DeterminacyFormula<C> baseFormula;
+    private final DeterminacyFormula<C, Instance<C>> baseFormula;
     private final ImmutableList<Dependency> dependencies;
     private final ImmutableList<Policy> policies;
 

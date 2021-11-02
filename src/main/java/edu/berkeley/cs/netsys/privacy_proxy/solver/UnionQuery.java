@@ -18,9 +18,9 @@ public class UnionQuery<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<C>
     public UnionQuery(List<Query<C>> queries) {
         super();
 
-        var firstQuery = Iterables.getFirst(queries, null);
+        Query<C> firstQuery = Iterables.getFirst(queries, null);
         checkArgument(firstQuery != null, "union must take at least one query");
-        for (var query : queries) {
+        for (Query<C> query : queries) {
             checkArgument(query.getSchema() == firstQuery.getSchema());
         }
 

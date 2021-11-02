@@ -24,7 +24,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         this.qeLight = rawContext.mkTactic("qe-light");
     }
 
-    public static Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> makeCustomSortsContext(QuantifierOption option) {
+    public static Z3CustomSortsContext makeCustomSortsContext(QuantifierOption option) {
         return new Z3CustomSortsContext(option);
     }
 

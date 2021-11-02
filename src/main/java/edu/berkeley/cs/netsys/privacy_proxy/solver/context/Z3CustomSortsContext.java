@@ -11,7 +11,7 @@ import java.util.*;
  * Assumes that mkSolver is only called after the formula is generated (otherwise,
  * some values may be missing).
  */
-class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> {
+public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> {
     private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
 

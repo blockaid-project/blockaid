@@ -42,7 +42,7 @@ public class StripUnaryOpSubquery implements Preprocessor {
         // Only handling the case where this stripping doesn't remove any parameters.
         if (sqlSelect.accept(DynParamCounter.INSTANCE) != parameters.size()) {
             return Optional.empty();
-        };
+        }
 
         ParserResult newPR = new ParserResult(sqlSelect);
         // After stripping, need to set result bitmap to empty so that the results of this query are not processed.

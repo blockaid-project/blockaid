@@ -10,6 +10,7 @@ import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.QuantifierOption;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3CustomSortsContext;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
@@ -28,7 +29,7 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.*;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class QueryChecker {
-    public static boolean PRUNE_TRACE = true;
+    public static final boolean PRUNE_TRACE = true;
 
     public enum PrecheckSetting {
         DISABLED,
@@ -36,7 +37,7 @@ public class QueryChecker {
         FULL
     }
 
-    public static PrecheckSetting PRECHECK_SETTING = PrecheckSetting.COARSE;
+    public static final PrecheckSetting PRECHECK_SETTING = PrecheckSetting.COARSE;
 
     private static final int PREAPPROVE_MAX_PASSES = Integer.MAX_VALUE;
 
@@ -46,34 +47,34 @@ public class QueryChecker {
         UNKNOWN
     }
 
-    public static long SOLVE_TIMEOUT_MS = 2000; // ms
+    public static final long SOLVE_TIMEOUT_MS = 2000; // ms
 
     private final SchemaPlusWithKey rawSchema;
     private final List<Policy> policySet;
 
-    private final ImmutableList<Schema> allSchemata;
+    private final ImmutableList<Schema<?>> allSchemata;
 
     private final SMTPortfolioRunner runner;
-    private final DeterminacyFormula fastCheckDeterminacyFormula;
+    private final DeterminacyFormula<Z3CustomSortsContext, Instance<Z3CustomSortsContext>> fastCheckDeterminacyFormula;
 //    private final DeterminacyFormula determinacyFormula;
-    private final DecisionCache cache;
+    private final DecisionCache<Z3CustomSortsContext> cache;
 
     private int queryCount; // Number of queries processed so far.
-    private final DecisionTemplateGenerator dtg;
+    private final DecisionTemplateGenerator<?, ?> dtg;
 
     /**
      * For sharing decision cache among `QueryChecker` objects for the same database / policy.
      */
-    private static final ConcurrentHashMap<Properties, DecisionCache> decisionCaches = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Properties, DecisionCache<Z3CustomSortsContext>> decisionCaches = new ConcurrentHashMap<>();
 
     public QueryChecker(Properties info, ImmutableList<Policy> policySet, SchemaPlusWithKey rawSchema,
                         List<Dependency> dependencies) {
         this.rawSchema = rawSchema;
         this.policySet = policySet;
 
-        Schema customSortsSchema = new Schema(Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.USE_QUANTIFIERS),
-                rawSchema, dependencies);
-        Schema theorySchema = new Schema(
+        Z3CustomSortsContext unboundedContext = Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.USE_QUANTIFIERS);
+        Schema<Z3CustomSortsContext> customSortsSchema = new Schema<>(unboundedContext, rawSchema, dependencies);
+        Schema<?> theorySchema = new Schema<>(
                 switch (BOUNDED_FORMULA_TYPE) {
                     case THEORY -> Z3ContextWrapper.makeTheoryContext();
                     case CUSTOM_SORTS -> Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.QUANTIFIER_FREE);
@@ -83,28 +84,28 @@ public class QueryChecker {
 
         this.runner = new SMTPortfolioRunner(this, SOLVE_TIMEOUT_MS);
 //        this.determinacyFormula = new BasicDeterminacyFormula(customSortsSchema, policySet);
-        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula(customSortsSchema, policySet);
+        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula<>(customSortsSchema, policySet);
         this.dtg = ENABLE_CACHING ?
-                new DecisionTemplateGenerator(this, customSortsSchema, theorySchema,
+                new DecisionTemplateGenerator<>(this, customSortsSchema, theorySchema,
                         policySet, fastCheckDeterminacyFormula)
                 : null;
 
         // Find an existing cache corresponding to `info`, or create a new one if one doesn't exist already.
         this.cache = decisionCaches.computeIfAbsent(info, (Properties _info) ->
                 // This schema is for building preapproved sets; shouldn't matter which one we use.
-                new DecisionCache(customSortsSchema, policySet));
+                new DecisionCache<>(customSortsSchema, policySet));
 
         // At this point, the context should be tracking all constants from the views and constraints.
         // Call `push` to separate them from the trace-specific constants.
-        for (Schema schema : allSchemata) {
+        for (Schema<?> schema : allSchemata) {
             schema.getContext().pushTrackConsts();
         }
     }
 
 
     public void resetSequence() {
-        for (Schema schema : allSchemata) {
-            Z3ContextWrapper context = schema.getContext();
+        for (Schema<?> schema : allSchemata) {
+            Z3ContextWrapper<?, ?, ?, ?> context = schema.getContext();
             context.popTrackConsts();
             context.pushTrackConsts();
         }
@@ -308,11 +309,11 @@ public class QueryChecker {
     }
 
     // The fields of `DecisionCache` are shared between `QueryChecker` objects for the same database & policy.
-    private static class DecisionCache {
+    private static class DecisionCache<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         final ImmutableList<ImmutableSet<String>> preapprovedSets;
         final TraceCache policyDecisionCacheFine;
 
-        public DecisionCache(Schema schema, List<Policy> policySet) {
+        public DecisionCache(Schema<C> schema, List<Policy> policySet) {
             switch (PRECHECK_SETTING) {
                 case DISABLED -> this.preapprovedSets = null;
                 case COARSE -> this.preapprovedSets = buildPreapprovedSetsCoarse(policySet);
@@ -334,19 +335,11 @@ public class QueryChecker {
                     .collect(ImmutableList.toImmutableList());
         }
 
-        private static ImmutableList<ImmutableSet<String>> buildPreapprovedSetsFull(
-                Schema schema, List<Policy> policySet) {
-            class Entry {
-                private final BoolExpr predicate;
-                private final ImmutableSet<String> columns;
+        private static <C extends Z3ContextWrapper<?, ?, ?, ?>> ImmutableList<ImmutableSet<String>> buildPreapprovedSetsFull(
+                Schema<C> schema, List<Policy> policySet) {
+            record Entry(BoolExpr predicate, ImmutableSet<String> columns) {}
 
-                public Entry(BoolExpr predicate, ImmutableSet<String> columns) {
-                    this.predicate = predicate;
-                    this.columns = columns;
-                }
-            }
-
-            Z3ContextWrapper ctx = schema.getContext();
+            C ctx = schema.getContext();
 
             ImmutableList.Builder<ImmutableSet<String>> preapprovedSetsBuilder = ImmutableList.builder();
 
