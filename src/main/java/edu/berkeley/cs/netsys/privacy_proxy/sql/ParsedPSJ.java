@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+// TODO(zhangwen): belongs in `solver` package?
 public class ParsedPSJ {
     // TODO(zhangwen): make most of these fields immutable.
     private final List<String> relations;
@@ -115,16 +116,12 @@ public class ParsedPSJ {
                         throw new RuntimeException("not supported: relation alias");
                     }
                     for (String relation : relations) {
-                        schema.getColumnNames(relation).forEach(col -> {
-                            addProjectColumn((relation + "." + col).toUpperCase());
-                        });
+                        schema.getColumnNames(relation).forEach(col -> addProjectColumn((relation + "." + col).toUpperCase()));
                     }
                 } else { // SELECT table.* FROM ...
                     String quantifier = identifier.names.get(identifier.names.size() - 2).toUpperCase();
                     String relation = relations.get(relAliasToIdx.get(quantifier));
-                    schema.getColumnNames(relation).forEach(col -> {
-                        addProjectColumn((quantifier + "." + col).toUpperCase());
-                    });
+                    schema.getColumnNames(relation).forEach(col -> addProjectColumn((quantifier + "." + col).toUpperCase()));
                 }
             } else {
                 addProjectColumn(quantifyName(identifier));
@@ -292,8 +289,10 @@ public class ParsedPSJ {
         }
     }
 
-    private Expr getPredicate(SqlNode theta, Map<String, Expr> symbolMap, List<Object> params, List<String> paramNames, Schema schema) {
-        Z3ContextWrapper context = schema.getContext();
+    private <C extends Z3ContextWrapper<?, ?, ?, ?>> Expr<?> getPredicate(SqlNode theta, Map<String, Expr<?>> symbolMap,
+                                                                          List<Object> params, List<String> paramNames,
+                                                                          Schema<C> schema) {
+        C context = schema.getContext();
         if (theta instanceof SqlIdentifier identifier) {
             String name = quantifyName(identifier);
             if (symbolMap.containsKey(name)) {
@@ -304,8 +303,8 @@ public class ParsedPSJ {
                 String relationName = getRelationNameForAlias(parts[0]);
                 List<Column> columns = schema.getColumns(relationName);
                 for (Column column : columns) {
-                    if (column.name.toUpperCase().equals(parts[1])) {
-                        return context.mkConst(name, column.type);
+                    if (column.name().toUpperCase().equals(parts[1])) {
+                        return context.mkConst(name, column.type());
                     }
                 }
 
@@ -323,13 +322,12 @@ public class ParsedPSJ {
             }
             throw new UnsupportedOperationException("unhandled literal type: " + literal.getTypeName());
         } else if (theta instanceof SqlBasicCall call) {
-            Expr left = getPredicate(call.operand(0), symbolMap, params, paramNames, schema);
+            Expr<?> left = getPredicate(call.operand(0), symbolMap, params, paramNames, schema);
 
             if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
-                final Expr left1 = left;
                 SqlNodeList values = call.operand(1);
                 BoolExpr[] exprs = values.getList().stream()
-                        .map(n -> context.mkEq(left1, getPredicate(n, symbolMap, params, paramNames, schema)))
+                        .map(n -> context.mkEq(left, getPredicate(n, symbolMap, params, paramNames, schema)))
                         .toArray(BoolExpr[]::new);
                 BoolExpr expr = context.mkOr(exprs);
                 if (theta.getKind() == SqlKind.NOT_IN) {
@@ -338,7 +336,7 @@ public class ParsedPSJ {
                 return expr;
             }
 
-            Expr right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
+            Expr<?> right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
             if (left instanceof ArithExpr && right instanceof SeqExpr) {
                 try {
                     new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime();
@@ -427,8 +425,8 @@ public class ParsedPSJ {
         return relationSet;
     }
 
-    private BoolExpr getPredicate(Map<String, Expr> symbolMap, Schema schema, String prefix, int parameterOffset) {
-        Z3ContextWrapper context = schema.getContext();
+    private <C extends Z3ContextWrapper<?, ?, ?, ?>> BoolExpr getPredicate(Map<String, Expr<?>> symbolMap, Schema<C> schema, String prefix, int parameterOffset) {
+        C context = schema.getContext();
         if (theta != null && theta.size() > 0) {
             List<Object> params = new ArrayList<>(parameters);
             Collections.reverse(params);
@@ -456,16 +454,16 @@ public class ParsedPSJ {
         }
     }
 
-    public BoolExpr getPredicate(Schema schema) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> BoolExpr getPredicate(Schema<C> schema) {
         return getPredicate(Collections.emptyMap(), schema, null, 0);
     }
 
-    public Query getSolverQuery(Schema schema) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema) {
         return getSolverQuery(schema, null, 0);
     }
 
-    public Query getSolverQuery(Schema schema, String prefix, int offset) {
-        return new SolverQuery(schema, prefix, offset);
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema, String prefix, int offset) {
+        return new SolverQuery<>(schema, prefix, offset);
     }
 
     public List<Boolean> getResultBitmap() {
@@ -480,16 +478,16 @@ public class ParsedPSJ {
         return theta.isEmpty();
     }
 
-    private class SolverQuery extends PSJ {
+    private class SolverQuery<C extends Z3ContextWrapper<?, ?, ?, ?>> extends PSJ<C> {
         int[] projectRelationIndex;
         int[] projectColumnIndex;
         int[] thetaRelationIndex;
         int[] thetaColumnIndex;
-        Schema schema;
+        Schema<C> schema;
         String prefix;
         int parameterOffset;
 
-        private SolverQuery(Schema schema, String prefix, int parameterOffset) {
+        private SolverQuery(Schema<C> schema, String prefix, int parameterOffset) {
             super(schema, relations);
 
             projectRelationIndex = new int[projectColumns.size()];
@@ -505,7 +503,7 @@ public class ParsedPSJ {
             mapIndices(schema, thetaColumns, thetaRelationIndex, thetaColumnIndex);
         }
 
-        private void mapIndices(Schema schema, List<String> columns, int[] relationIndex, int[] columnIndex) {
+        private void mapIndices(Schema<C> schema, List<String> columns, int[] relationIndex, int[] columnIndex) {
             Iterator<String> iter = columns.iterator();
             for (int i = 0; i < columns.size(); ++i) {
                 String[] parts = iter.next().split("\\.");
@@ -524,7 +522,8 @@ public class ParsedPSJ {
             }
         }
 
-        public Iterable<Query> getComponents() {
+        @Override
+        public Iterable<Query<C>> getComponents() {
             UnionFind<String> uf = new UnionFind<>(relAliasToIdx.keySet());
             for (PredicateInfo info : theta.values()) {
                 List<String> thetaColumns = info.columns;
@@ -544,7 +543,7 @@ public class ParsedPSJ {
             if (components.size() == 1) {
                 return super.getComponents();
             }
-            List<Query> queries = new ArrayList<>();
+            List<Query<C>> queries = new ArrayList<>();
             for (Set<String> component : components.values()) {
                 List<String> componentRelations = new ArrayList<>();
                 boolean componentHasRelAlias = false;
@@ -584,21 +583,21 @@ public class ParsedPSJ {
         }
 
         @Override
-        protected BoolExpr predicateGenerator(Tuple... tuples) {
-            Map<String, Expr> map = new HashMap<>();
+        protected BoolExpr predicateGenerator(List<Tuple<C>> tuples) {
+            Map<String, Expr<?>> map = new HashMap<>();
             for (int i = 0; i < thetaColumnIndex.length; ++i) {
-                map.put(thetaColumns.get(i), tuples[thetaRelationIndex[i]].get(thetaColumnIndex[i]));
+                map.put(thetaColumns.get(i), tuples.get(thetaRelationIndex[i]).get(thetaColumnIndex[i]));
             }
             return getPredicate(map, schema, prefix, parameterOffset);
         }
 
         @Override
-        protected Tuple headSelector(Tuple... tuples) {
-            Expr[] parts = new Expr[projectRelationIndex.length];
-            for (int i = 0; i < parts.length; ++i) {
-                parts[i] = tuples[projectRelationIndex[i]].get(projectColumnIndex[i]);
+        protected Tuple<C> headSelector(List<Tuple<C>> tuples) {
+            ArrayList<Expr<?>> parts = new ArrayList<>();
+            for (int i = 0; i < projectRelationIndex.length; ++i) {
+                parts.add(tuples.get(projectRelationIndex[i]).get(projectColumnIndex[i]));
             }
-            return new Tuple(schema, parts);
+            return new Tuple<>(schema, parts);
         }
 
         @Override
@@ -611,7 +610,7 @@ public class ParsedPSJ {
         }
 
         @Override
-        public Schema getSchema() {
+        public Schema<C> getSchema() {
             return schema;
         }
     }

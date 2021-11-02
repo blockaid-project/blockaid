@@ -19,19 +19,19 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class RRLUnsatCoreDeterminacyFormula {
-    private final DeterminacyFormula baseFormula;
+public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
+    private final DeterminacyFormula<C> baseFormula;
     private final ImmutableList<Dependency> dependencies;
     private final ImmutableList<Policy> policies;
 
     private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)");
     private static final Pattern PREAMBLE_PATTERN = Pattern.compile("(Constraint|View)!(\\d+)");
 
-    public RRLUnsatCoreDeterminacyFormula(Schema schema, ImmutableList<Policy> policies) {
-        Instance inst1 = schema.makeFreshInstance("instance0"),
+    public RRLUnsatCoreDeterminacyFormula(Schema<C> schema, ImmutableList<Policy> policies) {
+        Instance<C> inst1 = schema.makeFreshInstance("instance0"),
                 inst2 = schema.makeFreshInstance("instance1");
 
-        Z3ContextWrapper context = schema.getContext();
+        C context = schema.getContext();
         ArrayList<NamedBoolExpr> preamble = new ArrayList<>();
 
         this.dependencies = ImmutableList.copyOf(schema.getDependencies());
@@ -45,9 +45,9 @@ public class RRLUnsatCoreDeterminacyFormula {
         }
 
         this.policies = policies;
-        ImmutableList<Query> views = schema.getPolicyQueries(policies);
+        ImmutableList<Query<C>> views = schema.getPolicyQueries(policies);
         for (int i = 0; i < views.size(); ++i) {
-            Query v = views.get(i);
+            Query<C> v = views.get(i);
             preamble.add(new NamedBoolExpr(
                     context.mkAnd(v.apply(inst1).isContainedInExpr(v.apply(inst2))),
                     "View!" + i
@@ -58,12 +58,12 @@ public class RRLUnsatCoreDeterminacyFormula {
         ImmutableList<BoolExpr> rawPreamble = preamble.stream().map(NamedBoolExpr::expr)
                 .collect(ImmutableList.toImmutableList());
 
-        this.baseFormula = new DeterminacyFormula(schema, inst1, inst2, rawPreamble, TextOption.USE_TEXT, preambleSMT);
+        this.baseFormula = new DeterminacyFormula<>(schema, inst1, inst2, rawPreamble, TextOption.USE_TEXT, preambleSMT);
     }
 
     private List<NamedBoolExpr> generateTupleCheckNamed(UnmodifiableLinearQueryTrace trace) {
-        Schema schema = baseFormula.schema;
-        Z3ContextWrapper context = baseFormula.context;
+        Schema<C> schema = baseFormula.schema;
+        C context = baseFormula.context;
         ArrayList<NamedBoolExpr> exprs = new ArrayList<>();
 
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
@@ -72,12 +72,12 @@ public class RRLUnsatCoreDeterminacyFormula {
             if (!qte.hasTuples()) {
                 continue;
             }
-            Query query = qte.getQuery().getSolverQuery(schema);
-            Relation r1 = query.apply(baseFormula.inst1);
-            List<Tuple> tuples = DeterminacyFormula.getTupleObjects(qte, schema);
+            Query<C> query = qte.getQuery().getSolverQuery(schema);
+            Relation<C> r1 = query.apply(baseFormula.inst1);
+            List<Tuple<C>> tuples = DeterminacyFormula.getTupleObjects(qte, schema);
 
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
-                Tuple tuple = tuples.get(rowIdx);
+                Tuple<C> tuple = tuples.get(rowIdx);
                 ReturnedRowLabel l = new ReturnedRowLabel(queryIdx, rowIdx);
                 exprs.add(new NamedBoolExpr(context.mkAnd(r1.doesContainExpr(tuple)), l.toString()));
             }

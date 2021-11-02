@@ -3,6 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.sql.preprocess;
 import com.google.common.collect.ImmutableSet;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 
 import java.util.Collections;
@@ -51,12 +52,13 @@ class PrivacyQueryEmptyRBWrapper extends PrivacyQuery {
     }
 
     @Override
-    public Query getSolverQuery(Schema schema) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema) {
         return pq.getSolverQuery(schema);
     }
 
     @Override
-    public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>>
+    Query<C> getSolverQuery(Schema<C> schema, String paramPrefix, int offset) {
         return pq.getSolverQuery(schema, paramPrefix, offset);
     }
 

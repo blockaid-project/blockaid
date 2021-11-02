@@ -6,29 +6,33 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public class Tuple {
-    private final Schema schema;
-    private final ImmutableList<Optional<Expr>> content; // empty denotes null.
+public class Tuple<C extends Z3ContextWrapper<?, ?, ?, ?>> {
+    private final Schema<C> schema;
+    private final ImmutableList<Optional<Expr<?>>> content; // empty denotes null.
 
-    public Tuple(Schema schema, Expr... exprs) {
+    public Tuple(Schema<C> schema, Expr<?>... exprs) {
         this(schema, Arrays.stream(exprs));
     }
 
-    public Tuple(Schema schema, Stream<Expr> exprs) {
-        this.content = exprs.map(Optional::ofNullable).collect(ImmutableList.toImmutableList());
+    public Tuple(Schema<C> schema, Collection<Expr<?>> exprs) {
+        this(schema, exprs.stream());
+    }
+
+    public Tuple(Schema<C> schema, Stream<Expr<?>> exprs) {
+        ImmutableList.Builder<Optional<Expr<?>>> builder = new ImmutableList.Builder<>();
+        exprs.forEach(e -> builder.add(Optional.ofNullable(e)));
+        this.content = builder.build();
         this.schema = checkNotNull(schema);
     }
 
-    public Schema getSchema() {
+    public Schema<C> getSchema() {
         return schema;
     }
 
@@ -40,41 +44,41 @@ public class Tuple {
         return content.isEmpty();
     }
 
-    public Expr get(int i) {
+    public Expr<?> get(int i) {
         return content.get(i).orElse(null);
     }
 
-    public Stream<Expr> stream() {
+    public Stream<Expr<?>> stream() {
         return content.stream().map(v -> v.orElse(null));
     }
 
-    BoolExpr equalsExpr(Tuple other) {
+    BoolExpr equalsExpr(Tuple<C> other) {
         checkArgument(getSchema() == other.getSchema(), "tuple schemas differ");
         checkArgument(size() == other.size(),
                 "tuple sizes are different: %s vs %s", size(), other.size());
 
-        Z3ContextWrapper context = schema.getContext();
+        C context = schema.getContext();
         if (isEmpty()) {
             return context.mkTrue();
         }
 
-        BoolExpr[] exprs = new BoolExpr[size()];
+        ArrayList<BoolExpr> exprs = new ArrayList<>();
         for (int i = 0; i < size(); ++i) {
-            Expr lhs = get(i), rhs = other.get(i);
+            Expr<?> lhs = get(i), rhs = other.get(i);
             if (context.areDistinctConstants(lhs, rhs)) {
                 // LHS and RHS represent distinct concrete values, which can't be equal!
                 return context.mkFalse();
             }
-            exprs[i] = context.mkEq(get(i), other.get(i));
+            exprs.add(context.mkEq(get(i), other.get(i)));
         }
         return context.mkAnd(exprs);
     }
 
-    public List<Expr> toExprList() {
+    public List<Expr<?>> toExprList() {
         return stream().collect(Collectors.toList());
     }
 
-    public Expr[] toExprArray() {
+    public Expr<?>[] toExprArray() {
         return stream().toArray(Expr[]::new);
     }
 
@@ -83,7 +87,7 @@ public class Tuple {
      * @param sorts the sorts of tuple elements; provides the sorts for NULLs.
      * @return a tuple with NULLs replaced replaced.
      */
-    public Tuple replaceNullsWithFreshConsts(Sort[] sorts) {
+    public Tuple<C> replaceNullsWithFreshConsts(Sort[] sorts) {
         // FIXME(zhangwen): handle SQL NULL properly.
         // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
         // NULL, this is... safe?  At least not blatantly unsafe.  I need to think through this...
@@ -92,13 +96,13 @@ public class Tuple {
             return this;
         }
 
-        Expr[] convertedExprs = new Expr[size()];
+        Expr<?>[] convertedExprs = new Expr[size()];
         for (int i = 0; i < size(); ++i) {
             convertedExprs[i] = content.get(i).orElse(schema.getContext().mkFreshConst("null", sorts[i]));
 //            convertedExprs[i] = content.get(i).orElse(schema.getContext().mkConst("null" + sorts[i].toString(), sorts[i]));
         }
 
-        return new Tuple(this.getSchema(), convertedExprs);
+        return new Tuple<>(this.getSchema(), convertedExprs);
     }
 
     @Override
@@ -127,14 +131,5 @@ public class Tuple {
             return true;
         }
         return false;
-    }
-
-    // For decision template generation / matching.
-    public static Object normalizeValue(Object v) {
-        return v;
-//        if (v instanceof Boolean) {
-//            return ((boolean) v) ? 1 : 0;
-//        }
-//        return v;
     }
 }

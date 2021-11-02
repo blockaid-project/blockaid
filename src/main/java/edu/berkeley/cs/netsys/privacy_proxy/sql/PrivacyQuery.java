@@ -2,8 +2,10 @@ package edu.berkeley.cs.netsys.privacy_proxy.sql;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.microsoft.z3.Sort;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.*;
 
@@ -68,7 +70,12 @@ public abstract class PrivacyQuery {
      */
     public abstract ImmutableSet<String> getRelations();
 
-    public abstract Query getSolverQuery(Schema schema);
-    public abstract Query getSolverQuery(Schema schema, String paramPrefix, int offset);
+    // FIXME(zhangwen): these methods refer to sorts, etc.; belong in solver package?
+    public abstract <C extends Z3ContextWrapper<?, ?, ?, ?>>
+    Query<C> getSolverQuery(Schema<C> schema);
+
+    public abstract <C extends Z3ContextWrapper<?, ?, ?, ?>>
+    Query<C> getSolverQuery(Schema<C> schema, String paramPrefix, int offset);
+
     public abstract List<Boolean> getResultBitmap();
 }

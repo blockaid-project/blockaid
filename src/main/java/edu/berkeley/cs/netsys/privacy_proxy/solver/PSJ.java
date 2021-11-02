@@ -8,86 +8,85 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-public abstract class PSJ extends Query {
-    private final Schema schema;
+public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<C> {
+    private final Schema<C> schema;
     private final List<String> relations;
-    private final Map<Instance, Function<Tuple, BoolExpr>> inst2DoesContainTemplate = new HashMap<>();
+    private final Map<Instance<C>, Function<Tuple<C>, BoolExpr>> inst2DoesContainTemplate = new HashMap<>();
 
     @Override
-    public Schema getSchema() {
+    public Schema<C> getSchema() {
         return schema;
     }
 
-    public PSJ(Schema schema, List<String> relations) {
+    public PSJ(Schema<C> schema, List<String> relations) {
         this.schema = schema;
         this.relations = relations;
     }
 
-    protected BoolExpr predicateGenerator(Tuple... tuples) {
+    protected BoolExpr predicateGenerator(List<Tuple<C>> tuples) {
         return schema.getContext().mkTrue();
     }
 
-    protected abstract Tuple headSelector(Tuple... tuples);
+    protected abstract Tuple<C> headSelector(List<Tuple<C>> tuples);
     protected abstract Sort[] headTypeSelector(Sort[]... types);
 
     @Override
     public Sort[] headTypes() {
         List<Sort[]> args = new ArrayList<>();
         for (String relationName : relations) {
-            args.add(schema.getColumns(relationName).stream().map(c -> c.type).toArray(Sort[]::new));
+            args.add(schema.getColumns(relationName).stream().map(Column::type).toArray(Sort[]::new));
         }
         return headTypeSelector(args.toArray(new Sort[0][]));
     }
 
     // Returns a formula stating that tuple is in the output of this query on the instance.
     @Override
-    public Iterable<BoolExpr> doesContain(Instance instance, Tuple tuple) {
+    public Iterable<BoolExpr> doesContain(Instance<C> instance, Tuple<C> tuple) {
         List<BoolExpr> bodyClauses = new ArrayList<>();
-        Tuple[] symbolicTups = relations.stream().map(schema::makeFreshQuantifiedTuple).toArray(Tuple[]::new);
-        Tuple headSymTup = headSelector(symbolicTups);
+        List<Tuple<C>> symbolicTuples = relations.stream().map(schema::makeFreshQuantifiedTuple).collect(Collectors.toList());
+        Tuple<C> headSymTup = headSelector(symbolicTuples);
         checkArgument(headSymTup.size() == tuple.size());
 
-        Z3ContextWrapper context = schema.getContext();
+        C context = schema.getContext();
         for (int i = 0; i < relations.size(); ++i) {
             String relationName = relations.get(i);
-            Tuple tup = symbolicTups[i];
+            Tuple<C> tup = symbolicTuples.get(i);
             Iterables.addAll(bodyClauses, instance.get(relationName).doesContainExpr(tup));
         }
 
-        bodyClauses.add(predicateGenerator(symbolicTups)); // The WHERE clause.
+        bodyClauses.add(predicateGenerator(symbolicTuples)); // The WHERE clause.
 
         for (int i = 0; i < tuple.size(); ++i) {
             bodyClauses.add(context.mkEq(tuple.get(i), headSymTup.get(i)));
         }
 
-        Set<Expr> existentialVars = Arrays.stream(symbolicTups).flatMap(Tuple::stream).collect(Collectors.toSet());
+        Set<Expr<?>> existentialVars = symbolicTuples.stream().flatMap(Tuple::stream).collect(Collectors.toSet());
         BoolExpr body = context.mkAnd(bodyClauses);
         return List.of(
                 context.eliminateQuantifiers(context.myMkExists(existentialVars, body))
         );
     }
 
-    private void visitJoins(Instance instance, BiConsumer<Tuple[], BoolExpr[]> consumer) {
+    private void visitJoins(Instance<C> instance, BiConsumer<List<Tuple<C>>, List<BoolExpr>> consumer) {
         visitJoins(instance, consumer, new ArrayList<>(), new ArrayList<>(), 0);
     }
 
-    private void visitJoins(Instance instance, BiConsumer<Tuple[], BoolExpr[]> consumer, List<Tuple> tuples, List<BoolExpr> exists, int index) {
+    private void visitJoins(Instance<C> instance, BiConsumer<List<Tuple<C>>, List<BoolExpr>> consumer, List<Tuple<C>> tuples, List<BoolExpr> exists, int index) {
         checkArgument(0 <= index && index <= relations.size());
         if (index == relations.size()) {
-            consumer.accept(tuples.toArray(new Tuple[0]), exists.toArray(new BoolExpr[0]));
+            consumer.accept(tuples, exists);
             return;
         }
         String relationName = relations.get(index);
-        ConcreteRelation relation = (ConcreteRelation) instance.get(relationName);
-        Tuple[] t = relation.getTuples();
-        BoolExpr[] e = relation.getExists();
-        for (int i = 0; i < t.length; ++i) {
-            tuples.add(t[i]);
-            exists.add(e[i]);
+        ConcreteRelation<C> relation = (ConcreteRelation<C>) instance.get(relationName);
+        List<Tuple<C>> t = relation.getTuples();
+        List<BoolExpr> e = relation.getExists();
+        for (int i = 0; i < t.size(); ++i) {
+            tuples.add(t.get(i));
+            exists.add(e.get(i));
             visitJoins(instance, consumer, tuples, exists, index + 1);
             exists.remove(exists.size() - 1);
             tuples.remove(tuples.size() - 1);
@@ -95,23 +94,23 @@ public abstract class PSJ extends Query {
     }
 
     @Override
-    public Tuple[] generateTuples(Instance instance) {
+    public List<Tuple<C>> generateTuples(Instance<C> instance) {
         checkArgument(instance.isConcrete);
 
-        final List<Tuple> tuples = new ArrayList<>();
-        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) -> tuples.add(headSelector(ts)));
-        return tuples.toArray(new Tuple[0]);
+        List<Tuple<C>> tuples = new ArrayList<>();
+        visitJoins(instance, (List<Tuple<C>> ts, List<BoolExpr> es) -> tuples.add(headSelector(ts)));
+        return tuples;
     }
 
     @Override
-    public BoolExpr[] generateExists(Instance instance) {
+    public List<BoolExpr> generateExists(Instance<C> instance) {
         checkArgument(instance.isConcrete);
 
-        final Z3ContextWrapper context = instance.getContext();
-        final List<BoolExpr> exprs = new ArrayList<>();
-        visitJoins(instance, (Tuple[] ts, BoolExpr[] es) ->
+        C context = instance.getContext();
+        List<BoolExpr> exprs = new ArrayList<>();
+        visitJoins(instance, (List<Tuple<C>> ts, List<BoolExpr> es) ->
                 exprs.add(context.mkAnd(context.mkAnd(es), predicateGenerator(ts)))
         );
-        return exprs.toArray(new BoolExpr[0]);
+        return exprs;
     }
 }

@@ -1,6 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.policy_checker;
 
 import com.microsoft.z3.*;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
@@ -40,7 +41,7 @@ public class Policy {
         return new HashSet<>(parsedPSJ.getNormalizedThetaColumns());
     }
 
-    public BoolExpr getPredicate(Schema schema) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> BoolExpr getPredicate(Schema<C> schema) {
         return parsedPSJ.getPredicate(schema);
     }
 
@@ -61,7 +62,7 @@ public class Policy {
                 || !Collections.disjoint(thetaColumns, parsedPSJ.getThetaColumns());
     }
 
-    public Query getSolverQuery(Schema schema) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema) {
         return parsedPSJ.getSolverQuery(schema);
     }
 }

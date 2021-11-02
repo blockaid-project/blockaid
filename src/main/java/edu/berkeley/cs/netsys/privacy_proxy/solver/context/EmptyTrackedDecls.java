@@ -15,12 +15,12 @@ public class EmptyTrackedDecls implements TrackedDecls {
     }
 
     @Override
-    public Iterable<Expr> getConsts() {
+    public Iterable<Expr<?>> getConsts() {
         return Collections.emptyList();
     }
 
     @Override
-    public Iterable<FuncDecl> getFuncDecls() {
+    public Iterable<FuncDecl<?>> getFuncDecls() {
         return Collections.emptyList();
     }
 }

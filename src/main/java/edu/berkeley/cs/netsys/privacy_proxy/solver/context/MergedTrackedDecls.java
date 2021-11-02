@@ -8,8 +8,8 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 
 public class MergedTrackedDecls implements TrackedDecls {
-    private final Iterable<Expr> consts;
-    private final Iterable<FuncDecl> funcDecls;
+    private final Iterable<Expr<?>> consts;
+    private final Iterable<FuncDecl<?>> funcDecls;
 
     <T extends TrackedDecls> MergedTrackedDecls(Collection<T> trackedDecls) {
         this.consts = Iterables.concat(
@@ -21,12 +21,12 @@ public class MergedTrackedDecls implements TrackedDecls {
     }
 
     @Override
-    public Iterable<Expr> getConsts() {
+    public Iterable<Expr<?>> getConsts() {
         return consts;
     }
 
     @Override
-    public Iterable<FuncDecl> getFuncDecls() {
+    public Iterable<FuncDecl<?>> getFuncDecls() {
         return funcDecls;
     }
 }

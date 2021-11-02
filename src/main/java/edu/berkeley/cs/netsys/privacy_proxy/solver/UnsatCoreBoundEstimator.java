@@ -12,26 +12,26 @@ import java.util.*;
 
 import static com.google.common.base.Preconditions.checkState;
 
-public class UnsatCoreBoundEstimator extends BoundEstimator {
-    private final BoundEstimator initialBounds;
+public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> extends BoundEstimator<C> {
+    private final BoundEstimator<C> initialBounds;
     private Solver solver;
 
-    public UnsatCoreBoundEstimator(BoundEstimator initialBounds) {
+    public UnsatCoreBoundEstimator(BoundEstimator<C> initialBounds) {
         this.initialBounds = initialBounds;
         this.solver = null;
     }
 
     @Override
-    public Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace queries) {
-        Z3ContextWrapper context = schema.getContext();
+    public Map<String, Integer> calculateBounds(Schema<C> schema, UnmodifiableLinearQueryTrace queries) {
+        C context = schema.getContext();
         Map<String, Integer> bounds = new HashMap<>(initialBounds.calculateBounds(schema, queries));
 
         int iters;
         for (iters = 0; ; ++iters) {
             ArrayList<NamedBoolExpr> assertions = new ArrayList<>();
 
-            Instance instance = schema.makeConcreteInstance("inst", bounds,
-                    queries.computeKnownRows(schema));
+            Instance<C> instance = schema.makeConcreteInstance("inst", bounds,
+                    queries.computeKnownRows(schema.getRawSchema()));
 
             Map<BoolExpr, Dependency> dependencyLabels = new HashMap<>();
             int i = 0;
@@ -46,10 +46,10 @@ public class UnsatCoreBoundEstimator extends BoundEstimator {
             Map<BoolExpr, PrivacyQuery> queryLabels = new HashMap<>();
             for (QueryTraceEntry queryTraceEntry : queries.getAllEntries()) {
                 PrivacyQuery query = queryTraceEntry.getQuery();
-                Query solverQuery = query.getSolverQuery(schema);
-                Relation r = solverQuery.apply(instance);
+                Query<C> solverQuery = query.getSolverQuery(schema);
+                Relation<C> r = solverQuery.apply(instance);
                 if (queryTraceEntry.hasTuples()) {
-                    List<Tuple> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
+                    List<Tuple<C>> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
                     String name = "query!" + (i++);
                     assertions.add(new NamedBoolExpr(context.mkAnd(r.doesContainExpr(tuples)), name));
                     queryLabels.put(context.mkBoolConst(name), query);

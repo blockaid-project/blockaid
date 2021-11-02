@@ -1,11 +1,11 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.microsoft.z3.*;
 
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.util.Collection;
+import java.util.*;
 
 import static com.google.common.base.Preconditions.checkState;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_QE;
@@ -15,7 +15,7 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_QE;
  * Assumes that mkSolver is only called after the formula is generated (otherwise,
  * some values may be missing).
  */
-public abstract class Z3ContextWrapper {
+public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sort, StringS extends Sort, BoolS extends Sort> {
     protected final Context rawContext;
     private final Tactic qeLight;
 
@@ -24,11 +24,11 @@ public abstract class Z3ContextWrapper {
         this.qeLight = rawContext.mkTactic("qe-light");
     }
 
-    public static Z3ContextWrapper makeCustomSortsContext(QuantifierOption option) {
+    public static Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> makeCustomSortsContext(QuantifierOption option) {
         return new Z3CustomSortsContext(option);
     }
 
-    public static Z3ContextWrapper makeTheoryContext() {
+    public static Z3ContextWrapper<IntSort, IntSort, IntSort, BoolSort> makeTheoryContext() {
         return new Z3TheoryContext();
     }
 
@@ -51,65 +51,79 @@ public abstract class Z3ContextWrapper {
      * @param rhs the other expression.
      * @return true if two expressions represent distinct constant values.
      */
-    public abstract boolean areDistinctConstants(Expr lhs, Expr rhs);
+    public abstract boolean areDistinctConstants(Expr<?> lhs, Expr<?> rhs);
 
-    public BoolExpr mkDistinct(Expr... exprs) {
+    public BoolExpr mkDistinct(Expr<?>... exprs) {
         if (exprs.length <= 1) {
             return mkTrue();
         }
         return rawContext.mkDistinct(exprs);
     }
 
-    public BoolExpr mkDistinct(Collection<Expr> exprs) {
+    public <S extends Sort> BoolExpr mkDistinct(Collection<Expr<S>> exprs) {
         return mkDistinct(exprs.toArray(new Expr[0]));
     }
 
-    public StringSymbol mkSymbol(String s) {
-        return rawContext.mkSymbol(s);
+    public BoolExpr mkDistinctUntyped(Collection<Expr<?>> exprs) {
+        return mkDistinct(exprs.toArray(new Expr[0]));
     }
 
     public abstract BoolExpr mkBoolConst(String s);
-    public abstract Expr mkConst(String s, Sort sort);
-    public abstract Expr mkFreshConst(String s, Sort sort);
+    public abstract <S extends Sort> Expr<S> mkConst(String s, S sort);
+    public abstract <S extends Sort> Expr<S> mkFreshConst(String s, S sort);
 
     // Not tracked.
-    public abstract Expr mkFreshQuantifiedConst(String s, Sort sort);
+    public abstract <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort);
 
     public BoolExpr mkAnd(BoolExpr... boolExprs) {
-        if (boolExprs.length == 0) {
+        return mkAnd(Arrays.asList(boolExprs));
+    }
+
+    public BoolExpr mkAnd(Iterable<BoolExpr> boolExprs) {
+        return mkAnd(Lists.newArrayList(boolExprs));
+    }
+
+    public BoolExpr mkAnd(List<BoolExpr> boolExprs) {
+        if (boolExprs.isEmpty()) {
             return rawContext.mkTrue();
         }
-        if (boolExprs.length == 1) {
-            return boolExprs[0];
+        if (boolExprs.size() == 1) {
+            return boolExprs.get(0);
         }
+
         for (BoolExpr boolExpr : boolExprs) {
             if (boolExpr.isFalse()) {
                 return rawContext.mkFalse();
             }
         }
-        return rawContext.mkAnd(boolExprs);
+
+        return rawContext.mkAnd(boolExprs.toArray(new BoolExpr[0]));
     }
 
-    public BoolExpr mkAnd(Iterable<BoolExpr> boolExprs) {
-        return mkAnd(Iterables.toArray(boolExprs, BoolExpr.class));
+    public BoolExpr mkAnd(BoolExpr e1, BoolExpr e2) {
+        return mkAnd(List.of(e1, e2));
+    }
+
+    public BoolExpr mkOr(List<BoolExpr> boolExprs) {
+        return rawContext.mkOr(boolExprs.toArray(new BoolExpr[0]));
     }
 
     public BoolExpr mkOr(BoolExpr... boolExprs) {
         return rawContext.mkOr(boolExprs);
     }
 
-    public BoolExpr myMkForall(Collection<Expr> quantifiers, BoolExpr body) {
+    public BoolExpr myMkForall(Collection<Expr<?>> quantifiers, BoolExpr body) {
         return myMkForall(quantifiers.toArray(new Expr[0]), body);
     }
 
-    public BoolExpr myMkForall(Expr[] quantifiers, BoolExpr body) {
+    public BoolExpr myMkForall(Expr<?>[] quantifiers, BoolExpr body) {
         if (quantifiers.length == 0) {
             return body;
         }
         return rawContext.mkForall(quantifiers, body, 1, null, null, null, null);
     }
 
-    public BoolExpr myMkExists(Collection<Expr> quantifiers, BoolExpr body) {
+    public BoolExpr myMkExists(Collection<Expr<?>> quantifiers, BoolExpr body) {
         if (quantifiers.isEmpty()) {
             return body;
         }
@@ -139,22 +153,22 @@ public abstract class Z3ContextWrapper {
         return mkSolver(); // By default, return a regular solver.
     }
 
-    public abstract Sort getCustomIntSort();
-    public abstract Sort getCustomBoolSort();
-    public abstract Sort getCustomRealSort();
-    public abstract Sort getCustomStringSort();
-    public abstract Sort getDateSort();
-    public abstract Sort getTimestampSort();
+    public abstract IntegralS getCustomIntSort();
+    public abstract BoolS getCustomBoolSort();
+    public abstract RealS getCustomRealSort();
+    public abstract StringS getCustomStringSort();
+    public abstract IntegralS getDateSort();
+    public abstract IntegralS getTimestampSort();
 
-    public abstract Expr mkCustomInt(long value);
-    public abstract Expr mkCustomBool(boolean value);
-    public abstract BoolExpr mkCustomIntLt(Expr left, Expr right);
-    public abstract Expr mkCustomString(String value);
-    public abstract Expr mkCustomReal(double value);
-    public abstract Expr mkDate(Date date);
-    public abstract Expr mkTimestamp(Timestamp ts);
+    public abstract Expr<IntegralS> mkCustomInt(long value);
+    public abstract Expr<BoolS> mkCustomBool(boolean value);
+    public abstract BoolExpr mkCustomIntLt(Expr<?> left, Expr<?> right);
+    public abstract Expr<StringS> mkCustomString(String value);
+    public abstract Expr<RealS> mkCustomReal(double value);
+    public abstract Expr<IntegralS> mkDate(Date date);
+    public abstract Expr<IntegralS> mkTimestamp(Timestamp ts);
 
-    public Expr getExprForValue(Object value) {
+    public Expr<?> getExprForValue(Object value) {
         if (value instanceof Long l) {
             return mkCustomInt(l);
         } else if (value instanceof Integer i) {
@@ -187,7 +201,7 @@ public abstract class Z3ContextWrapper {
         return rawContext.mkImplies(lhs, rhs);
     }
 
-    public BoolExpr mkEq(Expr lhs, Expr rhs) {
+    public BoolExpr mkEq(Expr<?> lhs, Expr<?> rhs) {
         return rawContext.mkEq(lhs, rhs);
     }
 
@@ -219,8 +233,8 @@ public abstract class Z3ContextWrapper {
         return rawContext.mkBool(b);
     }
 
-    public abstract FuncDecl mkFuncDecl(String s, Sort[] sorts, Sort sort);
-    public abstract FuncDecl mkFreshFuncDecl(String s, Sort[] sorts, Sort sort);
+    public abstract <R extends Sort> FuncDecl<R> mkFuncDecl(String s, Sort[] sorts, R sort);
+    public abstract <R extends Sort> FuncDecl<R> mkFreshFuncDecl(String s, Sort[] sorts, R sort);
 
     public Sort getSortForValue(Object value) {
         if (value instanceof Integer || value instanceof Long) {
@@ -235,8 +249,6 @@ public abstract class Z3ContextWrapper {
             return getDateSort();
         } else if (value instanceof Timestamp) {
             return getTimestampSort();
-        } else if (value instanceof Expr) {
-            return ((Expr) value).getSort();
         } else if (value == null) {
             throw new UnsupportedOperationException("null value unhandled");
         } else {

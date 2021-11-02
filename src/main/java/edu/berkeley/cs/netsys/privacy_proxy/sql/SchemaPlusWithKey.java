@@ -12,6 +12,7 @@ import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.ForeignKeyDependency;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -86,6 +87,10 @@ public class SchemaPlusWithKey {
             Table table = Objects.requireNonNull(schema.getTable(t));
             return table.getRowType(SQL_TYPE_FACTORY);
         });
+    }
+
+    public List<String> getRelationNames() {
+        return schema.getTableNames().stream().map(String::toUpperCase).collect(Collectors.toList());
     }
 
     public Stream<String> getColumnNames(String tableName) {

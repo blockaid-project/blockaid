@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.microsoft.z3.BoolSort;
 import com.microsoft.z3.FuncDecl;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
@@ -8,15 +9,15 @@ import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public class Instance {
+public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     private final String name;
-    private final Schema schema;
+    private final Schema<C> schema;
     final boolean isConcrete;
     // TODO(zhangwen): make these immutable.
-    private final Map<String, Relation> name2Rel;
-    private final Map<FuncDecl, String> funcDecl2RelName;
+    private final Map<String, Relation<C>> name2Rel;
+    private final Map<FuncDecl<BoolSort>, String> funcDecl2RelName;
 
-    Instance(String name, Schema schema, boolean isConcrete) {
+    Instance(String name, Schema<C> schema, boolean isConcrete) {
         this.name = name;
         this.schema = checkNotNull(schema);
         this.isConcrete = isConcrete;
@@ -24,7 +25,7 @@ public class Instance {
         this.funcDecl2RelName = new HashMap<>();
     }
 
-    public void put(String relName, Relation rel) {
+    public void put(String relName, Relation<C> rel) {
         if (rel instanceof GeneralRelation genRel) {
             RelationFunction f = genRel.getFunction();
             if (f instanceof Z3Function z3f) {
@@ -34,15 +35,15 @@ public class Instance {
         name2Rel.put(relName, rel);
     }
 
-    public Relation get(String relName) {
+    public Relation<C> get(String relName) {
         return name2Rel.get(relName);
     }
 
-    String getRelNameFromFuncDecl(FuncDecl fd) {
+    String getRelNameFromFuncDecl(FuncDecl<BoolSort> fd) {
         return funcDecl2RelName.get(fd);
     }
 
-    public Schema getSchema() {
+    public Schema<C> getSchema() {
         return schema;
     }
 
@@ -50,7 +51,7 @@ public class Instance {
         return name;
     }
 
-    public Z3ContextWrapper getContext() {
+    public C getContext() {
         return schema.getContext();
     }
 }

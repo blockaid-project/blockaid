@@ -11,7 +11,7 @@ import java.util.*;
  * Assumes that mkSolver is only called after the formula is generated (otherwise,
  * some values may be missing).
  */
-class Z3CustomSortsContext extends Z3ContextWrapper{
+class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> {
     private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
 
@@ -22,12 +22,12 @@ class Z3CustomSortsContext extends Z3ContextWrapper{
     }
 
     @Override
-    public boolean areDistinctConstants(Expr lhs, Expr rhs) {
+    public boolean areDistinctConstants(Expr<?> lhs, Expr<?> rhs) {
         Optional<Object> lhsV = customSorts.getValueForExpr(lhs), rhsV = customSorts.getValueForExpr(rhs);
         return lhsV.isPresent() && rhsV.isPresent() && !lhsV.get().equals(rhsV.get());
     }
 
-    private <T extends Expr> T trackConst(T c) {
+    private <S extends Sort, T extends Expr<S>> T trackConst(T c) {
         for (BaseTrackedDecls decls : trackedDeclStack) {
             if (decls.containsConst(c)) {
                 return c;
@@ -37,7 +37,7 @@ class Z3CustomSortsContext extends Z3ContextWrapper{
         return c;
     }
 
-    private FuncDecl trackFuncDecl(FuncDecl f) {
+    private <R extends Sort> FuncDecl<R> trackFuncDecl(FuncDecl<R> f) {
         for (BaseTrackedDecls decls : trackedDeclStack) {
             if (decls.containsFuncDecl(f)) {
                 return f;
@@ -53,18 +53,18 @@ class Z3CustomSortsContext extends Z3ContextWrapper{
     }
 
     @Override
-    public Expr mkConst(String s, Sort sort) {
+    public <S extends Sort> Expr<S> mkConst(String s, S sort) {
         return trackConst(rawContext.mkConst(s, sort));
     }
 
     @Override
-    public Expr mkFreshConst(String s, Sort sort) {
+    public <S extends Sort> Expr<S> mkFreshConst(String s, S sort) {
         return trackConst(rawContext.mkFreshConst(s, sort));
     }
 
     // Not tracked.
     @Override
-    public Expr mkFreshQuantifiedConst(String s, Sort sort) {
+    public <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort) {
         return rawContext.mkFreshConst(s, sort);
     }
 
@@ -112,77 +112,77 @@ class Z3CustomSortsContext extends Z3ContextWrapper{
     }
 
     @Override
-    public Sort getDateSort() {
+    public UninterpretedSort getDateSort() {
         return customSorts.dateSort;
     }
 
     @Override
-    public Expr mkDate(Date date) {
+    public Expr<UninterpretedSort> mkDate(Date date) {
         return trackConst(customSorts.getDate(date));
     }
 
     @Override
-    public Sort getTimestampSort() {
+    public UninterpretedSort getTimestampSort() {
         return customSorts.tsSort;
     }
 
     @Override
-    public Expr mkTimestamp(Timestamp ts) {
+    public Expr<UninterpretedSort> mkTimestamp(Timestamp ts) {
         return trackConst(customSorts.getTimestamp(ts));
     }
 
     @Override
-    public Sort getCustomIntSort() {
+    public UninterpretedSort getCustomIntSort() {
         return customSorts.intSort;
     }
 
     @Override
-    public Expr mkCustomInt(long value) {
+    public Expr<UninterpretedSort> mkCustomInt(long value) {
         return trackConst(customSorts.getInt(value));
     }
 
     @Override
-    public BoolExpr mkCustomIntLt(Expr left, Expr right) {
+    public BoolExpr mkCustomIntLt(Expr<?> left, Expr<?> right) {
         return (BoolExpr) customSorts.intLt.apply(left, right);
     }
 
     @Override
-    public Sort getCustomRealSort() {
+    public UninterpretedSort getCustomRealSort() {
         return customSorts.realSort;
     }
 
     @Override
-    public Expr mkCustomReal(double value) {
+    public Expr<UninterpretedSort> mkCustomReal(double value) {
         return trackConst(customSorts.getReal(value));
     }
 
     @Override
-    public Sort getCustomStringSort() {
+    public UninterpretedSort getCustomStringSort() {
         return customSorts.stringSort;
     }
 
     @Override
-    public Sort getCustomBoolSort() {
+    public UninterpretedSort getCustomBoolSort() {
         return customSorts.boolSort;
     }
 
     @Override
-    public Expr mkCustomString(String value) {
+    public Expr<UninterpretedSort> mkCustomString(String value) {
         return trackConst(customSorts.getString(value));
     }
 
     @Override
-    public Expr mkCustomBool(boolean value) {
+    public Expr<UninterpretedSort> mkCustomBool(boolean value) {
         return trackConst(customSorts.getBool(value));
     }
 
     @Override
-    public FuncDecl mkFuncDecl(String s, Sort[] sorts, Sort sort) {
+    public <R extends Sort> FuncDecl<R> mkFuncDecl(String s, Sort[] sorts, R sort) {
         return trackFuncDecl(rawContext.mkFuncDecl(s, sorts, sort));
     }
 
     @Override
-    public FuncDecl mkFreshFuncDecl(String s, Sort[] sorts, Sort sort) {
+    public <R extends Sort> FuncDecl<R> mkFreshFuncDecl(String s, Sort[] sorts, R sort) {
         return trackFuncDecl(rawContext.mkFreshFuncDecl(s, sorts, sort));
     }
 }

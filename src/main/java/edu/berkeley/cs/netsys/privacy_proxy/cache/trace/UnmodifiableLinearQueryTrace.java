@@ -1,7 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.cache.trace;
 
 import com.google.common.collect.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuerySelect;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
@@ -64,10 +63,9 @@ public abstract class UnmodifiableLinearQueryTrace {
         return new SubQueryTrace(newQueryList, getConstMap(), newCurrQuery, backMap);
     }
 
-    public ListMultimap<String, Map<String, Object>> computeKnownRows(Schema schema) {
-        SchemaPlusWithKey rawSchema = schema.getRawSchema();
+    public ListMultimap<String, Map<String, Object>> computeKnownRows(SchemaPlusWithKey rawSchema) {
         Map<String, String> tableName2PkName = new HashMap<>();
-        for (String tableName : schema.getRelationNames()) {
+        for (String tableName : rawSchema.getRelationNames()) {
             Optional<ImmutableList<String>> oPkColumns = rawSchema.getPrimaryKeyColumns(tableName);
             if (oPkColumns.isEmpty()) {
                 continue;

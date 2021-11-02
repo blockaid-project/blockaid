@@ -21,15 +21,15 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public class Schema {
-    private final Z3ContextWrapper context;
+public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
+    private final C context;
     private final SchemaPlusWithKey rawSchema;
     private final ImmutableMap<String, ImmutableList<Column>> relations;
     private final List<Dependency> dependencies;
 
-    private final LoadingCache<ImmutableList<Policy>, ImmutableList<Query>> policyQueries;
+    private final LoadingCache<ImmutableList<Policy>, ImmutableList<Query<C>>> policyQueries;
 
-    public Schema(Z3ContextWrapper context, SchemaPlusWithKey rawSchema, List<Dependency> dependencies) {
+    public Schema(C context, SchemaPlusWithKey rawSchema, List<Dependency> dependencies) {
         this.context = checkNotNull(context);
         this.rawSchema = checkNotNull(rawSchema);
         this.dependencies = checkNotNull(dependencies);
@@ -50,7 +50,7 @@ public class Schema {
         this.policyQueries = CacheBuilder.newBuilder().maximumSize(1).build(
                 new CacheLoader<>() {
                     @Override
-                    public ImmutableList<Query> load(ImmutableList<Policy> policies) {
+                    public ImmutableList<Query<C>> load(ImmutableList<Policy> policies) {
                         return policies.stream().map(p -> p.getSolverQuery(Schema.this))
                                 .collect(ImmutableList.toImmutableList());
                     }
@@ -58,11 +58,11 @@ public class Schema {
         );
     }
 
-    public ImmutableList<Query> getPolicyQueries(ImmutableList<Policy> policies) {
+    public ImmutableList<Query<C>> getPolicyQueries(ImmutableList<Policy> policies) {
         return policyQueries.getUnchecked(policies);
     }
 
-    private static Sort getSortFromSqlType(Z3ContextWrapper context, RelDataType type) {
+    private static Sort getSortFromSqlType(Z3ContextWrapper<?, ?, ?, ?> context, RelDataType type) {
         RelDataTypeFamily family = type.getFamily();
         if (family == SqlTypeFamily.NUMERIC) {
             // TODO(zhangwen): treating decimal also as int.
@@ -93,7 +93,7 @@ public class Schema {
         throw new IllegalArgumentException("unrecognized family: " + family);
     }
 
-    public Z3ContextWrapper getContext() {
+    public C getContext() {
         return context;
     }
 
@@ -101,17 +101,16 @@ public class Schema {
         return dependencies;
     }
 
-    public Instance makeFreshInstance(String instancePrefix) {
-        Instance instance = new Instance(instancePrefix, this, false);
-        Map<Dependency, Iterable<BoolExpr>> constraints = new HashMap<>();
+    public Instance<C> makeFreshInstance(String instancePrefix) {
+        Instance<C> instance = new Instance<>(instancePrefix, this, false);
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
 
-            Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
-            FuncDecl func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName, colTypes,
+            Sort[] colTypes = columns.stream().map(Column::type).toArray(Sort[]::new);
+            FuncDecl<BoolSort> func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName, colTypes,
                     context.getBoolSort());
-            instance.put(relationName, new GeneralRelation(this, new Z3Function(func), colTypes));
+            instance.put(relationName, new GeneralRelation<>(this, new Z3Function(func), colTypes));
         }
         return instance;
     }
@@ -124,17 +123,17 @@ public class Schema {
      *                        a map from column name to value.
      * @return a concrete instance.
      */
-    public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds,
+    public Instance<C> makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds,
                                          ListMultimap<String, Map<String, Object>> table2KnownRows) {
-        Instance instance = new Instance(instancePrefix, this, true);
+        Instance<C> instance = new Instance<>(instancePrefix, this, true);
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
-            Sort[] colTypes = columns.stream().map(column -> column.type).toArray(Sort[]::new);
+            Sort[] colTypes = columns.stream().map(Column::type).toArray(Sort[]::new);
 
             int numTuples = bounds.get(relationName);
-            Tuple[] tuples = new Tuple[numTuples];
-            BoolExpr[] exists = new BoolExpr[numTuples];
+            ArrayList<Tuple<C>> tuples = new ArrayList<>();
+            ArrayList<BoolExpr> exists = new ArrayList<>();
             String prefix = instancePrefix + "_" + relationName;
 
             List<Map<String, Object>> knownRows =
@@ -146,41 +145,41 @@ public class Schema {
             int i = 0;
 //            System.out.println("***\t" + relationName);
             for (Map<String, Object> knownRow : knownRows) {
-                List<Expr> values = new ArrayList<>();
+                List<Expr<?>> values = new ArrayList<>();
                 for (Column col : columns) {
-                    Object knownValue = knownRow.get(col.name);
+                    Object knownValue = knownRow.get(col.name());
                     if (knownValue != null) {
                         // TODO(zhangwen): This ignores a known NULL value, which is safe to do; fix?
                         values.add(context.getExprForValue(knownValue));
                     } else {
-                        values.add(context.mkConst(prefix + "_" + i + "_" + col.name, col.type));
+                        values.add(context.mkConst(prefix + "_" + i + "_" + col.name(), col.type()));
                     }
                 }
-                tuples[i] = new Tuple(this, values.stream());
+                tuples.add(new Tuple<>(this, values.stream()));
 //                System.out.println("***\t" + tuples[i]);
-                exists[i] = context.mkTrue(); // A tuple with a known PK value must exist.
+                exists.add(context.mkTrue()); // A tuple with a known PK value must exist.
                 i += 1;
             }
 
             for (; i < numTuples; ++i) {
-                List<Expr> values = new ArrayList<>();
+                List<Expr<?>> values = new ArrayList<>();
                 for (Column col : columns) {
-                    values.add(context.mkConst(prefix + "_" + i + "_" + col.name, col.type));
+                    values.add(context.mkConst(prefix + "_" + i + "_" + col.name(), col.type()));
                 }
-                tuples[i] = new Tuple(this, values.stream());
-                exists[i] = context.mkBoolConst(prefix + "_" + i + "_exists");
+                tuples.add(new Tuple<>(this, values));
+                exists.add(context.mkBoolConst(prefix + "_" + i + "_exists"));
             }
-            instance.put(relationName, new ConcreteRelation(this, colTypes, tuples, exists));
+            instance.put(relationName, new ConcreteRelation<>(this, colTypes, tuples, exists));
         }
         return instance;
     }
 
-    public Instance makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
+    public Instance<C> makeConcreteInstance(String instancePrefix, Map<String, Integer> bounds) {
         return makeConcreteInstance(instancePrefix, bounds, null);
     }
 
     public List<String> getRelationNames() {
-        return relations.keySet().stream().map(String::toUpperCase).collect(Collectors.toList());
+        return rawSchema.getRelationNames();
     }
 
     public List<Column> getColumns(String relationName) {
@@ -191,18 +190,18 @@ public class Schema {
     public List<String> getColumnNames(String relationName) {
         return columnNamesCache.computeIfAbsent(
                 relationName,
-                k -> relations.get(k).stream().map(c -> c.name).collect(Collectors.toList())
+                k -> relations.get(k).stream().map(Column::name).collect(Collectors.toList())
         );
     }
 
-    public Tuple makeFreshQuantifiedTuple(String relationName) {
+    public Tuple<C> makeFreshQuantifiedTuple(String relationName) {
         return makeFreshQuantifiedTuple(relationName, "e");
     }
 
-    public Tuple makeFreshQuantifiedTuple(String relationName, String prefix) {
+    public Tuple<C> makeFreshQuantifiedTuple(String relationName, String prefix) {
         List<Column> columns = relations.get(relationName.toUpperCase());
-        return new Tuple(this, columns.stream()
-                .map(column -> context.mkFreshQuantifiedConst(prefix, column.type)));
+        return new Tuple<>(this, columns.stream()
+                .map(column -> context.mkFreshQuantifiedConst(prefix, column.type())));
     }
 
     public SchemaPlusWithKey getRawSchema() {

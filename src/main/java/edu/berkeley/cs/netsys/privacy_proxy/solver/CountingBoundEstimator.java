@@ -3,7 +3,9 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
+import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -12,15 +14,16 @@ import java.util.stream.IntStream;
 import static com.google.common.base.Preconditions.checkState;
 
 // Single-use only.
-public class CountingBoundEstimator extends BoundEstimator {
-    private Schema schema = null;
+public class CountingBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> extends BoundEstimator<C> {
+    private SchemaPlusWithKey rawSchema = null;
     private SetMultimap<String, Object> colName2Values = null;
 
     @Override
-    public Map<String, Integer> calculateBounds(Schema schema, UnmodifiableLinearQueryTrace trace) {
+    public Map<String, Integer> calculateBounds(Schema<C> schema, UnmodifiableLinearQueryTrace trace) {
         // TODO(zhangwen): this is ugly.
         checkState(this.colName2Values == null,
                 "a CountingBoundEstimator object can only `calculateBounds` once");
+        this.rawSchema = schema.getRawSchema();
 
         HashMultimap<String, Object> colName2Values = HashMultimap.create();
         for (QueryTraceEntry e : trace.getAllEntries()) {
@@ -50,7 +53,7 @@ public class CountingBoundEstimator extends BoundEstimator {
         }
 
         HashMap<String, Integer> bounds = new HashMap<>();
-        for (String relationName : schema.getRelationNames()) {
+        for (String relationName : rawSchema.getRelationNames()) {
             bounds.put(relationName, 0);
         }
 
@@ -63,18 +66,17 @@ public class CountingBoundEstimator extends BoundEstimator {
             }
         }
 
-        this.schema = schema;
         this.colName2Values = colName2Values;
         return bounds;
     }
 
     public ImmutableSetMultimap<String, Object> getPkValues() {
-        checkState(this.schema != null);
+        checkState(this.rawSchema != null);
         checkState(this.colName2Values != null);
 
         ImmutableSetMultimap.Builder<String, Object> builder = new ImmutableSetMultimap.Builder<>();
-        for (String relationName : schema.getRelationNames()) {
-            Optional<ImmutableList<String>> oPkColumnNames = schema.getRawSchema().getPrimaryKeyColumns(relationName);
+        for (String relationName : rawSchema.getRelationNames()) {
+            Optional<ImmutableList<String>> oPkColumnNames = rawSchema.getPrimaryKeyColumns(relationName);
             if (oPkColumnNames.isEmpty()) {
                 continue;
             }

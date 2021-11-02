@@ -84,7 +84,7 @@ public class DecisionTemplate {
             int ecIdx = e.getValue();
             Object constValue = constMap.get(constName);
 
-            if (!ec2Value.ensureMapping(ecIdx, Tuple.normalizeValue(constValue))) {
+            if (!ec2Value.ensureMapping(ecIdx, constValue)) {
                 return false;
             }
         }
@@ -283,14 +283,14 @@ public class DecisionTemplate {
         private static boolean matchHelper(List<Object> target, Map<Integer, Object> idx2Value,
                                     Map<Integer, Integer> idx2EC, PushPopMap<Integer, Object> ec2Value) {
             for (Map.Entry<Integer, Object> e : idx2Value.entrySet()) {
-                Object normalizedTarget = Tuple.normalizeValue(target.get(e.getKey()));
+                Object normalizedTarget = target.get(e.getKey());
                 if (!e.getValue().equals(normalizedTarget)) {
                     return false;
                 }
             }
             for (Map.Entry<Integer, Integer> e : idx2EC.entrySet()) {
                 int idx = e.getKey(), ecIdx = e.getValue();
-                if (!ec2Value.ensureMapping(ecIdx, Tuple.normalizeValue(target.get(idx)))) {
+                if (!ec2Value.ensureMapping(ecIdx, target.get(idx))) {
                     return false;
                 }
             }

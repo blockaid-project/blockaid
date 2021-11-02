@@ -1,12 +1,9 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
 import com.google.common.collect.*;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Expr;
-import com.microsoft.z3.Solver;
-import com.microsoft.z3.Status;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.*;
@@ -16,13 +13,13 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkState;
 
-public class UnsatCoreFormulaBuilder {
-    private final DeterminacyFormula baseFormula;
+public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>> {
+    private final DeterminacyFormula<C> baseFormula;
     private final ImmutableSet<String> relevantAttributes;
 
     // Shorthands.
-    private final Schema schema;
-    private final Z3ContextWrapper context;
+    private final Schema<C> schema;
+    private final C context;
 
     public enum Option {
         NORMAL,
@@ -30,7 +27,7 @@ public class UnsatCoreFormulaBuilder {
         POSITIVE // preamble ==> forall tuple in Q, tuple is in Q'
     }
 
-    public UnsatCoreFormulaBuilder(DeterminacyFormula baseFormula, Collection<Policy> policies) {
+    public UnsatCoreFormulaBuilder(DeterminacyFormula<C> baseFormula, Collection<Policy> policies) {
         this.baseFormula = baseFormula;
         this.schema = baseFormula.schema;
         this.context = baseFormula.context;
@@ -82,7 +79,7 @@ public class UnsatCoreFormulaBuilder {
         if (option != Option.NO_PREAMBLE) {
             antecedent.addAll(baseFormula.preamble);
         }
-        Query query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
+        Query<C> query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
         Iterable<BoolExpr> negatedConsequence = baseFormula.generateNotContains(query);
 
         // Since we're param labels-only, add returned-row labels to background and exclude them from `labeledExprs`.
@@ -130,12 +127,12 @@ public class UnsatCoreFormulaBuilder {
             if (!qte.hasTuples()) {
                 continue;
             }
-            Query query = qte.getQuery().getSolverQuery(schema);
-            Relation r1 = query.apply(baseFormula.inst1);
-            List<Tuple> tuples = DeterminacyFormula.getTupleObjects(qte, schema);
+            Query<C> query = qte.getQuery().getSolverQuery(schema);
+            Relation<C> r1 = query.apply(baseFormula.inst1);
+            List<Tuple<C>> tuples = DeterminacyFormula.getTupleObjects(qte, schema);
 
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
-                Tuple tuple = tuples.get(rowIdx);
+                Tuple<C> tuple = tuples.get(rowIdx);
                 ReturnedRowLabel l = new ReturnedRowLabel(queryIdx, rowIdx);
                 label2Expr.put(l, context.mkAnd(r1.doesContainExpr(tuple)));
             }
@@ -143,29 +140,20 @@ public class UnsatCoreFormulaBuilder {
         return label2Expr.build();
     }
 
-    // Normalize the values.  For example, we treat false and 0 as the same.
-    private ListMultimap<Object, Expr> makeNormalizedECs(Multimap<Object, Expr> ecs) {
-        ListMultimap<Object, Expr> normalized = ArrayListMultimap.create();
-        for (Object v : ecs.keySet()) {
-            normalized.putAll(Tuple.normalizeValue(v), ecs.get(v));
-        }
-        return normalized;
-    }
-
     private Map<Label, BoolExpr> makeLabeledExprsAll(UnmodifiableLinearQueryTrace trace) {
         QueryTraceEntry lastEntry = trace.getCurrentQuery();
-        ListMultimap<Object, Expr> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
+        ListMultimap<Object, Expr<?>> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
 
-        Map<Expr, Operand> expr2Operand = new HashMap<>();
+        Map<Expr<?>, Operand> expr2Operand = new HashMap<>();
         Map<Label, BoolExpr> label2Expr = new HashMap<>();
 
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
-        Set<Expr> pkValuedExprs = new HashSet<>();
+        Set<Expr<?>> pkValuedExprs = new HashSet<>();
         for (int queryIdx = 0; queryIdx < allEntries.size(); ++queryIdx) {
             QueryTraceEntry e = allEntries.get(queryIdx);
             boolean isCurrentQuery = e == lastEntry;
             String qPrefix = (isCurrentQuery? "cq" : ("q" + queryIdx));
-            Query q = e.getQuery().getSolverQuery(schema, qPrefix, 0);
+            Query<C> q = e.getQuery().getSolverQuery(schema, qPrefix, 0);
 
             if (!e.hasTuples() && !isCurrentQuery) {
                 // Discard this query -- it has no returned rows, and it is not the query being checked.
@@ -175,7 +163,7 @@ public class UnsatCoreFormulaBuilder {
             List<Object> paramValues = e.getQuery().parameters;
             int numParams = paramValues.size();
             for (int paramIdx = 0; paramIdx < numParams; ++paramIdx) {
-                Expr paramExpr = context.mkConst(
+                Expr<?> paramExpr = context.mkConst(
                         // TODO(zhangwen): this naming scheme has to match that in `ParsedPSJ`, which is error-prone.
                         "!" + qPrefix + "!" + paramIdx,
                         context.getSortForValue(paramValues.get(paramIdx)));
@@ -189,7 +177,7 @@ public class UnsatCoreFormulaBuilder {
                 continue;
             }
 
-            Relation r1 = q.apply(baseFormula.inst1);
+            Relation<C> r1 = q.apply(baseFormula.inst1);
             List<List<Object>> rows = e.getTuples();
 
             ImmutableSet<String> pkValuedColumns = schema.getRawSchema().getPkValuedColumns();
@@ -198,7 +186,7 @@ public class UnsatCoreFormulaBuilder {
                 List<Object> tuple = rows.get(rowIdx);
                 String tupPrefix = "!" + qPrefix + "_tup" + rowIdx;
 
-                Tuple head = q.makeHead(colIdx -> tupPrefix + "_col" + colIdx);
+                Tuple<C> head = q.makeHead(colIdx -> tupPrefix + "_col" + colIdx);
                 for (int attrIdx = 0; attrIdx < tuple.size(); ++attrIdx) {
                     Object v = tuple.get(attrIdx);
                     if (v == null) {
@@ -209,7 +197,7 @@ public class UnsatCoreFormulaBuilder {
                     if (attrNames.stream().noneMatch(relevantAttributes::contains)) {
                         continue;
                     }
-                    Expr attrExpr = head.get(attrIdx);
+                    Expr<?> attrExpr = head.get(attrIdx);
                     checkState(!expr2Operand.containsKey(attrExpr));
                     checkState(!isCurrentQuery);
                     expr2Operand.put(attrExpr, new ReturnedRowFieldOperand(queryIdx, rowIdx, attrIdx));
@@ -230,13 +218,10 @@ public class UnsatCoreFormulaBuilder {
             // TODO(zhangwen): should put const naming scheme in one place.
             String name = e.getKey();
             Object value = e.getValue();
-            Expr constExpr = context.mkConst("!" + name, context.getSortForValue(value));
+            Expr<?> constExpr = context.mkConst("!" + name, context.getSortForValue(value));
             expr2Operand.put(constExpr, new ContextConstantOperand(name));
             ecs.put(value, constExpr);
         }
-
-        // `ecs` has been fully constructed.
-        ecs = makeNormalizedECs(ecs);
 
         long startTime = System.currentTimeMillis();
         removeRedundantExprs(
@@ -253,14 +238,14 @@ public class UnsatCoreFormulaBuilder {
 //        }
 
         for (Object value : ecs.keySet()) {
-            List<Expr> variables = ecs.get(value);
+            List<Expr<?>> variables = ecs.get(value);
 
             // Generate equalities of the form: variable = value.
-            Expr vExpr = context.getExprForValue(value);
+            Expr<?> vExpr = context.getExprForValue(value);
             if (vExpr != null) {
                 // TODO(zhangwen): we currently ignore NULL values, i.e., assuming NULLs are irrelevant for compliance.
                 ValueOperand rhs = new ValueOperand(value);
-                for (Expr p : variables) {
+                for (Expr<?> p : variables) {
                     if (pkValuedExprs.contains(p)) {
                         // Optimization based on assumption: the primary key value doesn't matter.
                         continue;
@@ -274,10 +259,10 @@ public class UnsatCoreFormulaBuilder {
 
             // Generate equalities of the form: variable1 = variable2.
             for (int i = 0; i < variables.size(); ++i) {
-                Expr p1 = variables.get(i);
+                Expr<?> p1 = variables.get(i);
                 Operand lhs = expr2Operand.get(p1);
                 for (int j = i + 1; j < variables.size(); ++j) {
-                    Expr p2 = variables.get(j);
+                    Expr<?> p2 = variables.get(j);
                     Operand rhs = expr2Operand.get(p2);
                     label2Expr.put(new EqualityLabel(lhs, rhs), context.mkEq(p1, p2));
                 }
@@ -291,19 +276,19 @@ public class UnsatCoreFormulaBuilder {
                 }
 
                 ValueOperand vo1 = new ValueOperand(value1), vo2 = new ValueOperand(value2);
-                Expr vExpr1 = context.getExprForValue(value1), vExpr2 = context.getExprForValue(value2);
-                for (Expr p1 : ecs.get(value1)) {
+                Expr<?> vExpr1 = context.getExprForValue(value1), vExpr2 = context.getExprForValue(value2);
+                for (Expr<?> p1 : ecs.get(value1)) {
                     Operand o1 = expr2Operand.get(p1);
                     label2Expr.put(new LessThanLabel(o1, vo2), context.mkCustomIntLt(p1, vExpr2));
                 }
-                for (Expr p2 : ecs.get(value2)) {
+                for (Expr<?> p2 : ecs.get(value2)) {
                     Operand o2 = expr2Operand.get(p2);
                     label2Expr.put(new LessThanLabel(vo1, o2), context.mkCustomIntLt(vExpr1, p2));
                 }
 
-                for (Expr p1 : ecs.get(value1)) {
+                for (Expr<?> p1 : ecs.get(value1)) {
                     Operand lhs = expr2Operand.get(p1);
-                    for (Expr p2 : ecs.get(value2)) {
+                    for (Expr<?> p2 : ecs.get(value2)) {
                         Operand rhs = expr2Operand.get(p2);
                         label2Expr.put(new LessThanLabel(lhs, rhs), context.mkCustomIntLt(p1, p2));
                     }
@@ -316,17 +301,17 @@ public class UnsatCoreFormulaBuilder {
 
     // Optimization: For two operands that are always equal, remove one of them (from `ecs` & `expr2Operand`);
     // if one operand is a pk-valued expr, and add the other to `pkValuedExprs`.
-    private void removeRedundantExprs(Multimap<Object, Expr> ecs,
-                                      Map<Expr, Operand> expr2Operand,
-                                      Set<Expr> pkValuedExprs,
+    private void removeRedundantExprs(Multimap<Object, Expr<?>> ecs,
+                                      Map<Expr<?>, Operand> expr2Operand,
+                                      Set<Expr<?>> pkValuedExprs,
                                       Collection<BoolExpr> returnedRowExprs) {
         Solver solver = context.mkQfSolver();
         solver.add(returnedRowExprs.toArray(new BoolExpr[0]));
 
         for (Object v : ecs.keySet()) {
-            HashSet<Expr> redundantExprs = new HashSet<>();
-            Collection<Expr> variables = ecs.get(v);
-            for (Expr p1 : variables) {
+            HashSet<Expr<?>> redundantExprs = new HashSet<>();
+            Collection<Expr<?>> variables = ecs.get(v);
+            for (Expr<?> p1 : variables) {
                 Operand o1 = expr2Operand.get(p1);
                 // Only look at labels of the form "query param = returned row attribute".
                 if (o1.getKind() != Operand.Kind.QUERY_PARAM) {
@@ -337,7 +322,7 @@ public class UnsatCoreFormulaBuilder {
                     continue;
                 }
 
-                for (Expr p2 : variables) {
+                for (Expr<?> p2 : variables) {
                     Operand o2 = expr2Operand.get(p2);
                     if (o2.getKind() != Operand.Kind.RETURNED_ROW_ATTR) {
                         continue;

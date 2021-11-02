@@ -1,6 +1,9 @@
 package edu.berkeley.cs.netsys.privacy_proxy.sql;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.microsoft.z3.Sort;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import org.apache.calcite.sql.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Query;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Schema;
@@ -85,18 +88,18 @@ public class PrivacyQueryUnion extends PrivacyQuery {
     }
 
     @Override
-    public Query getSolverQuery(Schema schema) {
-        return new UnionQuery(queries.stream().map(q -> q.getSolverQuery(schema)).toArray(Query[]::new));
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema) {
+        return new UnionQuery<>(queries.stream().map(q -> q.getSolverQuery(schema)).collect(ImmutableList.toImmutableList()));
     }
 
     @Override
-    public Query getSolverQuery(Schema schema, String paramPrefix, int offset) {
-        Query[] q = new Query[queries.size()];
-        for (int i = 0; i < queries.size(); ++i) {
-            q[i] = queries.get(i).getSolverQuery(schema, paramPrefix, offset);
-            offset += queries.get(i).parameters.size();
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema, String paramPrefix, int offset) {
+        ArrayList<Query<C>> qs = new ArrayList<>();
+        for (PrivacyQuery pq : queries) {
+            qs.add(pq.getSolverQuery(schema, paramPrefix, offset));
+            offset += pq.parameters.size();
         }
-        return new UnionQuery(q);
+        return new UnionQuery<>(qs);
     }
 
     @Override

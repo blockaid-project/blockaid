@@ -10,7 +10,7 @@ import java.util.HashMap;
 /**
  * Uses integer and bool sorts.  Doesn't track constants.
  */
-class Z3TheoryContext extends Z3ContextWrapper{
+class Z3TheoryContext extends Z3ContextWrapper<IntSort, IntSort, IntSort, BoolSort> {
     // We represent strings using int expressions, so track the mapping.
     private final ArrayList<HashMap<String, IntNum>> strToIntNum;
 
@@ -20,7 +20,7 @@ class Z3TheoryContext extends Z3ContextWrapper{
     }
 
     @Override
-    public boolean areDistinctConstants(Expr lhs, Expr rhs) {
+    public boolean areDistinctConstants(Expr<?> lhs, Expr<?> rhs) {
         if (!(lhs instanceof IntNum lhsNum) || !(rhs instanceof IntNum rhsNum)) {
             return false;
         }
@@ -33,18 +33,18 @@ class Z3TheoryContext extends Z3ContextWrapper{
     }
 
     @Override
-    public Expr mkConst(String s, Sort sort) {
+    public <S extends Sort> Expr<S> mkConst(String s, S sort) {
         return rawContext.mkConst(s, sort);
     }
 
     @Override
-    public Expr mkFreshConst(String s, Sort sort) {
+    public <S extends Sort> Expr<S> mkFreshConst(String s, S sort) {
         return rawContext.mkFreshConst(s, sort);
     }
 
     // Not tracked.
     @Override
-    public Expr mkFreshQuantifiedConst(String s, Sort sort) {
+    public <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort) {
         return rawContext.mkFreshConst(s, sort);
     }
 
@@ -90,22 +90,22 @@ class Z3TheoryContext extends Z3ContextWrapper{
     }
 
     @Override
-    public Sort getDateSort() {
+    public IntSort getDateSort() {
         return rawContext.getIntSort();
     }
 
     @Override
-    public Expr mkDate(Date date) {
+    public Expr<IntSort> mkDate(Date date) {
         return rawContext.mkInt(date.getTime());
     }
 
     @Override
-    public Sort getTimestampSort() {
+    public IntSort getTimestampSort() {
         return rawContext.getIntSort();
     }
 
     @Override
-    public Expr mkTimestamp(Timestamp ts) {
+    public Expr<IntSort> mkTimestamp(Timestamp ts) {
         return rawContext.mkInt(
                 // Number of nanoseconds since epoch.
                 ts.getTime() * 1000000 + ts.getNanos() % 1000000
@@ -113,42 +113,42 @@ class Z3TheoryContext extends Z3ContextWrapper{
     }
 
     @Override
-    public Sort getCustomIntSort() {
+    public IntSort getCustomIntSort() {
         return rawContext.getIntSort();
     }
 
     @Override
-    public Expr mkCustomInt(long value) {
+    public Expr<IntSort> mkCustomInt(long value) {
         return rawContext.mkInt(value);
     }
 
     @Override
-    public BoolExpr mkCustomIntLt(Expr left, Expr right) {
-        return rawContext.mkLt((ArithExpr) left, (ArithExpr) right);
+    public BoolExpr mkCustomIntLt(Expr<?> left, Expr<?> right) {
+        return rawContext.mkLt((IntExpr) left, (IntExpr) right);
     }
 
     @Override
-    public Sort getCustomRealSort() {
+    public IntSort getCustomRealSort() {
         return rawContext.getIntSort();
     }
 
     @Override
-    public Expr mkCustomReal(double value) {
+    public Expr<IntSort> mkCustomReal(double value) {
         return rawContext.mkInt(Double.doubleToRawLongBits(value));
     }
 
     @Override
-    public Sort getCustomStringSort() {
+    public IntSort getCustomStringSort() {
         return rawContext.getIntSort();
     }
 
     @Override
-    public Sort getCustomBoolSort() {
+    public BoolSort getCustomBoolSort() {
         return rawContext.getBoolSort();
     }
 
     @Override
-    public Expr mkCustomString(String value) {
+    public Expr<IntSort> mkCustomString(String value) {
         int numStringsSoFar = 0;
         // Has this string been assigned an `IntNum` before?
         for (HashMap<String, IntNum> m : strToIntNum) {
@@ -167,17 +167,17 @@ class Z3TheoryContext extends Z3ContextWrapper{
     }
 
     @Override
-    public Expr mkCustomBool(boolean value) {
+    public BoolExpr mkCustomBool(boolean value) {
         return rawContext.mkBool(value);
     }
 
     @Override
-    public FuncDecl mkFuncDecl(String s, Sort[] sorts, Sort sort) {
+    public <R extends Sort> FuncDecl<R> mkFuncDecl(String s, Sort[] sorts, R sort) {
         return rawContext.mkFuncDecl(s, sorts, sort);
     }
 
     @Override
-    public FuncDecl mkFreshFuncDecl(String s, Sort[] sorts, Sort sort) {
+    public <R extends Sort> FuncDecl<R> mkFreshFuncDecl(String s, Sort[] sorts, R sort) {
         return rawContext.mkFreshFuncDecl(s, sorts, sort);
     }
 }

@@ -1,12 +1,12 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.*;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.*;
@@ -26,7 +26,7 @@ public class UniqueDependency implements Dependency {
     }
 
     @Override
-    public Iterable<BoolExpr> apply(Instance instance) {
+    public <C extends Z3ContextWrapper<?, ?, ?, ?>> Iterable<BoolExpr> apply(Instance<C> instance) {
         if (instance.isConcrete) {
             return applyConcrete(instance);
         } else {
@@ -50,13 +50,13 @@ public class UniqueDependency implements Dependency {
         return ImmutableSet.of();
     }
 
-    private Iterable<BoolExpr> applyGeneral(Instance instance) {
-        Z3ContextWrapper context = instance.getContext();
+    private <C extends Z3ContextWrapper<?, ?, ?, ?>> Iterable<BoolExpr> applyGeneral(Instance<C> instance) {
+        C context = instance.getContext();
 
-        Relation relation = instance.get(this.relationName);
-        Schema schema = instance.getSchema();
-        Tuple tup1 = schema.makeFreshQuantifiedTuple(relationName);
-        Tuple tup2 = schema.makeFreshQuantifiedTuple(relationName);
+        Relation<C> relation = instance.get(this.relationName);
+        Schema<C> schema = instance.getSchema();
+        Tuple<C> tup1 = schema.makeFreshQuantifiedTuple(relationName);
+        Tuple<C> tup2 = schema.makeFreshQuantifiedTuple(relationName);
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
         checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);
@@ -75,32 +75,31 @@ public class UniqueDependency implements Dependency {
                 context.mkAnd(relation.doesContainExpr(tup2)), agreeFormula);
         BoolExpr rhs = tup1.equalsExpr(tup2);
 
-        Expr[] allVars = Stream.concat(tup1.stream(), tup2.stream()).toArray(Expr[]::new);
+        List<Expr<?>> allVars = Stream.concat(tup1.stream(), tup2.stream()).collect(Collectors.toList());
         return List.of(context.myMkForall(allVars, context.mkImplies(lhs, rhs)));
     }
 
-    private Iterable<BoolExpr> applyConcrete(Instance instance) {
-        Z3ContextWrapper context = instance.getContext();
+    private <C extends Z3ContextWrapper<?, ?, ?, ?>> Iterable<BoolExpr> applyConcrete(Instance<C> instance) {
+        C context = instance.getContext();
 
-        ConcreteRelation relation = (ConcreteRelation) instance.get(this.relationName);
-        Schema schema = instance.getSchema();
+        ConcreteRelation<C> relation = (ConcreteRelation<C>) instance.get(this.relationName);
+        Schema<C> schema = instance.getSchema();
 
         List<String> allColumnNames = schema.getColumnNames(relationName);
         checkArgument(!columnNames.isEmpty(), "empty primary/unique key for relation %s", relationName);
 
-        Tuple[] tuples = relation.getTuples();
-        if (tuples.length == 0) {
+        ImmutableList<Tuple<C>> tuples = relation.getTuples();
+        if (tuples.isEmpty()) {
             return List.of();
         }
 
-        BoolExpr[] exists = relation.getExists();
-        Expr[][] syms = new Expr[columnNames.size()][]; // Maps (pk column index, tuple index) -> value at that column.
+        ImmutableList<BoolExpr> exists = relation.getExists();
+        Table<Integer, Integer, Expr<?>> syms = HashBasedTable.create(); // Maps (pk column index, tuple index) -> value at that column.
         int index = 0;
         for (int i = 0; i < allColumnNames.size(); ++i) {
             if (columnNames.contains(allColumnNames.get(i))) {
-                syms[index] = new Expr[tuples.length];
-                for (int j = 0; j < tuples.length; ++j) {
-                    syms[index][j] = tuples[j].get(i);
+                for (int j = 0; j < tuples.size(); ++j) {
+                    syms.put(index, j, tuples.get(j).get(i));
                 }
                 ++index;
             }
@@ -108,21 +107,21 @@ public class UniqueDependency implements Dependency {
         checkArgument(index == columnNames.size(), "some column(s) not found: %s.%s", relationName, columnNames);
 
         // Fast path: single-column integer primary key.
-        // Unclear whether tthis is actually faster, though.
-        if (columnNames.size() == 1 && syms[0][0].getSort().equals(context.getCustomIntSort())) {
-            return List.of(context.mkDistinct(syms[0]));
+        // Unclear whether this is actually faster, though.
+        if (columnNames.size() == 1 && syms.get(0, 0).getSort().equals(context.getCustomIntSort())) {
+            return List.of(context.mkDistinctUntyped(syms.row(0).values()));
         }
 
         List<BoolExpr> exprs = new ArrayList<>();
-        for (int i = 0; i < tuples.length; ++i) {
-            for (int j = i + 1; j < tuples.length; ++j) {
+        for (int i = 0; i < tuples.size(); ++i) {
+            for (int j = i + 1; j < tuples.size(); ++j) {
                 // (tup i exists /\ tup j exists) ==> not (tup i[pk columns] == tup j[pk columns]).
-                BoolExpr[] constraint = new BoolExpr[syms.length + 2];
-                for (int k = 0; k < syms.length; ++k) {
-                    constraint[k] = context.mkEq(syms[k][i], syms[k][j]);
+                BoolExpr[] constraint = new BoolExpr[columnNames.size() + 2];
+                for (int k = 0; k < columnNames.size(); ++k) {
+                    constraint[k] = context.mkEq(syms.get(k, i), syms.get(k, j));
                 }
-                constraint[constraint.length - 2] = exists[i];
-                constraint[constraint.length - 1] = exists[j];
+                constraint[constraint.length - 2] = exists.get(i);
+                constraint[constraint.length - 1] = exists.get(j);
                 exprs.add(context.mkNot(context.mkAnd(constraint)));
             }
         }

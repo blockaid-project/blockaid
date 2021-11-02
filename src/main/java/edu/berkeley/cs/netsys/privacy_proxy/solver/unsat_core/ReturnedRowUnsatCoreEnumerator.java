@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
+import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.DecisionTemplateGenerator;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVC4Executor;
@@ -7,9 +8,6 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.*;
 import com.google.common.collect.*;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Solver;
-import com.microsoft.z3.Status;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
@@ -29,23 +27,23 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMess
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
-public class ReturnedRowUnsatCoreEnumerator {
+public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, CB extends Z3ContextWrapper<?, ?, ?, ?>> {
     private static final int TIMEOUT_S = 20;
 
     private final QueryChecker checker;
-    private final Schema boundedSchema;
+    private final Schema<CB> boundedSchema;
     private final ImmutableList<Policy> policies;
-    private final RRLUnsatCoreDeterminacyFormula rrlFormula;
+    private final RRLUnsatCoreDeterminacyFormula<CU> rrlFormula;
 
-    private UnsatCoreFormulaBuilder formulaBuilder = null;
+    private UnsatCoreFormulaBuilder<CB> formulaBuilder = null;
     private Solver solver = null;
 
-    public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema unboundedSchema, Schema boundedSchema,
+    public ReturnedRowUnsatCoreEnumerator(QueryChecker checker, Schema<CU> unboundedSchema, Schema<CB> boundedSchema,
                                           ImmutableList<Policy> policies) {
         this.checker = checker;
         this.boundedSchema = boundedSchema;
         this.policies = policies;
-        this.rrlFormula = new RRLUnsatCoreDeterminacyFormula(unboundedSchema, policies);
+        this.rrlFormula = new RRLUnsatCoreDeterminacyFormula<>(unboundedSchema, policies);
     }
 
     public record Core(Set<ReturnedRowLabel> rrCore, Set<PreambleLabel> preambleCore) {}
@@ -130,10 +128,10 @@ public class ReturnedRowUnsatCoreEnumerator {
         );
 
         long startNs = System.nanoTime();
-        Z3ContextWrapper boundedContext = boundedSchema.getContext();
+        CB boundedContext = boundedSchema.getContext();
         try {
-            CountingBoundEstimator cbe = new CountingBoundEstimator();
-            UnsatCoreBoundEstimator boundEstimator = new UnsatCoreBoundEstimator(cbe);
+            CountingBoundEstimator<CB> cbe = new CountingBoundEstimator<>();
+            UnsatCoreBoundEstimator<CB> boundEstimator = new UnsatCoreBoundEstimator<>(cbe);
             Map<String, Integer> bounds = boundEstimator.calculateBounds(boundedSchema, subTrace);
 
             Map<String, Integer> slackBounds = Maps.transformValues(bounds, n -> n + boundSlack);
@@ -148,16 +146,16 @@ public class ReturnedRowUnsatCoreEnumerator {
                         (table, bound) -> relevantTables.contains(table) ? Objects.requireNonNull(bound) : 0);
             }
 
-            SubPreamble subPreamble = switch (PRUNE_PREAMBLE) {
+            SubPreamble<CB> subPreamble = switch (PRUNE_PREAMBLE) {
                 case UNSAT_CORE -> SubPreamble.fromLabels(boundedSchema, preambleCore);
                 case COARSE, OFF -> null; // Keep the entire preamble.
             };
 
-            BoundedDeterminacyFormula baseFormula = new BoundedDeterminacyFormula(
+            BoundedDeterminacyFormula<CB> baseFormula = new BoundedDeterminacyFormula<>(
                     boundedSchema, policies, slackBounds,
                     true, TextOption.NO_TEXT, null,
                     subPreamble);
-            this.formulaBuilder = new UnsatCoreFormulaBuilder(baseFormula, policies);
+            this.formulaBuilder = new UnsatCoreFormulaBuilder<>(baseFormula, policies);
             printMessage("\t\t| Bounded RRL core 1:\t" + (System.nanoTime() - startNs) / 1000000);
 
             UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
@@ -169,7 +167,9 @@ public class ReturnedRowUnsatCoreEnumerator {
             }
 
             solver.push();
-            solver.add(fs.getBackground().toArray(new BoolExpr[0]));
+            for (BoolExpr e : fs.getBackground()) {
+                solver.add(e);
+            }
             printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000);
             try (UnsatCoreEnumerator<ReturnedRowLabel> uce
                          = new UnsatCoreEnumerator<>(boundedContext, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
@@ -196,7 +196,7 @@ public class ReturnedRowUnsatCoreEnumerator {
      * @param trace the trace to compute relevant tables from.
      * @return the set of relevant table names.
      */
-    private static Set<String> computeRelevantTables(Schema schema, UnmodifiableLinearQueryTrace trace) {
+    private static <C extends Z3ContextWrapper<?, ?, ?, ?>> Set<String> computeRelevantTables(Schema<C> schema, UnmodifiableLinearQueryTrace trace) {
         HashSet<String> relevantTables = new HashSet<>();
         for (QueryTraceEntry entry : trace.getAllEntries()) { // This includes the current query as well.
             relevantTables.addAll(entry.getQuery().getRelations());
@@ -221,7 +221,7 @@ public class ReturnedRowUnsatCoreEnumerator {
     }
 
     // MUST be called only after `minimizeRRCore`.
-    public UnsatCoreFormulaBuilder getFormulaBuilder() {
+    public UnsatCoreFormulaBuilder<CB> getFormulaBuilder() {
         return Objects.requireNonNull(formulaBuilder);
     }
 
