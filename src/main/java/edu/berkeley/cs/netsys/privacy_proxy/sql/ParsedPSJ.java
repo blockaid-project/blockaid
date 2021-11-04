@@ -12,6 +12,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.util.UnionFind;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -326,14 +327,12 @@ public class ParsedPSJ {
 
             if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
                 SqlNodeList values = call.operand(1);
+                BiFunction<Expr<?>, Expr<?>, BoolExpr> op =
+                        theta.getKind() == SqlKind.IN ? context::mkSqlEqTrue : context::mkSqlNeqTrue;
                 BoolExpr[] exprs = values.getList().stream()
-                        .map(n -> context.mkEq(left, getPredicate(n, symbolMap, params, paramNames, schema)))
+                        .map(n -> op.apply(left, getPredicate(n, symbolMap, params, paramNames, schema)))
                         .toArray(BoolExpr[]::new);
-                BoolExpr expr = context.mkOr(exprs);
-                if (theta.getKind() == SqlKind.NOT_IN) {
-                    expr = context.mkNot(expr);
-                }
-                return expr;
+                return context.mkOr(exprs);
             }
 
             Expr<?> right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
@@ -357,15 +356,15 @@ public class ParsedPSJ {
             } else if (theta.getKind() == SqlKind.OR) {
                 return context.mkOr((BoolExpr) left, (BoolExpr) right);
             } else if (theta.getKind() == SqlKind.EQUALS) {
-                return context.mkEq(left, right);
+                return context.mkSqlEqTrue(left, right);
             } else if (theta.getKind() == SqlKind.NOT_EQUALS) {
-                return context.mkNot(context.mkEq(left, right));
+                return context.mkSqlNeqTrue(left, right);
             } else if (theta.getKind() == SqlKind.LESS_THAN) {
-                return context.mkCustomIntLt(left, right);
+                return context.mkCustomIntLtTrue(left, right);
 //            } else if (theta.getKind() == SqlKind.LESS_THAN_OR_EQUAL) {
 //                return context.mkLe((ArithExpr) left, (ArithExpr) right);
             } else if (theta.getKind() == SqlKind.GREATER_THAN) {
-                return context.mkCustomIntLt(right, left);
+                return context.mkCustomIntLtTrue(right, left);
 //            } else if (theta.getKind() == SqlKind.GREATER_THAN_OR_EQUAL) {
 //                return context.mkGe((ArithExpr) left, (ArithExpr) right);
             }
@@ -479,10 +478,9 @@ public class ParsedPSJ {
     }
 
     private class SolverQuery<C extends Z3ContextWrapper<?, ?, ?, ?>> extends PSJ<C> {
-        final int[] projectRelationIndex;
-        final int[] projectColumnIndex;
-        final int[] thetaRelationIndex;
-        final int[] thetaColumnIndex;
+        final ImmutableList<RelationColumnPair> projectColumnIndices;
+        final ImmutableList<RelationColumnPair> thetaColumnIndices;
+
         final Schema<C> schema;
         final String prefix;
         final int parameterOffset;
@@ -490,36 +488,32 @@ public class ParsedPSJ {
         private SolverQuery(Schema<C> schema, String prefix, int parameterOffset) {
             super(schema, relations);
 
-            projectRelationIndex = new int[projectColumns.size()];
-            projectColumnIndex = new int[projectColumns.size()];
-            thetaRelationIndex = new int[thetaColumns.size()];
-            thetaColumnIndex = new int[thetaColumns.size()];
-
             this.schema = schema;
             this.prefix = prefix;
             this.parameterOffset = parameterOffset;
 
-            mapIndices(schema, projectColumns, projectRelationIndex, projectColumnIndex);
-            mapIndices(schema, thetaColumns, thetaRelationIndex, thetaColumnIndex);
+            this.projectColumnIndices = mapIndices(schema, projectColumns);
+            this.thetaColumnIndices = mapIndices(schema, thetaColumns);
         }
 
-        private void mapIndices(Schema<C> schema, List<String> columns, int[] relationIndex, int[] columnIndex) {
-            Iterator<String> iter = columns.iterator();
-            for (int i = 0; i < columns.size(); ++i) {
-                String[] parts = iter.next().split("\\.");
+        private ImmutableList<RelationColumnPair> mapIndices(Schema<C> schema, List<String> columns) {
+            ImmutableList.Builder<RelationColumnPair> builder = ImmutableList.builder();
+            for (String columnName : columns) {
+                String[] parts = columnName.split("\\.");
                 String quantifier = parts[0]; // A quantifier can either be a relation name or an alias.
 
-                int currIdx = relAliasToIdx.get(quantifier);
-                relationIndex[i] = currIdx;
-
-                String relationName = relations.get(currIdx);
+                int relationIndex = relAliasToIdx.get(quantifier);
+                String relationName = relations.get(relationIndex);
                 List<String> columnNames = schema.getColumnNames(relationName);
-                columnIndex[i] = columnNames.indexOf(parts[1]);
-                if (relationIndex[i] == -1 || columnIndex[i] == -1) {
-                    throw new RuntimeException("column not found: " + relationName + "." + parts[1]
+                int columnIndex = columnNames.indexOf(parts[1]);
+                if (columnIndex == -1) {
+                    throw new IllegalArgumentException("column not found: " + relationName + "." + parts[1]
                             + " in columns: " + columnNames);
                 }
+
+                builder.add(new RelationColumnPair(relationIndex, columnIndex));
             }
+            return builder.build();
         }
 
         @Override
@@ -585,28 +579,16 @@ public class ParsedPSJ {
         @Override
         protected BoolExpr predicateGenerator(List<Tuple<C>> tuples) {
             Map<String, Expr<?>> map = new HashMap<>();
-            for (int i = 0; i < thetaColumnIndex.length; ++i) {
-                map.put(thetaColumns.get(i), tuples.get(thetaRelationIndex[i]).get(thetaColumnIndex[i]));
+            for (int i = 0; i < thetaColumns.size(); ++i) {
+                RelationColumnPair pair = thetaColumnIndices.get(i);
+                map.put(thetaColumns.get(i), tuples.get(pair.relationIndex()).get(pair.columnIndex()));
             }
             return getPredicate(map, schema, prefix, parameterOffset);
         }
 
         @Override
-        protected Tuple<C> headSelector(List<Tuple<C>> tuples) {
-            ArrayList<Expr<?>> parts = new ArrayList<>();
-            for (int i = 0; i < projectRelationIndex.length; ++i) {
-                parts.add(tuples.get(projectRelationIndex[i]).get(projectColumnIndex[i]));
-            }
-            return new Tuple<>(schema, parts);
-        }
-
-        @Override
-        protected Sort[] headTypeSelector(Sort[]... types) {
-            Sort[] parts = new Sort[projectRelationIndex.length];
-            for (int i = 0; i < parts.length; ++i) {
-                parts[i] = types[projectRelationIndex[i]][projectColumnIndex[i]];
-            }
-            return parts;
+        protected List<RelationColumnPair> headSelector() {
+            return projectColumnIndices;
         }
 
         @Override

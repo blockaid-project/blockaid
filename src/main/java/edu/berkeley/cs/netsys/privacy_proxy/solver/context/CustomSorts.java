@@ -2,6 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -25,7 +26,8 @@ class CustomSorts {
     private final List<Values> valuesStack;
 
     final FuncDecl<BoolSort> intLt;
-    final ImmutableList<BoolExpr> intLtAxioms;
+
+    final ImmutableList<BoolExpr> axioms;
 
     private static final Function<Values, Map<Date, Expr<UninterpretedSort>>> PICK_DATE = v -> v.dateValues;
     private static final Function<Values, Map<Timestamp, Expr<UninterpretedSort>>> PICK_TS = v -> v.tsValues;
@@ -66,19 +68,33 @@ class CustomSorts {
         valuesStack.add(new Values());
 
         intLt = context.mkFuncDecl("lt", new Sort[]{intSort, intSort}, context.rawContext.getBoolSort());
-        intLtAxioms = switch (quantifierOption) {
+        axioms = switch (quantifierOption) {
             case QUANTIFIER_FREE -> ImmutableList.of(); // No axioms, which require quantifiers.
             case USE_QUANTIFIERS -> {
+                ImmutableList.Builder<BoolExpr> axiomsBuilder = ImmutableList.builder();
+
+                // Integer less-than transitivity.
                 Expr<UninterpretedSort> x = rawContext.mkConst("x", intSort),
                         y = rawContext.mkConst("y", intSort),
                         z = rawContext.mkConst("z", intSort);
-                BoolExpr trans = rawContext.mkForall(
+                BoolExpr intLtTrans = rawContext.mkForall(
                         new Expr[]{x, y, z},
                         rawContext.mkImplies(
                                 rawContext.mkAnd(intLt.apply(x, y), intLt.apply(y, z)), intLt.apply(x, z)
                         ), 1, null, null, null, null
                 );
-                yield ImmutableList.of(trans);
+                axiomsBuilder.add(intLtTrans);
+
+                if (Options.CONSTRAIN_CUSTOM_BOOL == Options.OnOffType.ON) {
+                    Expr<UninterpretedSort> myTrue = getBool(true), myFalse = getBool(false),
+                            b = rawContext.mkConst("b", boolSort);
+                    axiomsBuilder.add(rawContext.mkForall(
+                            new Expr[]{b},
+                            rawContext.mkOr(rawContext.mkEq(b, myTrue), rawContext.mkEq(b, myFalse)),
+                            1, null, null, null, null));
+                }
+
+                yield axiomsBuilder.build();
             }
         };
     }
@@ -202,7 +218,7 @@ class CustomSorts {
         prepareSolverForSort(solver, PICK_REAL);
         prepareSolverForSort(solver, PICK_STRING);
         prepareSolverForSort(solver, PICK_BOOL);
-        solver.add(intLtAxioms.toArray(new BoolExpr[0]));
+        solver.add(axioms.toArray(new BoolExpr[0]));
         return solver;
     }
 
@@ -220,7 +236,7 @@ class CustomSorts {
         prepareSortValues(sb, PICK_REAL);
         prepareSortValues(sb, PICK_STRING);
         prepareSortValues(sb, PICK_BOOL);
-        for (BoolExpr axiom : intLtAxioms) {
+        for (BoolExpr axiom : axioms) {
             sb.append("(assert ").append(axiom.getSExpr()).append(")\n");
         }
         return sb.toString();

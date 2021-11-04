@@ -29,7 +29,7 @@ public class Options {
     public static final boolean USE_COLORS = Objects.equals(System.getProperty("privoxy.use_colors"), "true");
 
     /* Quiet mode -- suppress log messages. */
-    public static final boolean QUIET = Objects.equals(System.getProperty("privoxy.quiet"), "true");
+    public static final LogLevel LOG_LEVEL = LogLevel.fromString(System.getProperty("privoxy.log_level", "normal"));
 
     /* Enable quick denial check -- off by default since denials are not performance-sensitive. */
     public static final boolean ENABLE_QUICK_DENIAL = Objects.equals(System.getProperty("privoxy.enable_quick_denial"), "true");
@@ -42,10 +42,10 @@ public class Options {
         OFF
     }
 
-    private static OnOffType getOnOffProperty(String key, OnOffType def) {
+    private static OnOffType getOnOffProperty(String key, OnOffType defaultValue) {
         String value = System.getProperty(key);
         if (value == null) {
-            return def;
+            return defaultValue;
         }
         return switch (value) {
             case "on" -> OnOffType.ON;
@@ -54,6 +54,13 @@ public class Options {
                     "unrecognized option for " + key + " (must be on/off): " + value);
         };
     }
+
+    public static final OnOffType CONSTRAIN_CUSTOM_BOOL = getOnOffProperty("privoxy.constrain_custom_bool", OnOffType.ON);
+
+    /**
+     * Whether the unsat-core bound estimator should shrink bounds.
+     */
+    public static final OnOffType SHRINK_BOUNDS = getOnOffProperty("privoxy.shrink_bounds", OnOffType.ON);
 
     public enum PrunePreambleType {
         OFF, // No preamble pruning.

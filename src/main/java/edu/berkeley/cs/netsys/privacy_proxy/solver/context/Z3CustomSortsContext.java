@@ -127,8 +127,68 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
+    public Sort getNullableCustomIntSort() {
+        return getCustomIntSort();
+    }
+
+    @Override
+    public Sort getNullableCustomBoolSort() {
+        return getCustomBoolSort();
+    }
+
+    @Override
+    public Sort getNullableCustomRealSort() {
+        return getCustomRealSort();
+    }
+
+    @Override
+    public Sort getNullableCustomStringSort() {
+        return getCustomStringSort();
+    }
+
+    @Override
+    public Sort getNullableDateSort() {
+        return getDateSort();
+    }
+
+    @Override
+    public Sort getNullableTimestampSort() {
+        return getTimestampSort();
+    }
+
+    @Override
     public Expr<UninterpretedSort> mkTimestamp(Timestamp ts) {
         return trackConst(customSorts.getTimestamp(ts));
+    }
+
+    @Override
+    protected boolean isSortNullable(Sort s) {
+        // FIXME(zhangwen): implement this.
+        return false;
+    }
+
+    @Override
+    protected Expr<?> getValueFromMaybeNullable(Expr<?> e) {
+        // FIXME(zhangwen): implement this.
+        return e;
+    }
+
+    @Override
+    public <S extends Sort> Expr<S> mkNull(S sort) {
+        // FIXME(zhangwen): implement this.
+        return mkFreshConst("null", sort);
+    }
+
+    @Override
+    public BoolExpr mkSqlIsNull(Expr<?> e) {
+        // FIXME(zhangwen): implement this.
+        return rawContext.mkFalse();
+    }
+
+    @Override
+    public BoolExpr mkSqlEqTrue(Expr<?> lhs, Expr<?> rhs) {
+        // FIXME(zhangwen): implement this.
+        return mkEq(lhs, rhs);
     }
 
     @Override
@@ -142,7 +202,7 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
-    public BoolExpr mkCustomIntLt(Expr<?> left, Expr<?> right) {
+    public BoolExpr mkRawCustomIntLt(Expr<?> left, Expr<?> right) {
         return (BoolExpr) customSorts.intLt.apply(left, right);
     }
 

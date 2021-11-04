@@ -7,6 +7,10 @@ import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.*;
+import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
+import edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -262,7 +266,8 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                 for (int j = i + 1; j < variables.size(); ++j) {
                     Expr<?> p2 = variables.get(j);
                     Operand rhs = expr2Operand.get(p2);
-                    label2Expr.put(new EqualityLabel(lhs, rhs), context.mkEq(p1, p2));
+                    // Again, we require that `p1` and `p2` are not null.
+                    label2Expr.put(new EqualityLabel(lhs, rhs), context.mkSqlEqTrue(p1, p2));
                 }
             }
         }
@@ -277,18 +282,18 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                 Expr<?> vExpr1 = context.getExprForValue(value1), vExpr2 = context.getExprForValue(value2);
                 for (Expr<?> p1 : ecs.get(value1)) {
                     Operand o1 = expr2Operand.get(p1);
-                    label2Expr.put(new LessThanLabel(o1, vo2), context.mkCustomIntLt(p1, vExpr2));
+                    label2Expr.put(new LessThanLabel(o1, vo2), context.mkCustomIntLtTrue(p1, vExpr2));
                 }
                 for (Expr<?> p2 : ecs.get(value2)) {
                     Operand o2 = expr2Operand.get(p2);
-                    label2Expr.put(new LessThanLabel(vo1, o2), context.mkCustomIntLt(vExpr1, p2));
+                    label2Expr.put(new LessThanLabel(vo1, o2), context.mkCustomIntLtTrue(vExpr1, p2));
                 }
 
                 for (Expr<?> p1 : ecs.get(value1)) {
                     Operand lhs = expr2Operand.get(p1);
                     for (Expr<?> p2 : ecs.get(value2)) {
                         Operand rhs = expr2Operand.get(p2);
-                        label2Expr.put(new LessThanLabel(lhs, rhs), context.mkCustomIntLt(p1, p2));
+                        label2Expr.put(new LessThanLabel(lhs, rhs), context.mkCustomIntLtTrue(p1, p2));
                     }
                 }
             }
@@ -329,12 +334,12 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                         continue;
                     }
 
-                    long startMs = System.currentTimeMillis();
                     Status res = solver.check(context.mkNot(context.mkEq(p1, p2)));
-//                    System.out.println("\t\t| removeRedundant check:\t" + (System.currentTimeMillis() - startMs));
                     if (res == Status.UNSATISFIABLE) {
                         // Keep the query param, toss the returned row attribute.
-//                        Logger.printStylizedMessage(o1 + " = " + o2, TerminalColor.ANSI_RED_BACKGROUND);
+                        Logger.printStylizedMessage("removeRedundantExprs:\t" + o1 + " == " + o2,
+                                TerminalColor.ANSI_GREEN_BACKGROUND + TerminalColor.ANSI_BLACK,
+                                LogLevel.VERBOSE);
                         redundantExprs.add(p2);
                         if (pkValuedExprs.contains(p2)) {
                             pkValuedExprs.add(p1);
@@ -342,7 +347,10 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                     } else {
                         checkState(res == Status.SATISFIABLE,
                                 "removeRedundant solver failure: " + res);
-//                        Logger.printStylizedMessage(o1 + " = " + o2, TerminalColor.ANSI_GREEN_BACKGROUND);
+                        Logger.printStylizedMessage(() -> {
+                            Model m = solver.getModel();
+                            return "removeRedundantExprs:\t" + o1 + " != " + o2 + "\t" + m.eval(p1, false) + ", " + m.eval(p2, false);
+                        }, TerminalColor.ANSI_RED_BACKGROUND, LogLevel.VERBOSE);
                     }
                 }
             }

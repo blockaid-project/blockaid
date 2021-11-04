@@ -12,12 +12,15 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ViewLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 
 public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     private final DeterminacyFormula<C, Instance<C>> baseFormula;
@@ -37,21 +40,24 @@ public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, 
         this.dependencies = ImmutableList.copyOf(schema.getDependencies());
         for (int i = 0; i < dependencies.size(); ++i) {
             Dependency d = dependencies.get(i);
-            preamble.add(new NamedBoolExpr(
-                    context.mkAnd(Iterables.concat(
-                            d.apply(inst1), d.apply(inst2))),
-                    "Constraint!" + i
-            ));
+            BoolExpr formula = context.mkAnd(Iterables.concat(d.apply(inst1), d.apply(inst2)));
+            if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
+                preamble.add(new NamedBoolExpr(formula, "Constraint!" + i));
+            } else {
+                preamble.add(NamedBoolExpr.makeUnnamed(formula));
+            }
         }
 
         this.policies = policies;
         ImmutableList<Query<C>> views = schema.getPolicyQueries(policies);
         for (int i = 0; i < views.size(); ++i) {
             Query<C> v = views.get(i);
-            preamble.add(new NamedBoolExpr(
-                    context.mkAnd(v.apply(inst1).isContainedInExpr(v.apply(inst2))),
-                    "View!" + i
-            ));
+            BoolExpr formula = context.mkAnd(v.apply(inst1).isContainedInExpr(v.apply(inst2)));
+            if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
+                preamble.add(new NamedBoolExpr(formula, "View!" + i));
+            } else {
+                preamble.add(NamedBoolExpr.makeUnnamed(formula));
+            }
         }
 
         String preambleSMT = DeterminacyFormula.makePreambleSMTNamed(preamble);

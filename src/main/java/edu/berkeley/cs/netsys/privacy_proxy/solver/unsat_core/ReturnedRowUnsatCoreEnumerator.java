@@ -2,7 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVC4Executor;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVCExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.*;
@@ -14,6 +14,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.ProcessSMTExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.SMTExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.VampireUCoreExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
+import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.util.*;
@@ -54,7 +55,8 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        executors.add(new CVC4Executor("cvc4", smt, latch));
+        executors.add(new CVCExecutor("cvc4", "cvc4", smt, latch));
+        executors.add(new CVCExecutor("cvc5", "cvc5", smt, latch));
         executors.add(new VampireUCoreExecutor("vampire_lrs+10_1", smt, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
 //        executors.add(new VampireUCoreExecutor("vampire_lrs+1_3", smt, latch, "lrs+1_3:2_afr=on:afp=100000:afq=1.0:anc=all_dependent:cond=on:fde=none:gs=on:inw=on:ile=on:irw=on:nm=6:nwc=1:stl=30:sos=theory:updr=off:uhcvi=on_" + (TIMEOUT_S * 10)));
         executors.add(new VampireUCoreExecutor("vampire_dis+11_3", smt, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_" + (TIMEOUT_S * 10)));
@@ -98,14 +100,15 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
                 preambleCore = rrlFormula.extractPreambleLabels(unsatCore);
             }
         }
-        System.out.println("\t\t| Solve:\t" + (System.nanoTime() - startNs) / 1000000);
+        long solveDurMs = (System.nanoTime() - startNs) / 1000000;
+        System.out.println("\t\t| Solve:\t" + solveDurMs);
         checker.printFormula(smt, "rr_unsat_core");
 
         if (smallestRRCore == null) {
             return Optional.empty();
         }
 
-        printMessage("Winner:\t" + winner);
+        printMessage("Winner:\t" + winner + "\t" + solveDurMs);
         printStylizedMessage(smallestRRCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
         if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
             printStylizedMessage(preambleCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
@@ -139,10 +142,15 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
             // We keep the entire preamble and instead set the bounds of irrelevant tables to zero.
             // Views and dependencies that rely on irrelevant tables should then result in trivial formulas.
             if (PRUNE_PREAMBLE == Options.PrunePreambleType.COARSE) {
-                Set<String> relevantTables = computeRelevantTables(boundedSchema, subTrace);
+                Set<String> relevantTables = boundedSchema.computeRelevantTables(subTrace);
                 printMessage(() -> "Relevant tables:\t" + relevantTables);
                 slackBounds = Maps.transformEntries(slackBounds,
                         (table, bound) -> relevantTables.contains(table) ? Objects.requireNonNull(bound) : 0);
+            }
+
+            {
+                var finalSlackBounds = slackBounds;
+                printMessage(() -> "Bounds:\t" + finalSlackBounds, LogLevel.VERBOSE);
             }
 
             SubPreamble<CB> subPreamble = switch (PRUNE_PREAMBLE) {
@@ -155,7 +163,7 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
                     true, TextOption.NO_TEXT, null,
                     subPreamble);
             this.formulaBuilder = new UnsatCoreFormulaBuilder<>(baseFormula, policies);
-            printMessage("\t\t| Bounded RRL core 1:\t" + (System.nanoTime() - startNs) / 1000000);
+            printMessage("\t\t| Bounded RRL core 1:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
 
             UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
             solver = boundedContext.mkQfSolver();
@@ -169,12 +177,12 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
             for (BoolExpr e : fs.getBackground()) {
                 solver.add(e);
             }
-            printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000);
+            printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
             try (UnsatCoreEnumerator<ReturnedRowLabel, CB> uce
                          = new UnsatCoreEnumerator<>(boundedContext, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
-                printMessage("\t\t| Bounded RRL core 3:\t" + (System.nanoTime() - startNs) / 1000000);
+                printMessage("\t\t| Bounded RRL core 3:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
                 Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
-                printMessage("\t\t| Bounded RRL core 4:\t" + (System.nanoTime() - startNs) / 1000000);
+                printMessage("\t\t| Bounded RRL core 4:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
                 s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, subTrace)).collect(Collectors.toSet());
                 return s;
             } finally {
@@ -183,40 +191,6 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
         } finally {
             printMessage("\t\t| Bounded RRL core:\t" + (System.nanoTime() - startNs) / 1000000);
         }
-    }
-
-    /**
-     * Computes the relevant tables for a trace.  The set of relevant tables is the minimal set that satisfies:
-     * - A table that appears in the trace (either previous or current query) is relevant.
-     * - In a constraint `LHS \subseteq RHS`, if LHS references a relevant table, then all tables referenced by RHS
-     *   are relevant.
-     *
-     * @param schema the schema.
-     * @param trace the trace to compute relevant tables from.
-     * @return the set of relevant table names.
-     */
-    private static <C extends Z3ContextWrapper<?, ?, ?, ?>> Set<String> computeRelevantTables(Schema<C> schema, UnmodifiableLinearQueryTrace trace) {
-        HashSet<String> relevantTables = new HashSet<>();
-        for (QueryTraceEntry entry : trace.getAllEntries()) { // This includes the current query as well.
-            relevantTables.addAll(entry.getQuery().getRelations());
-        }
-
-        boolean converged;
-        do {
-            converged = true;
-            for (Dependency d : schema.getDependencies()) {
-                if (Sets.intersection(d.getFromRelations(), relevantTables).isEmpty()) {
-                    continue;
-                }
-                if (relevantTables.containsAll(d.getToRelations())) {
-                    continue;
-                }
-                converged = false;
-                relevantTables.addAll(d.getToRelations());
-            }
-        } while (!converged);
-
-        return relevantTables;
     }
 
     // MUST be called only after `minimizeRRCore`.

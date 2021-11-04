@@ -6,6 +6,7 @@ import com.microsoft.z3.*;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.function.BiFunction;
 
 import static com.google.common.base.Preconditions.checkState;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_QE;
@@ -16,6 +17,11 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_QE;
  * some values may be missing).
  */
 public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sort, StringS extends Sort, BoolS extends Sort> {
+    public enum Nullability {
+        IS_NULLABLE,
+        NOT_NULLABLE
+    }
+
     protected final Context rawContext;
     private final Tactic qeLight;
 
@@ -29,7 +35,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public static Z3ContextWrapper<IntSort, IntSort, IntSort, BoolSort> makeTheoryContext() {
-        return new Z3TheoryContext();
+        return new Z3TheoryContext<>();
     }
 
     public BoolExpr eliminateQuantifiers(BoolExpr e) {
@@ -105,10 +111,21 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public BoolExpr mkOr(List<BoolExpr> boolExprs) {
-        return rawContext.mkOr(boolExprs.toArray(new BoolExpr[0]));
+        return mkOr(boolExprs.toArray(new BoolExpr[0]));
     }
 
     public BoolExpr mkOr(BoolExpr... boolExprs) {
+        if (boolExprs.length == 0) {
+            return rawContext.mkFalse();
+        }
+        if (boolExprs.length == 1) {
+            return boolExprs[0];
+        }
+        for (BoolExpr boolExpr : boolExprs) {
+            if (boolExpr.isTrue()) {
+                return rawContext.mkTrue();
+            }
+        }
         return rawContext.mkOr(boolExprs);
     }
 
@@ -160,9 +177,44 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     public abstract IntegralS getDateSort();
     public abstract IntegralS getTimestampSort();
 
+    // TODO(zhangwen): generics??
+    public abstract Sort getNullableCustomIntSort();
+    public abstract Sort getNullableCustomBoolSort();
+    public abstract Sort getNullableCustomRealSort();
+    public abstract Sort getNullableCustomStringSort();
+    public abstract Sort getNullableDateSort();
+    public abstract Sort getNullableTimestampSort();
+
+    public Sort getCustomIntSort(Nullability o) {
+        return switch (o) { case IS_NULLABLE -> getNullableCustomIntSort(); case NOT_NULLABLE -> getCustomIntSort(); };
+    }
+
+    public Sort getCustomBoolSort(Nullability o) {
+        return switch (o) { case IS_NULLABLE -> getNullableCustomBoolSort(); case NOT_NULLABLE -> getCustomBoolSort(); };
+    }
+
+    public Sort getCustomRealSort(Nullability o) {
+        return switch (o) { case IS_NULLABLE -> getNullableCustomRealSort(); case NOT_NULLABLE -> getCustomRealSort(); };
+    }
+
+    public Sort getCustomStringSort(Nullability o) {
+        return switch (o) { case IS_NULLABLE -> getNullableCustomStringSort(); case NOT_NULLABLE -> getCustomStringSort(); };
+    }
+
+    public Sort getDateSort(Nullability o) {
+        return switch (o) { case IS_NULLABLE -> getNullableDateSort(); case NOT_NULLABLE -> getDateSort(); };
+    }
+
+    public Sort getTimestampSort(Nullability o) {
+        return switch (o) { case IS_NULLABLE -> getNullableTimestampSort(); case NOT_NULLABLE -> getTimestampSort(); };
+    }
+
     public abstract Expr<IntegralS> mkCustomInt(long value);
     public abstract Expr<BoolS> mkCustomBool(boolean value);
-    public abstract BoolExpr mkCustomIntLt(Expr<?> left, Expr<?> right);
+
+    // Assumes operands are not nullable.
+    public abstract BoolExpr mkRawCustomIntLt(Expr<?> left, Expr<?> right);
+
     public abstract Expr<StringS> mkCustomString(String value);
     public abstract Expr<RealS> mkCustomReal(double value);
     public abstract Expr<IntegralS> mkDate(Date date);
@@ -201,8 +253,73 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         return rawContext.mkImplies(lhs, rhs);
     }
 
-    public BoolExpr mkEq(Expr<?> lhs, Expr<?> rhs) {
+    public BoolExpr mkRawEq(Expr<?> lhs, Expr<?> rhs) {
         return rawContext.mkEq(lhs, rhs);
+    }
+
+    protected abstract boolean isSortNullable(Sort s);
+
+    // Assumes that `e` is not null.
+    protected abstract Expr<?> getValueFromMaybeNullable(Expr<?> e);
+
+    /**
+     * Makes the null value of the given sort.
+     * @param sort the sort of the value to be created; must be a nullable sort.
+     * @param <S> the sort type.
+     * @return the null value of the given sort.
+     */
+    public abstract <S extends Sort> Expr<S> mkNull(S sort);
+
+    public abstract BoolExpr mkSqlIsNull(Expr<?> e);
+
+    public BoolExpr mkSqlIsNotNull(Expr<?> e) {
+        return rawContext.mkNot(mkSqlIsNull(e));
+    }
+
+    // Supports the case where one side is nullable and the other not (in which case, asserts the nullable side is not
+    // null and equals the other side).  Treats `null == null` as true.
+    public BoolExpr mkEq(Expr<?> lhs, Expr<?> rhs) {
+        if (lhs.getSort().equals(rhs.getSort())) {
+            return rawContext.mkEq(lhs, rhs);
+        }
+        // One is nullable, the other is not.
+        if (isSortNullable(lhs.getSort())) {
+            Expr<?> temp = lhs;
+            lhs = rhs;
+            rhs = temp;
+        }
+        // LHS is non-nullable, RHS is nullable.
+        return rawContext.mkAnd(
+                mkSqlIsNotNull(rhs),
+                rawContext.mkEq(lhs, getValueFromMaybeNullable(rhs))
+        );
+    }
+
+    /**
+     * Makes a boolean expression for when the SQL predicate "lhs ? rhs" is true.  Takes null into account.
+     * @param lhs left-hand side of equality.
+     * @param rhs right-hand side of equality.
+     * @param op function that generates boolean expression for the binary operation; only applied to expressions of value sort.
+     * @return boolean expression.
+     */
+    private BoolExpr mkSqlBinaryTrue(Expr<?> lhs, Expr<?> rhs, BiFunction<Expr<?>, Expr<?>, BoolExpr> op) {
+        return rawContext.mkAnd(
+                mkSqlIsNotNull(lhs),
+                mkSqlIsNotNull(rhs),
+                op.apply(getValueFromMaybeNullable(lhs), getValueFromMaybeNullable(rhs))
+        );
+    }
+
+    public BoolExpr mkSqlEqTrue(Expr<?> lhs, Expr<?> rhs) {
+        return mkSqlBinaryTrue(lhs, rhs, rawContext::mkEq);
+    }
+
+    public BoolExpr mkSqlNeqTrue(Expr<?> lhs, Expr<?> rhs) {
+        return mkSqlBinaryTrue(lhs, rhs, (e1, e2) -> rawContext.mkNot(rawContext.mkEq(e1, e2)));
+    }
+
+    public BoolExpr mkCustomIntLtTrue(Expr<?> lhs, Expr<?> rhs) {
+        return mkSqlBinaryTrue(lhs, rhs, this::mkRawCustomIntLt);
     }
 
     public BoolExpr mkAtMost(Collection<BoolExpr> exprs, int bound) {

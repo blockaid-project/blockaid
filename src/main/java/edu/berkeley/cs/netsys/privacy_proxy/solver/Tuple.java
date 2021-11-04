@@ -83,23 +83,21 @@ public class Tuple<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     }
 
     /**
-     * Returns a tuple with NULL elements replaced with fresh constants.
+     * Returns a tuple with NULL elements replaced with actual null values.
+     * TODO(zhangwen): make null exprs when tuples are made, instead of replacing them after the fact?
      * @param sorts the sorts of tuple elements; provides the sorts for NULLs.
-     * @return a tuple with NULLs replaced replaced.
+     * @return a tuple with NULLs replaced.
      */
-    public Tuple<C> replaceNullsWithFreshConsts(Sort[] sorts) {
-        // FIXME(zhangwen): handle SQL NULL properly.
-        // Here I'm using a fresh symbol for NULL.  Assuming that we see NULL here only when a previous query returned
-        // NULL, this is... safe?  At least not blatantly unsafe.  I need to think through this...
-        checkArgument(sorts.length == size());
+    public Tuple<C> fillNulls(List<Sort> sorts) {
+        checkArgument(sorts.size() == size());
         if (content.stream().noneMatch(Optional::isEmpty)) {
             return this;
         }
 
         Expr<?>[] convertedExprs = new Expr[size()];
         for (int i = 0; i < size(); ++i) {
-            convertedExprs[i] = content.get(i).orElse(schema.getContext().mkFreshConst("null", sorts[i]));
-//            convertedExprs[i] = content.get(i).orElse(schema.getContext().mkConst("null" + sorts[i].toString(), sorts[i]));
+            Sort thisSort = sorts.get(i);
+            convertedExprs[i] = content.get(i).orElseGet(() -> schema.getContext().mkNull(thisSort));
         }
 
         return new Tuple<>(this.getSchema(), convertedExprs);

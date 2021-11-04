@@ -7,8 +7,7 @@ import com.microsoft.z3.Expr;
 import com.microsoft.z3.FuncDecl;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Preconditions.*;
 
 // TODO(zhangwen): separate class for unbounded instances?
 public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
@@ -20,10 +19,14 @@ public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
 
     Instance(String name, Schema<C> schema, boolean isBounded, ImmutableMap<String, Relation<C>> name2Rel,
              ImmutableMap<FuncDecl<BoolSort>, String> funcDecl2RelName) {
+        if (isBounded) {
+            checkArgument(name2Rel.values().stream().allMatch(r -> r instanceof ConcreteRelation<C>));
+        }
+
         this.name = name;
         this.schema = checkNotNull(schema);
         this.isBounded = isBounded;
-        this.name2Rel = name2Rel;
+        this.name2Rel = checkNotNull(name2Rel);
         this.funcDecl2RelName = funcDecl2RelName;
     }
 

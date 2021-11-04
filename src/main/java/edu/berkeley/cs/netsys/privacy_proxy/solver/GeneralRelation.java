@@ -1,9 +1,9 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -13,13 +13,13 @@ public class GeneralRelation<C extends Z3ContextWrapper<?, ?, ?, ?>> implements 
     private final Schema<C> schema;
     private final C context;
     private final RelationFunction function;
-    private final Sort[] signature;
+    private final ImmutableList<Sort> signature;
 
-    public GeneralRelation(Schema<C> schema, RelationFunction function, Sort[] signature) {
+    public GeneralRelation(Schema<C> schema, RelationFunction function, List<Sort> signature) {
         this.schema = checkNotNull(schema);
         this.context = schema.getContext();
         this.function = checkNotNull(function);
-        this.signature = signature;
+        this.signature = ImmutableList.copyOf(signature);
     }
 
     RelationFunction getFunction() {
@@ -28,7 +28,7 @@ public class GeneralRelation<C extends Z3ContextWrapper<?, ?, ?, ?>> implements 
 
     @Override
     public Iterable<BoolExpr> doesContainExpr(Tuple<C> tup) {
-        Expr<?>[] args = tup.replaceNullsWithFreshConsts(signature).toExprArray();
+        Expr<?>[] args = tup.fillNulls(signature).toExprArray();
         return this.function.apply(args);
     }
 
@@ -49,7 +49,7 @@ public class GeneralRelation<C extends Z3ContextWrapper<?, ?, ?, ?>> implements 
     }
 
     private Tuple<C> makeFreshQuantifiedHead() {
-        return new Tuple<>(schema, Arrays.stream(signature).map(sort -> context.mkFreshQuantifiedConst("e", sort)));
+        return new Tuple<>(schema, signature.stream().map(sort -> context.mkFreshQuantifiedConst("e", sort)));
     }
 
     @Override
@@ -60,7 +60,7 @@ public class GeneralRelation<C extends Z3ContextWrapper<?, ?, ?, ?>> implements 
         BoolExpr lhs = context.mkAnd(this.doesContainExpr(syms));
         BoolExpr rhs = context.mkAnd(other.doesContainExpr(syms));
         return List.of(
-                context.myMkForall(syms.toExprArray(), context.mkEq(lhs, rhs))
+                context.myMkForall(syms.toExprArray(), context.mkRawEq(lhs, rhs))
         );
     }
 }

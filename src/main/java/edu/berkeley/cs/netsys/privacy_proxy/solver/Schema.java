@@ -6,7 +6,10 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Sets;
 import com.microsoft.z3.*;
+import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
+import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
@@ -62,7 +65,11 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         return policyQueries.getUnchecked(policies);
     }
 
-    private static Sort getSortFromSqlType(Z3ContextWrapper<?, ?, ?, ?> context, RelDataType type) {
+    // Turns SQL column type to Z3 sort.
+    private static <C extends Z3ContextWrapper<?, ?, ?, ?>> Sort getSortFromSqlType(C context, RelDataType type) {
+        Z3ContextWrapper.Nullability nullability = type.isNullable() ? Z3ContextWrapper.Nullability.IS_NULLABLE
+                : Z3ContextWrapper.Nullability.NOT_NULLABLE;
+
         RelDataTypeFamily family = type.getFamily();
         if (family == SqlTypeFamily.NUMERIC) {
             // TODO(zhangwen): treating decimal also as int.
@@ -71,24 +78,24 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                 case SMALLINT:
                 case INTEGER:
                 case BIGINT:
-                    return context.getCustomIntSort();
+                    return context.getCustomIntSort(nullability);
                 case FLOAT:
                 case REAL:
                 case DOUBLE:
-                    return context.getCustomRealSort();
+                    return context.getCustomRealSort(nullability);
             }
             throw new IllegalArgumentException("Unsupported numeric type: " + type);
         } else if (family == SqlTypeFamily.CHARACTER || family == SqlTypeFamily.BINARY) {
-            return context.getCustomStringSort();
+            return context.getCustomStringSort(nullability);
         } else if (family == SqlTypeFamily.TIMESTAMP) {
-            return context.getTimestampSort();
+            return context.getTimestampSort(nullability);
         } else if (family == SqlTypeFamily.DATE) {
-            return context.getDateSort();
+            return context.getDateSort(nullability);
         } else if (family == SqlTypeFamily.BOOLEAN) {
-            return context.getCustomBoolSort();
+            return context.getCustomBoolSort(nullability);
         } else if (family == SqlTypeFamily.ANY) {
             // FIXME(zhangwen): I think text belongs in here.
-            return context.getCustomStringSort();
+            return context.getCustomStringSort(nullability);
         }
         throw new IllegalArgumentException("unrecognized family: " + family);
     }
@@ -107,9 +114,9 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
 
-            Sort[] colTypes = columns.stream().map(Column::type).toArray(Sort[]::new);
-            FuncDecl<BoolSort> func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName, colTypes,
-                    context.getBoolSort());
+            ImmutableList<Sort> colTypes = columns.stream().map(Column::type).collect(ImmutableList.toImmutableList());
+            FuncDecl<BoolSort> func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName,
+                    colTypes.toArray(new Sort[0]), context.getBoolSort());
             instBuilder.put(relationName, new GeneralRelation<>(this, new Z3Function(func), colTypes));
         }
         return instBuilder.buildUnbounded();
@@ -129,7 +136,7 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
-            Sort[] colTypes = columns.stream().map(Column::type).toArray(Sort[]::new);
+            ImmutableList<Sort> colTypes = columns.stream().map(Column::type).collect(ImmutableList.toImmutableList());
 
             int numTuples = bounds.get(relationName);
             ArrayList<Tuple<C>> tuples = new ArrayList<>();
@@ -157,7 +164,7 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                         values.add(thisVar);
                     }
                 }
-                tuples.add(new Tuple<>(this, values.stream()));
+                tuples.add(new Tuple<>(this, values));
 //                System.out.println("***\t" + tuples[i]);
                 exists.add(context.mkTrue()); // A tuple with a known PK value must exist.
                 i += 1;
@@ -213,5 +220,38 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
 
     public SchemaPlusWithKey getRawSchema() {
         return rawSchema;
+    }
+
+    /**
+     * Computes the relevant tables for a trace.  The set of relevant tables is the minimal set that satisfies:
+     * - A table that appears in the trace (either previous or current query) is relevant.
+     * - In a constraint `LHS \subseteq RHS`, if LHS references a relevant table, then all tables referenced by RHS
+     *   are relevant.
+     *
+     * @param trace the trace to compute relevant tables from.
+     * @return the set of relevant table names.
+     */
+    public Set<String> computeRelevantTables(UnmodifiableLinearQueryTrace trace) {
+        HashSet<String> relevantTables = new HashSet<>();
+        for (QueryTraceEntry entry : trace.getAllEntries()) { // This includes the current query as well.
+            relevantTables.addAll(entry.getQuery().getRelations());
+        }
+
+        boolean converged;
+        do {
+            converged = true;
+            for (Dependency d : dependencies) {
+                if (Sets.intersection(d.getFromRelations(), relevantTables).isEmpty()) {
+                    continue;
+                }
+                if (relevantTables.containsAll(d.getToRelations())) {
+                    continue;
+                }
+                converged = false;
+                relevantTables.addAll(d.getToRelations());
+            }
+        } while (!converged);
+
+        return relevantTables;
     }
 }

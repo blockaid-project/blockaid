@@ -133,7 +133,9 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>, I extend
     }
 
     public Iterable<BoolExpr> makeBodyFormula(UnmodifiableLinearQueryTrace queries) {
-        return Iterables.concat(generateTupleCheck(queries), generateConstantCheck(queries),
+        return Iterables.concat(
+                generateTupleCheck(queries),
+                generateConstantCheck(queries),
                 generateNotContains(queries));
     }
 

@@ -11,6 +11,9 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.*;
 
+/**
+ * A dependency that constrains a column (or set of columns) in a table, when non-null, is unique.
+ */
 public class UniqueDependency implements Dependency {
     private final String relationName;
     private final ImmutableSet<String> columnNames;
@@ -106,11 +109,9 @@ public class UniqueDependency implements Dependency {
         }
         checkArgument(index == columnNames.size(), "some column(s) not found: %s.%s", relationName, columnNames);
 
+        // FIXME(zhangwen): restore this optimization?
         // Fast path: single-column integer primary key.
         // Unclear whether this is actually faster, though.
-        if (columnNames.size() == 1 && syms.get(0, 0).getSort().equals(context.getCustomIntSort())) {
-            return List.of(context.mkDistinctUntyped(syms.row(0).values()));
-        }
 
         List<BoolExpr> exprs = new ArrayList<>();
         for (int i = 0; i < tuples.size(); ++i) {
@@ -118,7 +119,8 @@ public class UniqueDependency implements Dependency {
                 // (tup i exists /\ tup j exists) ==> not (tup i[pk columns] == tup j[pk columns]).
                 BoolExpr[] constraint = new BoolExpr[columnNames.size() + 2];
                 for (int k = 0; k < columnNames.size(); ++k) {
-                    constraint[k] = context.mkEq(syms.get(k, i), syms.get(k, j));
+                    // Two nulls are treated non-equal.
+                    constraint[k] = context.mkSqlEqTrue(syms.get(k, i), syms.get(k, j));
                 }
                 constraint[constraint.length - 2] = exists.get(i);
                 constraint[constraint.length - 1] = exists.get(j);

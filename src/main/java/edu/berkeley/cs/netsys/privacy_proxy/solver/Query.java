@@ -13,7 +13,7 @@ import java.util.function.IntFunction;
 
 public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     public abstract Schema<C> getSchema();
-    public abstract Sort[] headTypes();
+    public abstract List<Sort> headTypes();
     // To generate expression for "Q(inst) contains tup", use `query.apply(inst).doesContainExpr(tup)`.
     protected abstract Iterable<BoolExpr> doesContain(Instance<C> instance, Tuple<C> tuple);
     protected abstract List<Tuple<C>> generateTuples(Instance<C> instance);
@@ -41,12 +41,12 @@ public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         Schema<C> schema = getSchema();
         C context = schema.getContext();
 
-        Sort[] sorts = this.headTypes();
-        int numColumns = sorts.length;
+        List<Sort> sorts = this.headTypes();
+        int numColumns = sorts.size();
 
         ArrayList<Expr<?>> head = new ArrayList<>();
         for (int i = 0; i < numColumns; ++i) {
-            head.add(context.mkConst(nameGenerator.apply(i), sorts[i]));
+            head.add(context.mkConst(nameGenerator.apply(i), sorts.get(i)));
         }
         return new Tuple<>(schema, head);
     }
@@ -54,12 +54,12 @@ public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     public Tuple<C> makeFreshHead() {
         Schema<C> schema = getSchema();
         C context = schema.getContext();
-        return new Tuple<>(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshConst("z", t)));
+        return new Tuple<>(schema, headTypes().stream().map(t -> context.mkFreshConst("z", t)));
     }
 
     public Tuple<C> makeFreshExistentialHead() {
         Schema<C> schema = getSchema();
         C context = schema.getContext();
-        return new Tuple<>(schema, Arrays.stream(headTypes()).map(t -> context.mkFreshQuantifiedConst("e", t)));
+        return new Tuple<>(schema, headTypes().stream().map(t -> context.mkFreshQuantifiedConst("e", t)));
     }
 }

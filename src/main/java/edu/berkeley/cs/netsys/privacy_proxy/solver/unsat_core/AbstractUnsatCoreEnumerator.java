@@ -1,6 +1,8 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
+import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
 
 import java.util.*;
 
@@ -97,7 +99,7 @@ public abstract class AbstractUnsatCoreEnumerator<L, C extends Z3ContextWrapper<
             }
         }
         Optional<Set<L>> satLabels = isSubsetSat(seed, lowerBound);
-        System.out.println("\t\t| GrowB:\t" + (System.nanoTime() - startNs) / 1000000);
+        Logger.printMessage("\t\t| GrowB:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
         return satLabels.get();
     }
 
@@ -116,7 +118,7 @@ public abstract class AbstractUnsatCoreEnumerator<L, C extends Z3ContextWrapper<
                 currSeed = satLabels.get();
             }
         }
-        System.out.println("\t\t| GrowL:\t" + (System.currentTimeMillis() - startMs));
+        Logger.printMessage("\t\t| GrowL:\t" + (System.currentTimeMillis() - startMs), LogLevel.VERBOSE);
         return currSeed;
     }
 

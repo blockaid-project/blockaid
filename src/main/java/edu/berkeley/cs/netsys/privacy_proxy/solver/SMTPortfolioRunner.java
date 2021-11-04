@@ -2,10 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.microsoft.z3.Status;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVC4Executor;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.SMTExecutor;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.VampireExecutor;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.Z3Executor;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.*;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
 
 import java.util.ArrayList;
@@ -58,7 +55,8 @@ public class SMTPortfolioRunner {
         CountDownLatch latch = new CountDownLatch(1);
         ArrayList<SMTExecutor> executors = new ArrayList<>();
         executors.add(new Z3Executor("z3_fast", formula, latch, false, true, false));
-        executors.add(new CVC4Executor("cvc4_fast", formula, latch, false, true, false));
+        executors.add(new CVCExecutor("cvc4", "cvc4_fast", formula, latch, false, true, false));
+        executors.add(new CVCExecutor("cvc5", "cvc5_fast", formula, latch, false, true, false));
         executors.add(new VampireExecutor("vampire_lrs+10_1_fast", "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_10000", formula, latch, false, true, false));
         executors.add(new VampireExecutor("vampire_lrs+1_3_fast", "lrs+1_3:2_afr=on:afp=100000:afq=1.0:anc=all_dependent:cond=on:fde=none:gs=on:inw=on:ile=on:irw=on:nm=6:nwc=1:stl=30:sos=theory:updr=off:uhcvi=on_10000", formula, latch, false, true, false));
         executors.add(new VampireExecutor("vampire_dis+11_3_fast", "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_10000", formula, latch, false, true, false));

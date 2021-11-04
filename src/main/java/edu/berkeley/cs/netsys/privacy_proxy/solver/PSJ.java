@@ -26,20 +26,28 @@ public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<
         this.relations = relations;
     }
 
-    protected BoolExpr predicateGenerator(List<Tuple<C>> tuples) {
-        return schema.getContext().mkTrue();
+    public record RelationColumnPair(int relationIndex, int columnIndex) {}
+
+    protected abstract BoolExpr predicateGenerator(List<Tuple<C>> tuples);
+    protected abstract List<RelationColumnPair> headSelector();
+
+    protected Tuple<C> headValueSelector(List<Tuple<C>> tuples) {
+        ArrayList<Expr<?>> parts = new ArrayList<>();
+        for (RelationColumnPair pair : headSelector()) {
+            parts.add(tuples.get(pair.relationIndex).get(pair.columnIndex));
+        }
+        return new Tuple<>(schema, parts);
     }
 
-    protected abstract Tuple<C> headSelector(List<Tuple<C>> tuples);
-    protected abstract Sort[] headTypeSelector(Sort[]... types);
-
+    // TODO(zhangwen): compute this only once?
     @Override
-    public Sort[] headTypes() {
-        List<Sort[]> args = new ArrayList<>();
-        for (String relationName : relations) {
-            args.add(schema.getColumns(relationName).stream().map(Column::type).toArray(Sort[]::new));
+    public List<Sort> headTypes() {
+        ArrayList<Sort> sorts = new ArrayList<>();
+        for (RelationColumnPair pair : headSelector()) {
+            String relationName = relations.get(pair.relationIndex);
+            sorts.add(schema.getColumns(relationName).get(pair.columnIndex).type());
         }
-        return headTypeSelector(args.toArray(new Sort[0][]));
+        return sorts;
     }
 
     // Returns a formula stating that tuple is in the output of this query on the instance.
@@ -47,7 +55,7 @@ public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<
     public Iterable<BoolExpr> doesContain(Instance<C> instance, Tuple<C> tuple) {
         List<BoolExpr> bodyClauses = new ArrayList<>();
         List<Tuple<C>> symbolicTuples = relations.stream().map(schema::makeFreshQuantifiedTuple).collect(Collectors.toList());
-        Tuple<C> headSymTup = headSelector(symbolicTuples);
+        Tuple<C> headSymTup = headValueSelector(symbolicTuples);
         checkArgument(headSymTup.size() == tuple.size());
 
         C context = schema.getContext();
@@ -98,7 +106,7 @@ public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<
         checkArgument(instance.isBounded());
 
         List<Tuple<C>> tuples = new ArrayList<>();
-        visitJoins(instance, (List<Tuple<C>> ts, List<BoolExpr> es) -> tuples.add(headSelector(ts)));
+        visitJoins(instance, (List<Tuple<C>> ts, List<BoolExpr> es) -> tuples.add(headValueSelector(ts)));
         return tuples;
     }
 

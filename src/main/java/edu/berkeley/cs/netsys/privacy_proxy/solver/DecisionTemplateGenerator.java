@@ -125,7 +125,9 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
 //                    uce.optimizeCritical();
             printMessage("\t\t| Find conseq:\t" + (System.nanoTime() - startNs) / 1e6);
 
+            startNs = System.nanoTime();
             paramsCore = uce.next().get();
+            printMessage("\t\t| Find smallest unsat core:\t" + (System.nanoTime() - startNs) / 1e6);
         }
         printMessage("final #labels =\t" + paramsCore.size() + "\t" + paramsCore);
 

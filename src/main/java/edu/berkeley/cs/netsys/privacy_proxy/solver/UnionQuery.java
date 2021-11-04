@@ -13,7 +13,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 public class UnionQuery<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<C> {
     public final ImmutableList<Query<C>> queries;
-    private final Sort[] headTypes;
+    private final List<Sort> headTypes;
 
     public UnionQuery(List<Query<C>> queries) {
         super();
@@ -34,7 +34,7 @@ public class UnionQuery<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<C>
     }
 
     @Override
-    public Sort[] headTypes() {
+    public List<Sort> headTypes() {
         return headTypes;
     }
 
