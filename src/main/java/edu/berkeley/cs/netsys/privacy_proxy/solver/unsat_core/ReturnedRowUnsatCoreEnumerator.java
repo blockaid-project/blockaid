@@ -2,7 +2,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.CVCExecutor;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.*;
@@ -10,12 +10,10 @@ import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.ProcessSMTExecutor;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.SMTExecutor;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.executor.VampireUCoreExecutor;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
+import edu.berkeley.cs.netsys.privacy_proxy.util.VampireConfigurations;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -52,20 +50,17 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
         long startNs = System.nanoTime();
         String smt = rrlFormula.generateUnsatCoreSMT(trace);
         System.out.println("\t\t| Prepare formula:\t" + (System.nanoTime() - startNs) / 1000000);
+        checker.printFormula(smt, "rr_unsat_core");
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
+        executors.add(new Z3Executor("z3", smt, latch));
         executors.add(new CVCExecutor("cvc4", "cvc4", smt, latch));
         executors.add(new CVCExecutor("cvc5", "cvc5", smt, latch));
-        executors.add(new VampireUCoreExecutor("vampire_lrs+10_1", smt, latch, "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
-//        executors.add(new VampireUCoreExecutor("vampire_lrs+1_3", smt, latch, "lrs+1_3:2_afr=on:afp=100000:afq=1.0:anc=all_dependent:cond=on:fde=none:gs=on:inw=on:ile=on:irw=on:nm=6:nwc=1:stl=30:sos=theory:updr=off:uhcvi=on_" + (TIMEOUT_S * 10)));
-        executors.add(new VampireUCoreExecutor("vampire_dis+11_3", smt, latch, "dis+11_3_av=off:fsr=off:lcm=predicate:lma=on:nm=4:nwc=1:sd=3:ss=axioms:st=1.2:sos=on:updr=off_" + (TIMEOUT_S * 10)));
-        executors.add(new VampireUCoreExecutor("vampire_dis+3_1", smt, latch, "dis+3_1_cond=on:fde=unused:nwc=1:sd=1:ss=axioms:st=1.2:sos=on:sac=on:add=off:afp=40000:afq=1.4:anc=none_" + (TIMEOUT_S * 10)));
-//        executors.add(new VampireUCoreExecutor("vampire_dis+2_3", smt, latch, "dis+2_3_av=off:cond=on:fsr=off:lcm=reverse:lma=on:nwc=1:sos=on:sp=reverse_arity_" + (TIMEOUT_S * 10)));
-
-//            executors.add(new VampireProofExecutor("vampire_lrs+1011", smt, latch, "lrs+1011_2:3_av=off:gs=on:gsem=off:nwc=1.5:sos=theory:sp=occurrence:urr=ec_only:updr=off_" + (TIMEOUT_S * 10)));
-//            executors.add(new VampireProofExecutor("vampire_lrs+11_20", smt, latch, "lrs+11_20_av=off:bs=unit_only:bsr=on:bce=on:cond=on:fde=none:gs=on:gsem=on:irw=on:nm=4:nwc=1:stl=30:sos=theory:sp=reverse_arity:uhcvi=on_" + (TIMEOUT_S * 10)));
-//            executors.add(new VampireProofExecutor("vampire_lrs+1_7", smt, latch, "lrs+1_7_av=off:cond=fast:fde=none:gs=on:gsem=off:lcm=predicate:nm=6:nwc=1:stl=30:sd=3:ss=axioms:sos=on:sp=occurrence:updr=off_" + (TIMEOUT_S * 10)));
+        for (Map.Entry<String, String> entry : VampireConfigurations.getAll(TIMEOUT_S).entrySet()) {
+            String configName = entry.getKey(), configString = entry.getValue();
+            executors.add(new VampireUCoreExecutor(configName, smt, latch, configString));
+        }
 
         for (SMTExecutor executor : executors) {
             executor.start();
@@ -102,7 +97,6 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
         }
         long solveDurMs = (System.nanoTime() - startNs) / 1000000;
         System.out.println("\t\t| Solve:\t" + solveDurMs);
-        checker.printFormula(smt, "rr_unsat_core");
 
         if (smallestRRCore == null) {
             return Optional.empty();

@@ -20,7 +20,6 @@ class CustomSorts {
     final UninterpretedSort tsSort;
     final UninterpretedSort realSort;
     final UninterpretedSort stringSort;
-    final UninterpretedSort boolSort;
 
     private final String sortDeclarationSMT;
     private final List<Values> valuesStack;
@@ -56,13 +55,11 @@ class CustomSorts {
         intSort = dateSort = tsSort = rawContext.mkUninterpretedSort("CS!INT");
         realSort = rawContext.mkUninterpretedSort("CS!REAL");
         stringSort = rawContext.mkUninterpretedSort("CS!STRING");
-        boolSort = rawContext.mkUninterpretedSort("CS!BOOL");
 
         // dateSort and tsSort are currently the same sort, so we don't declare them.
         this.sortDeclarationSMT = "(declare-sort " + realSort.getSExpr() + " 0)\n" +
                 "(declare-sort " + stringSort.getSExpr() + " 0)\n" +
-                "(declare-sort " + intSort.getSExpr() + " 0)\n" +
-                "(declare-sort " + boolSort.getSExpr() + " 0)\n";
+                "(declare-sort " + intSort.getSExpr() + " 0)\n";
 
         valuesStack = new ArrayList<>();
         valuesStack.add(new Values());
@@ -84,16 +81,6 @@ class CustomSorts {
                         ), 1, null, null, null, null
                 );
                 axiomsBuilder.add(intLtTrans);
-
-                if (Options.CONSTRAIN_CUSTOM_BOOL == Options.OnOffType.ON) {
-                    Expr<UninterpretedSort> myTrue = getBool(true), myFalse = getBool(false),
-                            b = rawContext.mkConst("b", boolSort);
-                    axiomsBuilder.add(rawContext.mkForall(
-                            new Expr[]{b},
-                            rawContext.mkOr(rawContext.mkEq(b, myTrue), rawContext.mkEq(b, myFalse)),
-                            1, null, null, null, null));
-                }
-
                 yield axiomsBuilder.build();
             }
         };
@@ -147,10 +134,6 @@ class CustomSorts {
 
     Expr<UninterpretedSort> getString(String value) {
         return get(value, stringSort, PICK_STRING);
-    }
-
-    Expr<UninterpretedSort> getBool(boolean value) {
-        return get(value, boolSort, PICK_BOOL);
     }
 
     Optional<Object> getValueForExpr(Expr<?> e) {

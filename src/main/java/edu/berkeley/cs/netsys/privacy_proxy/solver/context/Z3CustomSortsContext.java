@@ -11,7 +11,7 @@ import java.util.*;
  * Assumes that mkSolver is only called after the formula is generated (otherwise,
  * some values may be missing).
  */
-public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> {
+public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, BoolSort> {
     private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
 
@@ -222,8 +222,8 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
-    public UninterpretedSort getCustomBoolSort() {
-        return customSorts.boolSort;
+    public BoolSort getCustomBoolSort() {
+        return rawContext.getBoolSort();
     }
 
     @Override
@@ -232,8 +232,8 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
-    public Expr<UninterpretedSort> mkCustomBool(boolean value) {
-        return trackConst(customSorts.getBool(value));
+    public Expr<BoolSort> mkCustomBool(boolean value) {
+        return rawContext.mkBool(value);
     }
 
     @Override

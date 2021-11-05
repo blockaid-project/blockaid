@@ -168,6 +168,29 @@ public class AutolabTest {
     }
 
     @Test
+    public void testProductionShowAssessment() throws ClassNotFoundException, SQLException {
+        PQuery[] queries = new PQuery[]{
+                new PQuery("SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'"),
+                new PQuery("SELECT `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = ? LIMIT ?", "Course0", 1),
+                new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?", 27000000, 1),
+                new PQuery("SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = ? AND `course_user_data`.`course_id` = ? LIMIT ?", 27000000, 10000000, 1),
+                new PQuery("SELECT `courses`.* FROM `courses` WHERE `courses`.`id` = ? AND `courses`.`disabled` = ? LIMIT ?", 10000000, false, 1),
+                new PQuery("SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = ? LIMIT ?", 27000000, 1),
+                new PQuery("SELECT `announcements`.* FROM `announcements` WHERE `announcements`.`start_date` < '%1$s' AND `announcements`.`end_date` > '%1$s' AND `announcements`.`persistent` = ? AND (`announcements`.`course_id` = ? OR `announcements`.`system` = ?) ORDER BY `announcements`.`start_date` ASC", false, 10000000, true),
+                new PQuery("SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = ? LIMIT ?", 10000000, 1),
+                new PQuery("SELECT courses.* FROM courses, course_user_data WHERE courses.id = course_user_data.course_id AND course_user_data.id = ?", 9000000),
+                new PQuery("SELECT assessment_user_data.* FROM assessment_user_data WHERE assessment_user_data.course_user_datum_id = ?", 9000000),
+                new PQuery("SELECT assessments.id, assessments.course_id, assessments.name, assessments.display_name, assessments.start_at, assessments.end_at, assessments.due_at, assessments.max_grace_days, assessments.category_name, assessments.updated_at FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.id = ?", 9000000),
+                new PQuery("""
+                        SELECT `submissions`.`id`, `submissions`.`version`, `submissions`.`course_user_datum_id`, `submissions`.`assessment_id`, `submissions`.`filename`, `submissions`.`created_at`, `submissions`.`updated_at`, `submissions`.`notes`, `submissions`.`mime_type`,
+                        `submissions`.`special_type`, `submissions`.`submitted_by_id`, `submissions`.`autoresult`, `submissions`.`detected_mime_type`, `submissions`.`submitter_ip`, `submissions`.`tweak_id`, `submissions`.`ignored`, `submissions`.`dave`, `submissions`.`settings`,
+                        `submissions`.`embedded_quiz_form_answer`, `submissions`.`submitted_by_app_id` FROM submissions, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.id = ?
+                        AND courses.disabled = 0 AND submissions.assessment_id = assessments.id AND submissions.course_user_datum_id = course_user_data.id""", 9000000),
+        };
+        testQueries(queries, 27000000, 1);
+    }
+
+    @Test
     public void testProductionShowGradebook() throws ClassNotFoundException, SQLException {
         String[] queries = new String[]{
                 "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",

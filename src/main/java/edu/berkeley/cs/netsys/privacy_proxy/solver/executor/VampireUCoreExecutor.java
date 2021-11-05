@@ -9,6 +9,7 @@ public class VampireUCoreExecutor extends ProcessSMTExecutor {
     private static final String[] COMMAND = new String[]{
             "term_to_kill",
             "vampire",
+            "--ignore_missing_inputs_in_unsat_core", "on",
             "--input_syntax", "smtlib2",
     };
 
