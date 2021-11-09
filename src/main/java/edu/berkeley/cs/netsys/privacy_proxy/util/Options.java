@@ -57,6 +57,8 @@ public class Options {
 
     public static final OnOffType CONSTRAIN_CUSTOM_BOOL = getOnOffProperty("privoxy.constrain_custom_bool", OnOffType.ON);
 
+    public static final OnOffType PRUNE_PREAMBLE_IN_VALIDATION = getOnOffProperty("privoxy.prune_preamble_in_validation", OnOffType.OFF);
+
     /**
      * Whether the unsat-core bound estimator should shrink bounds.
      */

@@ -1,10 +1,12 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.labels;
 
+import java.util.regex.Pattern;
+
 // Context-agnostic.
 public interface PreambleLabel {
     enum Kind {
         DEPENDENCY,
-        VIEW
+        POLICY
     }
 
     Kind getKind();

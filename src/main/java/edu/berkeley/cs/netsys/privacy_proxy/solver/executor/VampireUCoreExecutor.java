@@ -18,6 +18,6 @@ public class VampireUCoreExecutor extends ProcessSMTExecutor {
                 ObjectArrays.concat(
                         COMMAND, new String[]{"--decode", config},
                         String.class
-                ), true, true, true, true);
+                ), true, true, false, true);
     }
 }

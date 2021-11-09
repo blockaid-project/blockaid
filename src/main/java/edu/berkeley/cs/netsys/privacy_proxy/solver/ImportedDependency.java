@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableSet;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.*;
+import org.apache.calcite.sql.SqlKind;
 
 import java.util.*;
 
@@ -14,9 +15,9 @@ public class ImportedDependency implements Dependency {
     private final ImmutableList<String> relevantColumns;
 
     // Constraint: lhs is subset of rhs.
-    public ImportedDependency(SchemaPlusWithKey schema, ParserResult lhs, ParserResult rhs) {
-        q1 = PrivacyQueryFactory.createPrivacyQuery(lhs, schema, Collections.emptyList(), Collections.emptyList());
-        q2 = PrivacyQueryFactory.createPrivacyQuery(rhs, schema, Collections.emptyList(), Collections.emptyList());
+    public ImportedDependency(SchemaPlusWithKey rawSchema, ParserResult lhs, ParserResult rhs) {
+        q1 = PrivacyQueryFactory.createPrivacyQuery(lhs, rawSchema, Collections.emptyList(), Collections.emptyList());
+        q2 = PrivacyQueryFactory.createPrivacyQuery(rhs, rawSchema, Collections.emptyList(), Collections.emptyList());
 
         relevantColumns = new ImmutableList.Builder<String>()
                 .addAll(q1.getAllNormalizedProjectColumns())
@@ -34,6 +35,15 @@ public class ImportedDependency implements Dependency {
     @Override
     public ImmutableSet<String> getToRelations() {
         return q2.getRelations();
+    }
+
+    @Override
+    public ImmutableSet<String> getCriticalRelations() {
+        if (!(q1 instanceof PrivacyQuerySelect pqs)) {
+            // TODO(zhangwen): implement for union and empty wrapper.
+            return ImmutableSet.of();
+        }
+        return pqs.getRelations();
     }
 
     @Override

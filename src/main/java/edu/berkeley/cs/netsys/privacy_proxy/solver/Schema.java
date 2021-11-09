@@ -108,14 +108,14 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         return dependencies;
     }
 
-    public Instance<C> makeFreshInstance(String instancePrefix) {
-        Instance.Builder<C> instBuilder = new Instance.Builder<>(instancePrefix, this);
+    public Instance<C> makeUnboundedInstance(String name) {
+        Instance.Builder<C> instBuilder = new Instance.Builder<>(this);
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
 
             ImmutableList<Sort> colTypes = columns.stream().map(Column::type).collect(ImmutableList.toImmutableList());
-            FuncDecl<BoolSort> func = context.mkFreshFuncDecl(instancePrefix + "_" + relationName,
+            FuncDecl<BoolSort> func = context.mkFuncDecl(name + "_" + relationName,
                     colTypes.toArray(new Sort[0]), context.getBoolSort());
             instBuilder.put(relationName, new GeneralRelation<>(this, new Z3Function(func), colTypes));
         }
@@ -124,15 +124,15 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
 
     /**
      * Creates a bounded database instance of this schema.
-     * @param instancePrefix identifies this instance.
+     * @param name identifies this instance.
      * @param bounds maps table name to upper bound on size (number of rows).
      * @param table2KnownRows maps table name to distinct known partial rows of the table; each row is represented as
      *                        a map from column name to value.
      * @return a concrete instance.
      */
-    public BoundedInstance<C> makeBoundedInstance(String instancePrefix, Map<String, Integer> bounds,
-                                           ListMultimap<String, Map<String, Object>> table2KnownRows) {
-        Instance.Builder<C> instBuilder = new Instance.Builder<>(instancePrefix, this);
+    public BoundedInstance<C> makeBoundedInstance(String name, Map<String, Integer> bounds,
+                                                  ListMultimap<String, Map<String, Object>> table2KnownRows) {
+        Instance.Builder<C> instBuilder = new Instance.Builder<>(this);
         for (ImmutableMap.Entry<String, ImmutableList<Column>> relation : relations.entrySet()) {
             String relationName = relation.getKey();
             List<Column> columns = relation.getValue();
@@ -141,7 +141,7 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
             int numTuples = bounds.get(relationName);
             ArrayList<Tuple<C>> tuples = new ArrayList<>();
             ArrayList<BoolExpr> exists = new ArrayList<>();
-            String prefix = instancePrefix + "_" + relationName;
+            String prefix = name + "_" + relationName;
 
             List<Map<String, Object>> knownRows =
                     table2KnownRows == null ? Collections.emptyList() : table2KnownRows.get(relationName);

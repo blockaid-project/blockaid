@@ -71,4 +71,9 @@ public record ForeignKeyDependency(
     public ImmutableSet<String> getToRelations() {
         return ImmutableSet.of(toRelation);
     }
+
+    @Override
+    public ImmutableSet<String> getCriticalRelations() {
+        return ImmutableSet.of(fromRelation);
+    }
 }

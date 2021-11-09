@@ -1,16 +1,17 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Streams;
+import com.google.common.collect.*;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Expr;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PolicyLabel;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -24,8 +25,8 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
 
     public BoundedDeterminacyFormula(Schema<C> schema, ImmutableList<Policy> policies,
                                      Map<String, Integer> bounds, boolean splitProducts, TextOption text,
-                                     ListMultimap<String, Map<String, Object>> table2KnownRows,
-                                     SubPreamble<C> subPreamble) {
+                                     @Nullable ListMultimap<String, Map<String, Object>> table2KnownRows,
+                                     @Nullable Collection<PreambleLabel> preambleLabels) {
         super(schema,
                 (Integer instNum) -> schema.makeBoundedInstance("instance" + instNum, bounds, table2KnownRows),
                 (BoundedInstance<C> inst1, BoundedInstance<C> inst2) -> {
@@ -33,44 +34,65 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
                     checkArgument(inst2.getSchema() == schema && inst2.isBounded());
 
                     C context = schema.getContext();
-                    List<BoolExpr> clauses = new ArrayList<>();
+                    ImmutableMap.Builder<PreambleLabel, ImmutableList<BoolExpr>> builder = ImmutableMap.builder();
 
-                    SubPreamble<C> sub = subPreamble != null
-                            ? subPreamble
-                            : new SubPreamble<>(schema.getPolicyQueries(policies), schema.getDependencies());
-
-                    for (Dependency d : sub.dependencies()) {
-                        Iterables.addAll(clauses, d.apply(inst1));
-                        Iterables.addAll(clauses, d.apply(inst2));
+                    {
+                        Stream<DependencyLabel> depLabels;
+                        if (preambleLabels == null) {
+                            depLabels = schema.getDependencies().stream().map(DependencyLabel::new);
+                        } else {
+                            depLabels = preambleLabels.stream()
+                                    .filter(l -> l.getKind() == DependencyLabel.Kind.DEPENDENCY)
+                                    .map(l -> (DependencyLabel) l);
+                        }
+                        depLabels.forEach(l -> builder.put(l, ImmutableList.copyOf(
+                                Iterables.concat(l.dependency().apply(inst1), l.dependency().apply(inst2))
+                        )));
                     }
 
-                    if (splitProducts) {
-                        for (Query<C> v : sub.views()) {
-                            // (equal under each part) || (empty on one+ part per instance)
-                            List<BoolExpr> equalityParts = new ArrayList<>();
-                            List<BoolExpr> empty1Parts = new ArrayList<>();
-                            List<BoolExpr> empty2Parts = new ArrayList<>();
-                            for (Query<C> q : v.getComponents()) {
-                                Iterables.addAll(equalityParts, q.apply(inst1).equalsExpr(q.apply(inst2)));
-                                empty1Parts.add(q.apply(inst1).isEmptyExpr());
-                                empty2Parts.add(q.apply(inst2).isEmptyExpr());
-                            }
-                            BoolExpr equality = context.mkAnd(equalityParts.toArray(new BoolExpr[0]));
-                            BoolExpr empty1 = context.mkOr(empty1Parts.toArray(new BoolExpr[0]));
-                            BoolExpr empty2 = context.mkOr(empty2Parts.toArray(new BoolExpr[0]));
-                            clauses.add(
-                                    context.mkOr(
-                                            equality,
-                                            context.mkAnd(empty1, empty2)
-                                    )
-                            );
+                    {
+                        Stream<PolicyLabel> viewLabels;
+                        if (preambleLabels == null) {
+                            viewLabels = policies.stream().map(PolicyLabel::new);
+                        } else {
+                            viewLabels = preambleLabels.stream()
+                                    .filter(l -> l.getKind() == DependencyLabel.Kind.POLICY)
+                                    .map(l -> (PolicyLabel) l);
                         }
-                    } else {
-                        for (Query<C> v : sub.views()) {
-                            Iterables.addAll(clauses, v.apply(inst1).equalsExpr(v.apply(inst2)));
+
+                        if (splitProducts) {
+                            viewLabels.forEach(l -> {
+                                Query<C> v = l.policy().getSolverQuery(schema);
+
+                                // (equal under each part) || (empty on one+ part per instance)
+                                List<BoolExpr> equalityParts = new ArrayList<>();
+                                List<BoolExpr> empty1Parts = new ArrayList<>();
+                                List<BoolExpr> empty2Parts = new ArrayList<>();
+                                for (Query<C> q : v.getComponents()) {
+                                    Iterables.addAll(equalityParts, q.apply(inst1).equalsExpr(q.apply(inst2)));
+                                    empty1Parts.add(q.apply(inst1).isEmptyExpr());
+                                    empty2Parts.add(q.apply(inst2).isEmptyExpr());
+                                }
+                                BoolExpr equality = context.mkAnd(equalityParts.toArray(new BoolExpr[0]));
+                                BoolExpr empty1 = context.mkOr(empty1Parts.toArray(new BoolExpr[0]));
+                                BoolExpr empty2 = context.mkOr(empty2Parts.toArray(new BoolExpr[0]));
+
+                                builder.put(l, ImmutableList.of(
+                                        context.mkOr(
+                                                equality,
+                                                context.mkAnd(empty1, empty2)
+                                        )
+                                ));
+                            });
+                        } else {
+                            viewLabels.forEach(l -> {
+                                Query<C> q = l.policy().getSolverQuery(schema);
+                                builder.put(l, ImmutableList.copyOf(q.apply(inst1).equalsExpr(q.apply(inst2))));
+                            });
                         }
                     }
-                    return clauses;
+
+                    return builder.build();
                 }, text);
 
         this.allDbVars = Streams.concat(

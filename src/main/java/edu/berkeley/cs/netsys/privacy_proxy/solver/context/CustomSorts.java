@@ -2,7 +2,6 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
 import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.*;
-import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -16,6 +15,7 @@ class CustomSorts {
 
     // Dependent types would come in handy here...
     final UninterpretedSort intSort;
+    final UninterpretedSort boolSort;
     final UninterpretedSort dateSort;
     final UninterpretedSort tsSort;
     final UninterpretedSort realSort;
@@ -53,11 +53,13 @@ class CustomSorts {
 
         // Int, date, and timestamp share the same sort and less-than predicate.
         intSort = dateSort = tsSort = rawContext.mkUninterpretedSort("CS!INT");
+        boolSort = rawContext.mkUninterpretedSort("CS!BOOL");
         realSort = rawContext.mkUninterpretedSort("CS!REAL");
         stringSort = rawContext.mkUninterpretedSort("CS!STRING");
 
         // dateSort and tsSort are currently the same sort, so we don't declare them.
         this.sortDeclarationSMT = "(declare-sort " + realSort.getSExpr() + " 0)\n" +
+                "(declare-sort " + boolSort.getSExpr() + " 0)\n" +
                 "(declare-sort " + stringSort.getSExpr() + " 0)\n" +
                 "(declare-sort " + intSort.getSExpr() + " 0)\n";
 
@@ -126,6 +128,10 @@ class CustomSorts {
 
     Expr<UninterpretedSort> getInt(long value) {
         return get(value, intSort, PICK_INT);
+    }
+
+    Expr<UninterpretedSort> getBool(boolean value) {
+        return get(value, boolSort, PICK_BOOL);
     }
 
     Expr<UninterpretedSort> getReal(double value) {

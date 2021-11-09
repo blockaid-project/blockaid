@@ -11,6 +11,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core.UnsatCoreEnumerato
 import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 import edu.berkeley.cs.netsys.privacy_proxy.util.UnionFind;
 
 import java.util.*;
@@ -47,7 +48,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
         unboundedContext.pushTrackConsts();
         boundedContext.pushTrackConsts();
         try {
-            // Step 1: Find all minimal unsat cores among the returned-row labels, assuming all equalities hold.
+            // Step 1: Find one minimal unsat cores among the returned-row labels, assuming all equalities hold.
             Optional<ReturnedRowUnsatCoreEnumerator.Core> oCore = rruce.getInitialRRCore(trace);
             if (oCore.isEmpty()) {
                 return Optional.empty();
@@ -86,22 +87,26 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
         SubQueryTrace sqt = trace.getSubTrace(toKeep);
 
         // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
-        UnsatCoreFormulaBuilder.Formulas<Label> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
+        UnsatCoreFormulaBuilder.Formulas<Label, PreambleLabel> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
         ImmutableSet<Operand> allOperandsOld =
-                fs.getLabeledExprs().keySet().stream() // Get all labels.
+                fs.labeledExprs().keySet().stream() // Get all labels.
                         .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
                         .map(o -> backMapOperand(o, sqt))
                         .collect(ImmutableSet.toImmutableSet());
 
         Solver solver = rruce.getSolver();
 
-        solver.add(fs.getBackground().toArray(new BoolExpr[0]));
-        checker.printFormula(solver::toString, "bg");
+        Set<Label> smallestParamsCore;
+        Set<PreambleLabel> minimalPreambleCore = null; // This should be minimal _given_ the smallest params core.
 
-        Map<Label, BoolExpr> labeledExprs = fs.getLabeledExprs();
-        Set<Label> paramsCore;
-        try (UnsatCoreEnumerator<Label, CB> uce =
-                     new UnsatCoreEnumerator<>(boundedContext, solver, labeledExprs, Order.INCREASING)) {
+        // If we don't have preamble labels in the formula, let the solver minimize unsat cores
+        // (consisting solely of param labels).
+        boolean solverMinimizeUnsatCore = (Options.PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.OFF);
+        try (UnsatCoreEnumerator<Label, PreambleLabel, CB> uce =
+                     new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.INCREASING, solverMinimizeUnsatCore)) {
+            checker.printFormula(solver::toString, "bg");
+
+            Map<Label, BoolExpr> labeledExprs = fs.labeledExprs();
             printMessage("total    #labels =\t" + labeledExprs.size());
             Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
             printMessage("starting #labels =\t" + startingUnsatCore.size() + "\t" + startingUnsatCore);
@@ -126,20 +131,29 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
             printMessage("\t\t| Find conseq:\t" + (System.nanoTime() - startNs) / 1e6);
 
             startNs = System.nanoTime();
-            paramsCore = uce.next().get();
+            Optional<Set<Label>> oParamsCore = uce.next();
+            checkState(oParamsCore.isPresent(), "formula should be unsat");
+            smallestParamsCore = oParamsCore.get();
+
+            if (Options.PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.ON) {
+                minimalPreambleCore = uce.getUnsatCorePreamble();
+            }
             printMessage("\t\t| Find smallest unsat core:\t" + (System.nanoTime() - startNs) / 1e6);
         }
-        printMessage("final #labels =\t" + paramsCore.size() + "\t" + paramsCore);
+        printMessage("final #labels =\t" + smallestParamsCore.size() + "\t" + smallestParamsCore);
+        if (minimalPreambleCore != null) {
+            printMessage("preamble core =\t" + minimalPreambleCore.size() + "\t" + minimalPreambleCore);
+        }
 
-        // Step 4: Make decision template.
-        List<Label> coreLabelsOld = paramsCore.stream().map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
+        // Step 3: Make decision template.
+        List<Label> coreLabelsOld = smallestParamsCore.stream().map(l -> backMapLabel(l, sqt)).collect(Collectors.toList());
         // `rrCore` is with respect to the old (complete) trace, so no need to back map it.
         coreLabelsOld.addAll(rrCore);
         DecisionTemplate dt = buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld);
 
-        // Step 3: Validate the unsat core on unbounded formula.
+        // Step 4: Validate the decision template using unbounded formula.
         System.out.println("\t\t| Validate:");
-        String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, paramsCore);
+        String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, smallestParamsCore, minimalPreambleCore);
         if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
             printStylizedMessage("validation failed (slack = " + boundSlack + ")", ANSI_RED_BACKGROUND);
             printMessage(dt.toString());

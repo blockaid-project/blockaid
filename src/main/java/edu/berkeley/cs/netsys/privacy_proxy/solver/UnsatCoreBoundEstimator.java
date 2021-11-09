@@ -67,12 +67,20 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 PrivacyQuery query = queryTraceEntry.getQuery();
                 Query<C> solverQuery = query.getSolverQuery(schema);
                 Relation<C> r = solverQuery.apply(instance);
+
+                List<Tuple<C>> tuples;
                 if (queryTraceEntry.hasTuples()) {
-                    List<Tuple<C>> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
-                    String name = "query!" + (i++);
-                    assertions.add(new NamedBoolExpr(context.mkAnd(r.doesContainExpr(tuples)), name));
-                    queryLabels.put(context.mkBoolConst(name), query);
+                    tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
+//                } else if (queryTraceEntry == queries.getCurrentQuery()) {
+//                    // Insist that the current query returns at least one tuple.
+//                    tuples = List.of(solverQuery.makeFreshHead());
+                } else {
+                    continue;
                 }
+
+                String name = "query!" + (i++);
+                assertions.add(new NamedBoolExpr(context.mkAnd(r.doesContainExpr(tuples)), name));
+                queryLabels.put(context.mkBoolConst(name), query);
             }
 
             solver.push();
@@ -138,10 +146,17 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
             PrivacyQuery query = queryTraceEntry.getQuery();
             Query<C> solverQuery = query.getSolverQuery(schema);
             Relation<C> r = solverQuery.apply(instance);
+
+            // TODO(zhangwen): de-duplicate this code?
+            List<Tuple<C>> tuples;
             if (queryTraceEntry.hasTuples()) {
-                List<Tuple<C>> tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
-                solver.add(context.mkAnd(r.doesContainExpr(tuples)));
+                tuples = DeterminacyFormula.getTupleObjects(queryTraceEntry, schema);
+//            } else if (queryTraceEntry == queries.getCurrentQuery()) {
+//                tuples = List.of(solverQuery.makeFreshHead());
+            } else {
+                continue;
             }
+            solver.add(context.mkAnd(r.doesContainExpr(tuples)));
         }
         checkArgument(solver.check() == Status.SATISFIABLE, "initial bounds not large enough");
 

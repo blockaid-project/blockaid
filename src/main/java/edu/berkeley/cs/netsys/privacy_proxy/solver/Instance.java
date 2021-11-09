@@ -11,19 +11,17 @@ import static com.google.common.base.Preconditions.*;
 
 // TODO(zhangwen): separate class for unbounded instances?
 public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
-    private final String name;
     private final Schema<C> schema;
     private final boolean isBounded;
     private final ImmutableMap<String, Relation<C>> name2Rel;
     private final ImmutableMap<FuncDecl<BoolSort>, String> funcDecl2RelName;
 
-    Instance(String name, Schema<C> schema, boolean isBounded, ImmutableMap<String, Relation<C>> name2Rel,
+    Instance(Schema<C> schema, boolean isBounded, ImmutableMap<String, Relation<C>> name2Rel,
              ImmutableMap<FuncDecl<BoolSort>, String> funcDecl2RelName) {
         if (isBounded) {
             checkArgument(name2Rel.values().stream().allMatch(r -> r instanceof ConcreteRelation<C>));
         }
 
-        this.name = name;
         this.schema = checkNotNull(schema);
         this.isBounded = isBounded;
         this.name2Rel = checkNotNull(name2Rel);
@@ -46,29 +44,23 @@ public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         return schema;
     }
 
-    public String getName() {
-        return name;
-    }
-
     public C getContext() {
         return schema.getContext();
     }
 
     static class Builder<C extends Z3ContextWrapper<?, ?, ?, ?>> {
-        private final String name;
         private final Schema<C> schema;
         private final ImmutableMap.Builder<String, Relation<C>> name2RelBuilder;
         private final ImmutableMap.Builder<FuncDecl<BoolSort>, String> funcDecl2RelNameBuilder;
 
         /**
          * Variables that constitute the contents of a BOUNDED instance (including "exists" variables).
-         * TODO(zhangwen): adding vars explicitly is error-prone; extract from isntance directly?
+         * TODO(zhangwen): adding vars explicitly is error-prone; extract from instance directly?
          * TODO(zhangwen): have a separate bounded builder?
          */
         private final ImmutableList.Builder<Expr<?>> dbVarsBuilder;
 
-        Builder(String name, Schema<C> schema) {
-            this.name = name;
+        Builder(Schema<C> schema) {
             this.schema = schema;
             this.name2RelBuilder = new ImmutableMap.Builder<>();
             this.funcDecl2RelNameBuilder = new ImmutableMap.Builder<>();
@@ -92,11 +84,11 @@ public class Instance<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         public Instance<C> buildUnbounded() {
             ImmutableList<Expr<?>> dbVars = dbVarsBuilder.build();
             checkState(dbVars.isEmpty(), "unbounded formula shouldn't have dbVars");
-            return new Instance<>(name, schema, false, name2RelBuilder.build(), funcDecl2RelNameBuilder.build());
+            return new Instance<>(schema, false, name2RelBuilder.build(), funcDecl2RelNameBuilder.build());
         }
 
         public BoundedInstance<C> buildBounded() {
-            return new BoundedInstance<>(name, schema, name2RelBuilder.build(), funcDecl2RelNameBuilder.build(), dbVarsBuilder.build());
+            return new BoundedInstance<>(schema, name2RelBuilder.build(), funcDecl2RelNameBuilder.build(), dbVarsBuilder.build());
         }
     }
 }

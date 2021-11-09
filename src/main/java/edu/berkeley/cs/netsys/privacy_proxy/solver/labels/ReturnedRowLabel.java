@@ -16,6 +16,6 @@ public record ReturnedRowLabel(int queryIdx, int rowIdx) implements Label {
 
     @Override
     public String toString() {
-        return "ReturnedRowLabel!" + queryIdx + "!" + rowIdx;
+        return "ReturnedRowLabel_" + queryIdx + "_" + rowIdx;
     }
 }

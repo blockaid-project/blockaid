@@ -9,8 +9,8 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.*;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
-import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 import edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -26,8 +26,9 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
     private final C context;
 
     public enum Option {
-        NORMAL,
         NO_PREAMBLE,
+        NO_REMOVE_REDUNDANT,
+        NO_MARK_BG,
     }
 
     public UnsatCoreFormulaBuilder(DeterminacyFormula<C, I> baseFormula, Collection<Policy> policies) {
@@ -41,63 +42,74 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
         ).collect(ImmutableSet.toImmutableSet());
     }
 
-    public static class Formulas<L extends Label> {
-        private final ImmutableMap<L, BoolExpr> labeledExprs;
-        // Formula that is not under consideration for unsat core.
-        private final ImmutableList<BoolExpr> background;
+    public static record Formulas<L, BL>(
+            ImmutableMap<L, BoolExpr> labeledExprs,
+            ImmutableList<LabeledBoolExpr<BL>> background // Formula that is not under consideration for unsat core.
+    ) {}
 
-        public Formulas(Map<L, BoolExpr> labeledExprs, Collection<BoolExpr> background) {
-            this.labeledExprs = ImmutableMap.copyOf(labeledExprs);
-            this.background = ImmutableList.copyOf(background);
-        }
-
-        public ImmutableMap<L, BoolExpr> getLabeledExprs() {
-            return labeledExprs;
-        }
-
-        public ImmutableList<BoolExpr> getBackground() {
-            return background;
-        }
-    }
-
-    public Formulas<ReturnedRowLabel> buildReturnedRowsOnly(UnmodifiableLinearQueryTrace trace) {
+    public Formulas<ReturnedRowLabel, PreambleLabel> buildReturnedRowsOnly(UnmodifiableLinearQueryTrace trace,
+                                                                           EnumSet<Option> options) {
         ImmutableMap<ReturnedRowLabel, BoolExpr> labeledExprs = makeLabeledExprsRR(trace);
-        ImmutableList.Builder<BoolExpr> bgBuilder = new ImmutableList.Builder<>();
-        bgBuilder.addAll(baseFormula.preamble);
-        bgBuilder.addAll(baseFormula.generateConstantCheck(trace));
-        bgBuilder.addAll(baseFormula.generateNotContains(trace));
-        return new Formulas<>(labeledExprs, bgBuilder.build());
+
+        Stream<LabeledBoolExpr<PreambleLabel>> preambleBgStream =
+                baseFormula.preamble.entrySet().stream()
+                        .map(entry -> {
+                                    BoolExpr formula = context.mkAnd(entry.getValue());
+                                    if (options.contains(Option.NO_MARK_BG)) {
+                                        return LabeledBoolExpr.makeUnlabeled(formula);
+                                    } else {
+                                        return new LabeledBoolExpr<>(formula, entry.getKey());
+                                    }
+                                });
+        Stream<LabeledBoolExpr<PreambleLabel>> otherBgStream =
+                Streams.concat(
+                        Streams.stream(baseFormula.generateConstantCheck(trace)),
+                        Streams.stream(baseFormula.generateNotContains(trace))
+                ).map(LabeledBoolExpr::makeUnlabeled);
+
+        ImmutableList<LabeledBoolExpr<PreambleLabel>> background = Streams.concat(preambleBgStream, otherBgStream)
+                .collect(ImmutableList.toImmutableList());
+        return new Formulas<>(labeledExprs, background);
     }
 
-    public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace) {
-        return buildParamRelationsOnly(trace, Option.NORMAL);
+    public Formulas<Label, PreambleLabel> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace) {
+        return buildParamRelationsOnly(trace, EnumSet.noneOf(Option.class));
     }
 
-    // Assumes the entire trace is present, i.e., returned-row labels count as background.
-    public Formulas<Label> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace, Option option) {
-        Map<Label, BoolExpr> allLabeledExprs = makeLabeledExprsAll(trace);
-        ImmutableList.Builder<BoolExpr> bgBuilder = new ImmutableList.Builder<>();
+    /**
+     * Builds unsat core formulas assuming the entire trace is present, i.e., returned-row labels count as background.
+     * @param trace the trace to generate formulas for.
+     * @param options options for the formula.
+     * @return unsat core formulas.
+     */
+    public Formulas<Label, PreambleLabel> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace,
+                                                                  EnumSet<Option> options) {
+        Map<Label, BoolExpr> allLabeledExprs = makeLabeledExprsAll(trace, options);
+        ImmutableList.Builder<LabeledBoolExpr<PreambleLabel>> bgBuilder = ImmutableList.builder();
 
-        ArrayList<BoolExpr> antecedent = new ArrayList<>();
-        if (option != Option.NO_PREAMBLE) {
-            antecedent.addAll(baseFormula.preamble);
+        if (!options.contains(Option.NO_PREAMBLE)) {
+            for (var entry : baseFormula.preamble.entrySet()) {
+                BoolExpr formula = context.mkAnd(entry.getValue());
+                bgBuilder.add(
+                        options.contains(Option.NO_MARK_BG) ? LabeledBoolExpr.makeUnlabeled(formula)
+                                : new LabeledBoolExpr<>(formula, entry.getKey())
+                );
+            }
         }
         Query<C> query = trace.getCurrentQuery().getQuery().getSolverQuery(schema, "cq", 0);
-        Iterable<BoolExpr> negatedConsequence = baseFormula.generateNotContains(query);
 
         // Since we're param labels-only, add returned-row labels to background and exclude them from `labeledExprs`.
         ImmutableMap.Builder<Label, BoolExpr> labeledExprsBuilder = new ImmutableMap.Builder<>();
         for (Map.Entry<Label, BoolExpr> entry : allLabeledExprs.entrySet()) {
             if (entry.getKey().getKind() == Label.Kind.RETURNED_ROW) {
-                antecedent.add(entry.getValue());
+                bgBuilder.add(LabeledBoolExpr.makeUnlabeled(entry.getValue()));
             } else {
                 labeledExprsBuilder.put(entry);
             }
         }
 
-        bgBuilder.addAll(antecedent);
-        bgBuilder.addAll(negatedConsequence);
-        ImmutableList<BoolExpr> background = bgBuilder.build();
+        Iterable<BoolExpr> negatedConsequence = baseFormula.generateNotContains(query);
+        bgBuilder.add(LabeledBoolExpr.makeUnlabeled(context.mkAnd(negatedConsequence)));
 
         // TODO(zhangwen): existentially quantify the database table variables so that they don't appear in the model.
         //  The code below doesn't work because the labeled exprs also reference the quantified variables.
@@ -106,19 +118,25 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
 //            background = ImmutableList.of(quantifiedBackground);
 //        }
 
-        return new Formulas<>(labeledExprsBuilder.build(), background);
+        return new Formulas<>(labeledExprsBuilder.build(), bgBuilder.build());
     }
 
     // Once again, assumes the entire trace is present.
-    public String buildValidateParamRelationsOnlySMT(UnmodifiableLinearQueryTrace trace, Set<Label> labels) {
-        return baseFormula.generateSMT(() -> {
+    public String buildValidateParamRelationsOnlySMT(UnmodifiableLinearQueryTrace trace,
+                                                     Set<Label> labels,
+                                                     @Nullable Set<PreambleLabel> preambleLabels) {
+        if (preambleLabels == null) {
+            preambleLabels = baseFormula.computeRelevantPreambleLabels(trace);
+        }
+        Formulas<Label, PreambleLabel> fs = buildParamRelationsOnly(
+                trace, EnumSet.of(Option.NO_PREAMBLE, Option.NO_REMOVE_REDUNDANT, Option.NO_MARK_BG));
+        return baseFormula.generateSMT(
             // Don't include the preamble -- the `generateSMT` automatically.
-            Formulas<Label> fs = buildParamRelationsOnly(trace, Option.NO_PREAMBLE);
-            return Iterables.concat(
-                    fs.getBackground(),
-                    Maps.filterKeys(fs.getLabeledExprs(), labels::contains).values()
-            );
-        });
+            Streams.concat(
+                    // The entire background of `fs` is unlabeled.
+                    fs.background().stream().map(LabeledBoolExpr::expr),
+                    Maps.filterKeys(fs.labeledExprs(), labels::contains).values().stream()
+            ), preambleLabels);
     }
 
     private ImmutableMap<ReturnedRowLabel, BoolExpr> makeLabeledExprsRR(UnmodifiableLinearQueryTrace trace) {
@@ -142,7 +160,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
         return label2Expr.build();
     }
 
-    private Map<Label, BoolExpr> makeLabeledExprsAll(UnmodifiableLinearQueryTrace trace) {
+    private Map<Label, BoolExpr> makeLabeledExprsAll(UnmodifiableLinearQueryTrace trace, EnumSet<Option> options) {
         QueryTraceEntry lastEntry = trace.getCurrentQuery();
         ListMultimap<Object, Expr<?>> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
 
@@ -225,14 +243,16 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
             ecs.put(value, constExpr);
         }
 
-        long startTime = System.currentTimeMillis();
-        removeRedundantExprs(
-                ecs,
-                expr2Operand,
-                pkValuedExprs,
-                Maps.filterKeys(label2Expr, l -> l.getKind() == Label.Kind.RETURNED_ROW).values()
-        );
-        System.out.println("\t\t| removeRedundantExprs:\t" + (System.currentTimeMillis() - startTime));
+        if (!options.contains(Option.NO_REMOVE_REDUNDANT)) {
+            long startNs = System.nanoTime();
+            removeRedundantExprs(
+                    ecs,
+                    expr2Operand,
+                    pkValuedExprs,
+                    Maps.filterKeys(label2Expr, l -> l.getKind() == Label.Kind.RETURNED_ROW).values()
+            );
+            System.out.println("\t\t| removeRedundantExprs:\t" + (System.nanoTime() - startNs) / 1000000);
+        }
 
 //        for (Object value : ecs.keySet()) {
 //            List<Expr> variables = ecs.get(value);

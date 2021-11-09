@@ -12,6 +12,15 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Uses integer and bool sorts.  Doesn't track constants.
+ *
+ * For now, I give up on using SMT theories due to bad performance.  Here's what happens:
+ * - If we use theories in bounded formulas, in unbounded formulas we need to constrain the boolean sort to two values,
+ *   because Privoxy can generate decision templates that depend on this property.
+ * - Using the boolean sort in unbounded formulas (instead of uninterpreted) slows down the solvers.  Sometimes Z3 still
+ *   does well, but it produces unsat cores that are so large that performance of subsequent stages suffers.
+ * - For a similar reason, validation becomes very slow.  I tried pruning the validation formula to contain only the
+ *   preamble clauses that were used to prove compliance in the bounded formula, but that might also slow the solver
+ *   down.
  */
 class Z3TheoryContext<NullableInt, NullableBool> extends Z3ContextWrapper<IntSort, IntSort, IntSort, BoolSort> {
     // We represent strings using int expressions, so track the mapping.

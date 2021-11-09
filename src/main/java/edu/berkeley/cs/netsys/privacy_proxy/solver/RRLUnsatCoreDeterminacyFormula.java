@@ -1,18 +1,12 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
+import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.microsoft.z3.BoolExpr;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ReturnedRowLabel;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.ViewLabel;
-import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.*;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -24,46 +18,41 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 
 public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     private final DeterminacyFormula<C, Instance<C>> baseFormula;
-    private final ImmutableList<Dependency> dependencies;
-    private final ImmutableList<Policy> policies;
+    private final PreambleLabelCollection preambleLabels;
 
-    private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel!(\\d+)!(\\d+)");
-    private static final Pattern PREAMBLE_PATTERN = Pattern.compile("(Constraint|View)!(\\d+)");
+    private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel_(\\d+)_(\\d+)");
 
     public RRLUnsatCoreDeterminacyFormula(Schema<C> schema, ImmutableList<Policy> policies) {
-        Instance<C> inst1 = schema.makeFreshInstance("instance0"),
-                inst2 = schema.makeFreshInstance("instance1");
+        Instance<C> inst1 = schema.makeUnboundedInstance("instance0"),
+                inst2 = schema.makeUnboundedInstance("instance1");
 
         C context = schema.getContext();
-        ArrayList<NamedBoolExpr> preamble = new ArrayList<>();
+        this.preambleLabels = new PreambleLabelCollection(schema.getDependencies(), policies);
 
-        this.dependencies = ImmutableList.copyOf(schema.getDependencies());
-        for (int i = 0; i < dependencies.size(); ++i) {
-            Dependency d = dependencies.get(i);
-            BoolExpr formula = context.mkAnd(Iterables.concat(d.apply(inst1), d.apply(inst2)));
-            if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
-                preamble.add(new NamedBoolExpr(formula, "Constraint!" + i));
-            } else {
-                preamble.add(NamedBoolExpr.makeUnnamed(formula));
-            }
-        }
+        HashMap<PreambleLabel, NamedBoolExpr> preamble = new HashMap<>();
+        preambleLabels.forEachWithName((name, label) -> {
+            BoolExpr formula = switch (label.getKind()) {
+                case POLICY -> {
+                    Query<C> v = ((PolicyLabel) label).policy().getSolverQuery(schema);
+                    yield context.mkAnd(v.apply(inst1).isContainedInExpr(v.apply(inst2)));
+                }
+                case DEPENDENCY -> {
+                    Dependency d = ((DependencyLabel) label).dependency();
+                    yield context.mkAnd(Iterables.concat(d.apply(inst1), d.apply(inst2)));
+                }
+            };
 
-        this.policies = policies;
-        ImmutableList<Query<C>> views = schema.getPolicyQueries(policies);
-        for (int i = 0; i < views.size(); ++i) {
-            Query<C> v = views.get(i);
-            BoolExpr formula = context.mkAnd(v.apply(inst1).isContainedInExpr(v.apply(inst2)));
-            if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
-                preamble.add(new NamedBoolExpr(formula, "View!" + i));
-            } else {
-                preamble.add(NamedBoolExpr.makeUnnamed(formula));
-            }
-        }
+            NamedBoolExpr expr = switch (PRUNE_PREAMBLE) {
+                case UNSAT_CORE -> new NamedBoolExpr(formula, name);
+                case OFF, COARSE -> NamedBoolExpr.makeUnnamed(formula);
+            };
+            preamble.put(label, expr);
+        });
 
-        String preambleSMT = DeterminacyFormula.makePreambleSMTNamed(preamble);
-        ImmutableList<BoolExpr> rawPreamble = preamble.stream().map(NamedBoolExpr::expr)
-                .collect(ImmutableList.toImmutableList());
-
+        ImmutableMap<PreambleLabel, String> preambleSMT = DeterminacyFormula.makePreambleSMTNamed(preamble);
+        ImmutableMap<PreambleLabel, ImmutableList<BoolExpr>> rawPreamble = ImmutableMap.copyOf(
+                Maps.transformValues(preamble, nbe -> ImmutableList.of(nbe.expr()))
+        );
         this.baseFormula = new DeterminacyFormula<>(schema, inst1, inst2, rawPreamble, TextOption.USE_TEXT, preambleSMT);
     }
 
@@ -93,14 +82,17 @@ public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, 
     }
 
     public String generateUnsatCoreSMT(UnmodifiableLinearQueryTrace trace) {
-        return baseFormula.generateSMTFromString(() -> {
-            Stream<NamedBoolExpr> formulas = Streams.concat(
-                    generateTupleCheckNamed(trace).stream(),
-                    Streams.stream(baseFormula.generateConstantCheck(trace)).map(NamedBoolExpr::makeUnnamed),
-                    Streams.stream(baseFormula.generateNotContains(trace)).map(NamedBoolExpr::makeUnnamed)
-            );
-            return formulas.map(NamedBoolExpr::makeAssertion).collect(Collectors.joining("\n"));
-        }, "(set-option :produce-unsat-cores true)\n", "(get-unsat-core)\n(exit)");
+        Stream<NamedBoolExpr> formulas = Streams.concat(
+                generateTupleCheckNamed(trace).stream(),
+                Streams.stream(baseFormula.generateConstantCheck(trace)).map(NamedBoolExpr::makeUnnamed),
+                Streams.stream(baseFormula.generateNotContains(trace)).map(NamedBoolExpr::makeUnnamed)
+        );
+        String bodySMT = formulas.map(NamedBoolExpr::makeAssertion).collect(Collectors.joining("\n"));
+
+        return baseFormula.generateSMTFromString(bodySMT,
+                "(set-option :produce-unsat-cores true)\n",
+                "(get-unsat-core)\n(exit)",
+                baseFormula.computeRelevantPreambleLabels(trace));
     }
 
     public Set<ReturnedRowLabel> extractRRLabels(Collection<String> core) {
@@ -116,20 +108,8 @@ public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, 
     }
 
     public Set<PreambleLabel> extractPreambleLabels(Collection<String> core) {
-        Set<PreambleLabel> res = new HashSet<>();
-        for (String label : core) {
-            Matcher m = PREAMBLE_PATTERN.matcher(label);
-            if (!m.matches()) {
-                continue;
-            }
-
-            int i = Integer.parseInt(m.group(2));
-            res.add(switch (m.group(1)) {
-                case "Constraint" -> new DependencyLabel(dependencies.get(i));
-                case "View" -> new ViewLabel(policies.get(i));
-                default -> throw new IllegalArgumentException("parse preamble label failed: " + m.group(0));
-            });
-        }
-        return res;
+        return core.stream()
+                .flatMap(name -> preambleLabels.parse(name).stream())
+                .collect(Collectors.toSet());
     }
 }

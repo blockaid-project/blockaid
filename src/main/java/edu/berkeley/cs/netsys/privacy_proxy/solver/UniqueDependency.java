@@ -53,6 +53,11 @@ public class UniqueDependency implements Dependency {
         return ImmutableSet.of();
     }
 
+    @Override
+    public ImmutableSet<String> getCriticalRelations() {
+        return ImmutableSet.of(relationName);
+    }
+
     private <C extends Z3ContextWrapper<?, ?, ?, ?>> Iterable<BoolExpr> applyGeneral(Instance<C> instance) {
         C context = instance.getContext();
 
@@ -129,5 +134,10 @@ public class UniqueDependency implements Dependency {
         }
 
         return exprs;
+    }
+
+    @Override
+    public String toString() {
+        return "UniqueDependency{" + relationName + "." + columnNames + '}';
     }
 }

@@ -121,34 +121,6 @@ public class AutolabTest {
     }
 
     @Test
-    public void testProductionShowQuizPartial() throws ClassNotFoundException, SQLException {
-        String[] queries = new String[]{
-                "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '2021-09-12 23:14:07'",
-                "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'Course0' LIMIT 1",
-                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000000 ORDER BY `users`.`id` ASC LIMIT 1",
-                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000000 AND `course_user_data`.`course_id` = 10000000 LIMIT 1",
-                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 10000000 AND `courses`.`disabled` = 0 LIMIT 1",
-                "SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = 27000000 LIMIT 1",
-                "SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000000 AND `assessments`.`name` = 'quiz4' LIMIT 1",
-                "SELECT COUNT(`submissions`.`id`) FROM `submissions` WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000",
-                "SELECT `assessments`.* FROM `assessments` WHERE `assessments`.`id` = 5000016",
-                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`id` = 9000000 LIMIT 1",
-                "SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`id` = 5000016 LIMIT 1",
-                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 10000000 LIMIT 1",
-                "SELECT  `extensions`.* FROM `extensions` WHERE `extensions`.`course_user_datum_id` = 9000000 AND `extensions`.`assessment_id` = 5000016 LIMIT 1",
-                "SELECT  `extensions`.* FROM `extensions` WHERE `extensions`.`assessment_id` = 5000016 AND `extensions`.`course_user_datum_id` = 9000000 LIMIT 1",
-                "SELECT `submissions`.`id`, `submissions`.`version`, `submissions`.`course_user_datum_id`, `submissions`.`assessment_id`, `submissions`.`filename`, `submissions`.`created_at`, `submissions`.`updated_at`, `submissions`.`notes`, `submissions`.`mime_type`, `submissions`.`special_type`, `submissions`.`submitted_by_id`, `submissions`.`autoresult`, `submissions`.`detected_mime_type`, `submissions`.`submitter_ip`, `submissions`.`tweak_id`, `submissions`.`ignored`, `submissions`.`dave`, `submissions`.`settings`, `submissions`.`embedded_quiz_form_answer`, `submissions`.`submitted_by_app_id`, submissions.id AS submission_id, problems.id AS problem_id, scores.id AS score_id, scores.* FROM `submissions` JOIN problems ON submissions.assessment_id = problems.assessment_id JOIN scores ON (submissions.id = scores.submission_id AND problems.id = scores.problem_id AND scores.released = 1) WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000 ORDER BY version DESC",
-                "SELECT  `scoreboards`.* FROM `scoreboards` WHERE `scoreboards`.`assessment_id` = 5000016 LIMIT 1",
-                "SELECT COUNT(*) FROM `submissions` WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000",
-                "SELECT `attachments`.* FROM `attachments` WHERE `attachments`.`assessment_id` = 5000016",
-                "SELECT  `submissions`.`id`, `submissions`.`version`, `submissions`.`course_user_datum_id`, `submissions`.`assessment_id`, `submissions`.`filename`, `submissions`.`created_at`, `submissions`.`updated_at`, `submissions`.`notes`, `submissions`.`mime_type`, `submissions`.`special_type`, `submissions`.`submitted_by_id`, `submissions`.`autoresult`, `submissions`.`detected_mime_type`, `submissions`.`submitter_ip`, `submissions`.`tweak_id`, `submissions`.`ignored`, `submissions`.`dave`, `submissions`.`settings`, `submissions`.`embedded_quiz_form_answer`, `submissions`.`submitted_by_app_id` FROM `submissions` WHERE `submissions`.`assessment_id` = 5000016 AND `submissions`.`course_user_datum_id` = 9000000 ORDER BY version DESC LIMIT 3",
-                "SELECT `problems`.* FROM `problems` WHERE `problems`.`assessment_id` = 5000016",
-                "SELECT `announcements`.* FROM `announcements` WHERE `announcements`.`persistent` = 1 AND (`announcements`.`course_id` = 10000000 OR `announcements`.`system` = 1)",
-        };
-        testQueries(queries, 27000000, 1);
-    }
-
-    @Test
     public void testProductionHomepage() throws ClassNotFoundException, SQLException {
         PQuery[] queries = new PQuery[]{
                 new PQuery("SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'"),
@@ -207,6 +179,7 @@ public class AutolabTest {
         };
         testQueries(queries, 27000050, 1);
     }
+
     @Test
     public void testProductionDownload() throws ClassNotFoundException, SQLException {
         PQuery[] queries = new PQuery[]{

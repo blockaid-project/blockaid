@@ -10,7 +10,6 @@ import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.QueryChecker;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.SubPreamble;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 import edu.berkeley.cs.netsys.privacy_proxy.util.VampireConfigurations;
@@ -23,6 +22,7 @@ import java.util.stream.Collectors;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE_IN_VALIDATION;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, CB extends Z3ContextWrapper<?, ?, ?, ?>> {
@@ -54,7 +54,8 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        executors.add(new Z3Executor("z3", smt, latch));
+        // We don't include Z3 because it generates large unsat cores.
+//        executors.add(new Z3Executor("z3", smt, latch));
         executors.add(new CVCExecutor("cvc4", "cvc4", smt, latch));
         executors.add(new CVCExecutor("cvc5", "cvc5", smt, latch));
         for (Map.Entry<String, String> entry : VampireConfigurations.getAll(TIMEOUT_S).entrySet()) {
@@ -103,9 +104,9 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
         }
 
         printMessage("Winner:\t" + winner + "\t" + solveDurMs);
-        printStylizedMessage(smallestRRCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
+        printMessage("\tReturned-row core: " + smallestRRCore);
         if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
-            printStylizedMessage(preambleCore::toString, ANSI_RED + ANSI_BLUE_BACKGROUND);
+            printMessage("\tPreamble core: " + preambleCore);
         }
 
         return Optional.of(new Core(smallestRRCore, preambleCore));
@@ -147,19 +148,23 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
                 printMessage(() -> "Bounds:\t" + finalSlackBounds, LogLevel.VERBOSE);
             }
 
-            SubPreamble<CB> subPreamble = switch (PRUNE_PREAMBLE) {
-                case UNSAT_CORE -> SubPreamble.fromLabels(boundedSchema, preambleCore);
-                case COARSE, OFF -> null; // Keep the entire preamble.
-            };
+            if (PRUNE_PREAMBLE != Options.PrunePreambleType.UNSAT_CORE) {
+                preambleCore = null;
+            }
 
             BoundedDeterminacyFormula<CB> baseFormula = new BoundedDeterminacyFormula<>(
                     boundedSchema, policies, slackBounds,
                     true, TextOption.NO_TEXT, null,
-                    subPreamble);
+                    preambleCore);
             this.formulaBuilder = new UnsatCoreFormulaBuilder<>(baseFormula, policies);
             printMessage("\t\t| Bounded RRL core 1:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
 
-            UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel> fs = formulaBuilder.buildReturnedRowsOnly(subTrace);
+            EnumSet<UnsatCoreFormulaBuilder.Option> options = EnumSet.noneOf(UnsatCoreFormulaBuilder.Option.class);
+            if (PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.OFF) {
+                options = EnumSet.of(UnsatCoreFormulaBuilder.Option.NO_MARK_BG);
+            }
+            UnsatCoreFormulaBuilder.Formulas<ReturnedRowLabel, PreambleLabel> fs =
+                    formulaBuilder.buildReturnedRowsOnly(subTrace, options);
             solver = boundedContext.mkQfSolver();
 
             if (subTrace.size() == 1) { // Only the current query is in the trace.  It doesn't depend on any previous!
@@ -167,20 +172,14 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
                 return Collections.emptySet();
             }
 
-            solver.push();
-            for (BoolExpr e : fs.getBackground()) {
-                solver.add(e);
-            }
             printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
-            try (UnsatCoreEnumerator<ReturnedRowLabel, CB> uce
-                         = new UnsatCoreEnumerator<>(boundedContext, solver, fs.getLabeledExprs(), Order.ARBITRARY)) {
+            try (UnsatCoreEnumerator<ReturnedRowLabel, PreambleLabel, CB> uce
+                         = new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.ARBITRARY, true)) {
                 printMessage("\t\t| Bounded RRL core 3:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
-                Set<ReturnedRowLabel> s = uce.getStartingUnsatCore();
+                Set<ReturnedRowLabel> s = uce.next().get();
                 printMessage("\t\t| Bounded RRL core 4:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
                 s = s.stream().map(l -> (ReturnedRowLabel) DecisionTemplateGenerator.backMapLabel(l, subTrace)).collect(Collectors.toSet());
                 return s;
-            } finally {
-                solver.pop();
             }
         } finally {
             printMessage("\t\t| Bounded RRL core:\t" + (System.nanoTime() - startNs) / 1000000);

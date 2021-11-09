@@ -15,10 +15,12 @@ import java.util.*;
 import static com.google.common.base.Preconditions.checkArgument;
 
 public class Policy {
+    private final ParserResult parserResult;
     private final ParsedPSJ parsedPSJ;
     private final boolean useSuperset;
 
     public Policy(SchemaPlusWithKey schema, ParserResult result) {
+        this.parserResult = result;
         SqlNode node = result.getSqlNode();
         checkArgument(node.getKind() == SqlKind.SELECT, "a view must be a SELECT, instead got: " + node.getKind());
         parsedPSJ = new ParsedPSJ(node, schema, Collections.emptyList(), Collections.emptyList());
@@ -64,5 +66,10 @@ public class Policy {
 
     public <C extends Z3ContextWrapper<?, ?, ?, ?>> Query<C> getSolverQuery(Schema<C> schema) {
         return parsedPSJ.getSolverQuery(schema);
+    }
+
+    @Override
+    public String toString() {
+        return parserResult.getParsedSql();
     }
 }

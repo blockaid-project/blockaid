@@ -11,6 +11,9 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.QuantifierOption;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3CustomSortsContext;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PolicyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
@@ -62,6 +65,66 @@ public class QueryChecker {
     private int queryCount; // Number of queries processed so far.
     private final DecisionTemplateGenerator<?, ?> dtg;
 
+
+    // https://stackoverflow.com/a/19649473
+    @FunctionalInterface
+    interface TriFunction<A,B,C,R> {
+        R apply(A a, B b, C c);
+    }
+
+    /**
+     * Makes formula for checking determinacy (i.e., not for generating unsat core).
+     * @param schema database schema.
+     * @param policySet policy.
+     * @param textOption whether the formula will be used in text (SMT-LIB 2) mode.
+     * @param mkViewConstraint s function that generates constraints for a view.
+     * @param <C> context type.
+     * @return formula.
+     */
+    private static <C extends Z3ContextWrapper<?, ?, ?, ?>> DeterminacyFormula<C, Instance<C>> makeCheck(
+            Schema<C> schema, ImmutableList<Policy> policySet, TextOption textOption,
+            TriFunction<Query<C>, Instance<C>, Instance<C>, Iterable<BoolExpr>> mkViewConstraint) {
+        return new DeterminacyFormula<>(schema,
+                (Integer instNum) -> schema.makeUnboundedInstance("instance" + instNum),
+                (Instance<C> inst1, Instance<C> inst2) -> {
+                    checkArgument(inst1.getSchema() == schema);
+                    checkArgument(inst2.getSchema() == schema);
+
+                    ImmutableMap.Builder<PreambleLabel, ImmutableList<BoolExpr>> builder = ImmutableMap.builder();
+                    for (Dependency d : schema.getDependencies()) {
+                        ImmutableList<BoolExpr> clauses =
+                                ImmutableList.copyOf(Iterables.concat(d.apply(inst1), d.apply(inst2)));
+                        builder.put(new DependencyLabel(d), clauses);
+                    }
+
+                    Streams.forEachPair(
+                            policySet.stream().map(PolicyLabel::new),
+                            schema.getPolicyQueries(policySet).stream(),
+                            (label, view) ->
+                                    builder.put(label, ImmutableList.copyOf(mkViewConstraint.apply(view, inst1, inst2)
+                                    ))
+                    );
+
+                    return builder.build();
+                }, textOption);
+    }
+
+    public static <C extends Z3ContextWrapper<?, ?, ?, ?>>
+    DeterminacyFormula<C, Instance<C>> makeBasicCheckFormula(Schema<C> schema, ImmutableList<Policy> policySet,
+                                                             TextOption textOption) {
+        return makeCheck(schema, policySet, textOption,
+                (view, inst1, inst2) -> view.apply(inst1).equalsExpr(view.apply(inst2))
+        );
+    }
+
+    public static <C extends Z3ContextWrapper<?, ?, ?, ?>>
+    DeterminacyFormula<C, Instance<C>> makeFastCheckFormula(Schema<C> schema, ImmutableList<Policy> policySet,
+                                                            TextOption textOption) {
+        return makeCheck(schema, policySet, textOption,
+                (view, inst1, inst2) -> view.apply(inst1).isContainedInExpr(view.apply(inst2))
+        );
+    }
+
     /**
      * For sharing decision cache among `QueryChecker` objects for the same database / policy.
      */
@@ -83,8 +146,8 @@ public class QueryChecker {
         this.allSchemata = ImmutableList.of(customSortsSchema, theorySchema);
 
         this.runner = new SMTPortfolioRunner(this, SOLVE_TIMEOUT_MS);
-//        this.determinacyFormula = new BasicDeterminacyFormula(customSortsSchema, policySet);
-        this.fastCheckDeterminacyFormula = new FastCheckDeterminacyFormula<>(customSortsSchema, policySet);
+//        this.determinacyFormula = makeBasicCheckFormula(customSortsSchema, policySet, TextOption.USE_TEXT);
+        this.fastCheckDeterminacyFormula = makeFastCheckFormula(customSortsSchema, policySet, TextOption.USE_TEXT);
         this.dtg = ENABLE_CACHING ?
                 new DecisionTemplateGenerator<>(this, customSortsSchema, theorySchema,
                         policySet, fastCheckDeterminacyFormula)

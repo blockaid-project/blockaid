@@ -35,6 +35,9 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
             bufferedStdin.flush();
             bufferedStdin.close();
 
+            process.waitFor();
+
+            // TODO(zhangwen): deadlock?
             Scanner scanner = new Scanner(stdout);
             StringBuilder output = new StringBuilder();
             while (scanner.hasNextLine()) {
@@ -47,7 +50,6 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
                 System.err.println(scanner.nextLine());
             }
 
-            process.waitFor();
             this.output = output.toString();
             return this.output;
         } catch (InterruptedException e) {
