@@ -14,7 +14,6 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.context.TrackedDecls;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -113,7 +112,7 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>, I extend
         // Constrain constant values.
         for (Map.Entry<String, Object> entry : queries.getConstMap().entrySet()) {
             Object value = entry.getValue();
-            exprs.add(context.mkEq(
+            exprs.add(context.mkIsSameValue(
                     context.mkConst("!" + entry.getKey(), context.getSortForValue(value)),
                     context.getExprForValue(entry.getValue())
             ));

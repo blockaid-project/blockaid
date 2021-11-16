@@ -20,10 +20,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
-import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printStylizedMessage;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE_IN_VALIDATION;
-import static edu.berkeley.cs.netsys.privacy_proxy.util.TerminalColor.*;
 
 public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, CB extends Z3ContextWrapper<?, ?, ?, ?>> {
     private static final int TIMEOUT_S = 20;
@@ -54,9 +52,8 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
-        // We don't include Z3 because it generates large unsat cores.
-//        executors.add(new Z3Executor("z3", smt, latch));
-        executors.add(new CVCExecutor("cvc4", "cvc4", smt, latch));
+//        executors.add(new Z3Executor("z3", smt, latch)); // We don't include Z3 as it generates large unsat cores.
+//        executors.add(new CVCExecutor("cvc4", "cvc4", smt, latch)); // Currently we just keep cvc5.
         executors.add(new CVCExecutor("cvc5", "cvc5", smt, latch));
         for (Map.Entry<String, String> entry : VampireConfigurations.getAll(TIMEOUT_S).entrySet()) {
             String configName = entry.getKey(), configString = entry.getValue();
@@ -151,6 +148,7 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
             if (PRUNE_PREAMBLE != Options.PrunePreambleType.UNSAT_CORE) {
                 preambleCore = null;
             }
+            printMessage("\t\t| Bounded RRL core 0:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
 
             BoundedDeterminacyFormula<CB> baseFormula = new BoundedDeterminacyFormula<>(
                     boundedSchema, policies, slackBounds,
@@ -174,7 +172,8 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
 
             printMessage("\t\t| Bounded RRL core 2:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
             try (UnsatCoreEnumerator<ReturnedRowLabel, PreambleLabel, CB> uce
-                         = new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.ARBITRARY, true)) {
+                         = new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.ARBITRARY,
+                    Sets.immutableEnumSet(UnsatCoreEnumerator.Option.SOLVER_MINIMIZE_CORE))) {
                 printMessage("\t\t| Bounded RRL core 3:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
                 Set<ReturnedRowLabel> s = uce.next().get();
                 printMessage("\t\t| Bounded RRL core 4:\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);

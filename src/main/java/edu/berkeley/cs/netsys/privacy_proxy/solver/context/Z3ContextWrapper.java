@@ -2,11 +2,16 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
 import com.google.common.collect.Lists;
 import com.microsoft.z3.*;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFamily;
+import org.apache.calcite.sql.type.SqlTypeFamily;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkState;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_QE;
@@ -82,7 +87,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     public abstract <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort);
 
     public BoolExpr mkAnd(BoolExpr... boolExprs) {
-        return mkAnd(Arrays.asList(boolExprs));
+        return (BoolExpr) rawContext.mkAnd(boolExprs).simplify();
     }
 
     public BoolExpr mkAnd(Iterable<BoolExpr> boolExprs) {
@@ -90,43 +95,15 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public BoolExpr mkAnd(List<BoolExpr> boolExprs) {
-        if (boolExprs.isEmpty()) {
-            return rawContext.mkTrue();
-        }
-        if (boolExprs.size() == 1) {
-            return boolExprs.get(0);
-        }
-
-        for (BoolExpr boolExpr : boolExprs) {
-            if (boolExpr.isFalse()) {
-                return rawContext.mkFalse();
-            }
-        }
-
-        return rawContext.mkAnd(boolExprs.toArray(new BoolExpr[0]));
-    }
-
-    public BoolExpr mkAnd(BoolExpr e1, BoolExpr e2) {
-        return mkAnd(List.of(e1, e2));
+        return mkAnd(boolExprs.toArray(new BoolExpr[0]));
     }
 
     public BoolExpr mkOr(List<BoolExpr> boolExprs) {
-        return mkOr(boolExprs.toArray(new BoolExpr[0]));
+        return rawContext.mkOr(boolExprs.toArray(new BoolExpr[0]));
     }
 
     public BoolExpr mkOr(BoolExpr... boolExprs) {
-        if (boolExprs.length == 0) {
-            return rawContext.mkFalse();
-        }
-        if (boolExprs.length == 1) {
-            return boolExprs[0];
-        }
-        for (BoolExpr boolExpr : boolExprs) {
-            if (boolExpr.isTrue()) {
-                return rawContext.mkTrue();
-            }
-        }
-        return rawContext.mkOr(boolExprs);
+        return (BoolExpr) rawContext.mkOr(boolExprs).simplify();
     }
 
     public BoolExpr myMkForall(Collection<Expr<?>> quantifiers, BoolExpr body) {
@@ -246,6 +223,11 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public BoolExpr mkNot(BoolExpr e) {
+        if (e.isTrue()) {
+            return rawContext.mkFalse();
+        } else if (e.isFalse()) {
+            return rawContext.mkTrue();
+        }
         return rawContext.mkNot(e);
     }
 
@@ -259,7 +241,11 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
 
     protected abstract boolean isSortNullable(Sort s);
 
-    // Assumes that `e` is not null.
+    /**
+     * Returns the value of a non-null expression of a potentially nullable sort.
+     * @param e the expression.
+     * @return the value of `e`.
+     */
     protected abstract Expr<?> getValueFromMaybeNullable(Expr<?> e);
 
     /**
@@ -277,8 +263,8 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     // Supports the case where one side is nullable and the other not (in which case, asserts the nullable side is not
-    // null and equals the other side).  Treats `null == null` as true.
-    public BoolExpr mkEq(Expr<?> lhs, Expr<?> rhs) {
+    // null and equals the other side).  Treats `null` as the same value as `null`.
+    public BoolExpr mkIsSameValue(Expr<?> lhs, Expr<?> rhs) {
         if (lhs.getSort().equals(rhs.getSort())) {
             return rawContext.mkEq(lhs, rhs);
         }
@@ -371,5 +357,37 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         } else {
             throw new UnsupportedOperationException("unknown type for constant loading");
         }
+    }
+
+    // Turns SQL column type to Z3 sort.
+    public Sort getSortFromSqlType(SqlTypeName typeName, Nullability nullability) {
+        RelDataTypeFamily family = typeName.getFamily();
+        if (family == SqlTypeFamily.NUMERIC) {
+            // TODO(zhangwen): treating decimal also as int.
+            switch (typeName) {
+                case TINYINT:
+                case SMALLINT:
+                case INTEGER:
+                case BIGINT:
+                    return getCustomIntSort(nullability);
+                case FLOAT:
+                case REAL:
+                case DOUBLE:
+                    return getCustomRealSort(nullability);
+            }
+            throw new IllegalArgumentException("Unsupported numeric type: " + typeName);
+        } else if (family == SqlTypeFamily.CHARACTER || family == SqlTypeFamily.BINARY) {
+            return getCustomStringSort(nullability);
+        } else if (family == SqlTypeFamily.TIMESTAMP) {
+            return getTimestampSort(nullability);
+        } else if (family == SqlTypeFamily.DATE) {
+            return getDateSort(nullability);
+        } else if (family == SqlTypeFamily.BOOLEAN) {
+            return getCustomBoolSort(nullability);
+        } else if (family == SqlTypeFamily.ANY) {
+            // FIXME(zhangwen): I think text belongs in here.
+            return getCustomStringSort(nullability);
+        }
+        throw new IllegalArgumentException("unrecognized family: " + family);
     }
 }

@@ -1,13 +1,17 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 class CustomSorts {
     private final Z3CustomSortsContext context;
@@ -21,10 +25,12 @@ class CustomSorts {
     final UninterpretedSort realSort;
     final UninterpretedSort stringSort;
 
+    private final ImmutableMap<UninterpretedSort, Expr<UninterpretedSort>> sort2NullExpr;
+
     private final String sortDeclarationSMT;
     private final List<Values> valuesStack;
 
-    final FuncDecl<BoolSort> intLt;
+    final ImmutableMap<UninterpretedSort, FuncDecl<BoolSort>> sort2LtFunc;
 
     final ImmutableList<BoolExpr> axioms;
 
@@ -51,41 +57,60 @@ class CustomSorts {
         this.quantifierOption = qo;
         Context rawContext = context.rawContext;
 
-        // Int, date, and timestamp share the same sort and less-than predicate.
-        intSort = dateSort = tsSort = rawContext.mkUninterpretedSort("CS!INT");
+        intSort = rawContext.mkUninterpretedSort("CS!INT");
+        dateSort = rawContext.mkUninterpretedSort("CS!DATE");
+        tsSort = rawContext.mkUninterpretedSort("CS!TS");
         boolSort = rawContext.mkUninterpretedSort("CS!BOOL");
         realSort = rawContext.mkUninterpretedSort("CS!REAL");
         stringSort = rawContext.mkUninterpretedSort("CS!STRING");
+        ImmutableList<UninterpretedSort> allSorts = ImmutableList.of(intSort, dateSort, tsSort, boolSort, realSort, stringSort);
 
-        // dateSort and tsSort are currently the same sort, so we don't declare them.
-        this.sortDeclarationSMT = "(declare-sort " + realSort.getSExpr() + " 0)\n" +
-                "(declare-sort " + boolSort.getSExpr() + " 0)\n" +
-                "(declare-sort " + stringSort.getSExpr() + " 0)\n" +
-                "(declare-sort " + intSort.getSExpr() + " 0)\n";
+        sortDeclarationSMT = allSorts.stream()
+                .map(s -> "(declare-sort " + s.getSExpr() + " 0)")
+                .collect(Collectors.joining("\n"));
 
         valuesStack = new ArrayList<>();
         valuesStack.add(new Values());
 
-        intLt = context.mkFuncDecl("lt", new Sort[]{intSort, intSort}, context.rawContext.getBoolSort());
+        // We make a less-than function for every sort, even though some of them might not be comparable (?)
+        sort2LtFunc = allSorts.stream().collect(ImmutableMap.toImmutableMap(
+                sort -> sort, // key
+                sort -> context.mkFuncDecl("lt!" + sort.getSExpr(),
+                        new Sort[]{sort, sort}, context.rawContext.getBoolSort()) // value
+        ));
+
         axioms = switch (quantifierOption) {
             case QUANTIFIER_FREE -> ImmutableList.of(); // No axioms, which require quantifiers.
             case USE_QUANTIFIERS -> {
                 ImmutableList.Builder<BoolExpr> axiomsBuilder = ImmutableList.builder();
 
-                // Integer less-than transitivity.
-                Expr<UninterpretedSort> x = rawContext.mkConst("x", intSort),
-                        y = rawContext.mkConst("y", intSort),
-                        z = rawContext.mkConst("z", intSort);
-                BoolExpr intLtTrans = rawContext.mkForall(
-                        new Expr[]{x, y, z},
-                        rawContext.mkImplies(
-                                rawContext.mkAnd(intLt.apply(x, y), intLt.apply(y, z)), intLt.apply(x, z)
-                        ), 1, null, null, null, null
-                );
-                axiomsBuilder.add(intLtTrans);
+                // Transitivity axiom for less-than functions.
+                for (Map.Entry<UninterpretedSort, FuncDecl<BoolSort>> entry : sort2LtFunc.entrySet()) {
+                    UninterpretedSort sort = entry.getKey();
+                    FuncDecl<BoolSort> func = entry.getValue();
+                    Expr<UninterpretedSort> x = rawContext.mkConst("x", sort),
+                            y = rawContext.mkConst("y", sort),
+                            z = rawContext.mkConst("z", sort);
+                    BoolExpr ltTrans = rawContext.mkForall(
+                            new Expr[]{x, y, z},
+                            rawContext.mkImplies(
+                                    rawContext.mkAnd(func.apply(x, y), func.apply(y, z)), func.apply(x, z)
+                            ), 1, null, null, null, null
+                    );
+                    axiomsBuilder.add(ltTrans);
+                }
                 yield axiomsBuilder.build();
             }
         };
+
+        sort2NullExpr = ImmutableMap.<UninterpretedSort, Expr<UninterpretedSort>>builder()
+                .put(boolSort, getBool(null))
+                .put(intSort, getInt(null))
+                .put(dateSort, getDate(null))
+                .put(tsSort, getTimestamp(null))
+                .put(realSort, getReal(null))
+                .put(stringSort, getString(null))
+                .build();
     }
 
     void push() {
@@ -102,7 +127,7 @@ class CustomSorts {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    private <T> Expr<UninterpretedSort> get(T value, UninterpretedSort sort,
+    private <T> Expr<UninterpretedSort> get(@Nullable T value, UninterpretedSort sort,
                                             Function<Values, Map<T, Expr<UninterpretedSort>>> valueMapPicker) {
         for (int i = valuesStack.size(); i-- > 0; ) {
             Map<T, Expr<UninterpretedSort>> valueMap = valueMapPicker.apply(valuesStack.get(i));
@@ -111,42 +136,49 @@ class CustomSorts {
                 return e;
             }
         }
-        Expr<UninterpretedSort> c = context.mkFreshConst(sort.getSExpr(), sort);
+        Expr<UninterpretedSort> c = value == null ? context.mkConst(sort.getSExpr() + "!null", sort)
+                : context.mkFreshConst(sort.getSExpr(), sort);
         Values vs = valuesStack.get(valuesStack.size() - 1);
         valueMapPicker.apply(vs).put(value, c);
         vs.expr2Obj.put(c, value);
         return c;
     }
 
-    Expr<UninterpretedSort> getDate(Date date) {
+    Expr<UninterpretedSort> getDate(@Nullable Date date) {
         return get(date, dateSort, PICK_DATE);
     }
 
-    Expr<UninterpretedSort> getTimestamp(Timestamp ts) {
+    Expr<UninterpretedSort> getTimestamp(@Nullable Timestamp ts) {
         return get(ts, tsSort, PICK_TS);
     }
 
-    Expr<UninterpretedSort> getInt(long value) {
+    Expr<UninterpretedSort> getInt(@Nullable Long value) {
         return get(value, intSort, PICK_INT);
     }
 
-    Expr<UninterpretedSort> getBool(boolean value) {
+    Expr<UninterpretedSort> getBool(@Nullable Boolean value) {
         return get(value, boolSort, PICK_BOOL);
     }
 
-    Expr<UninterpretedSort> getReal(double value) {
+    Expr<UninterpretedSort> getReal(@Nullable Double value) {
         return get(value, realSort, PICK_REAL);
     }
 
-    Expr<UninterpretedSort> getString(String value) {
+    Expr<UninterpretedSort> getString(@Nullable String value) {
         return get(value, stringSort, PICK_STRING);
     }
 
-    Optional<Object> getValueForExpr(Expr<?> e) {
+    /**
+     * Checks whether the expression corresponds to a constant value and, if so, returns the value.
+     * TODO(zhangwen): The ugly return type is due to `Optional.of(null)` not being allowed.
+     * @param e the expression to check.
+     * @return if not a constant value, empty; otherwise, the value (potentially null) as an `Optional`.
+     */
+    Optional<Optional<Object>> getValueForExpr(Expr<?> e) {
         for (int i = valuesStack.size(); i-- > 0; ) {
             Values vs = valuesStack.get(i);
             if (vs.expr2Obj.containsKey(e)) {
-                return Optional.of(vs.expr2Obj.get(e));
+                return Optional.of(Optional.ofNullable(vs.expr2Obj.get(e)));
             }
         }
         return Optional.empty();
@@ -154,12 +186,12 @@ class CustomSorts {
 
     private <T extends Comparable<? super T>> Collection<BoolExpr> mkLtConstraints(
             Map<T, Expr<UninterpretedSort>> exprs) {
-        if (exprs.size() <= 1) {
+        // Filter out the null key -- don't include it in the less-than constraints.
+        List<T> keys = exprs.keySet().stream().filter(Objects::nonNull).sorted().collect(Collectors.toList());
+        if (keys.size() <= 1) {
             return Collections.emptyList();
         }
 
-        ArrayList<T> keys = new ArrayList<>(exprs.keySet());
-        Collections.sort(keys);
         ArrayList<BoolExpr> res = new ArrayList<>();
         switch (quantifierOption) {
             case QUANTIFIER_FREE -> {
@@ -169,14 +201,14 @@ class CustomSorts {
                     Expr<UninterpretedSort> thisElem = exprs.get(keys.get(i));
                     for (int j = i + 1; j < keys.size(); ++j) {
                         Expr<UninterpretedSort> otherElem = exprs.get(keys.get(j));
-                        res.add((BoolExpr) intLt.apply(thisElem, otherElem));
+                        res.add(mkRawCustomLt(thisElem, otherElem));
                     }
                 }
             }
             case USE_QUANTIFIERS -> {
                 for (int i = 0; i < keys.size() - 1; ++i) {
                     Expr<UninterpretedSort> thisElem = exprs.get(keys.get(i)), nextElem = exprs.get(keys.get(i + 1));
-                    res.add((BoolExpr) intLt.apply(thisElem, nextElem));
+                    res.add(mkRawCustomLt(thisElem, nextElem));
                 }
             }
         }
@@ -257,5 +289,25 @@ class CustomSorts {
         for (BoolExpr e : mkLtConstraints(value2Expr)) {
             sb.append("(assert ").append(e.getSExpr()).append(")\n");
         }
+    }
+
+    BoolExpr mkRawCustomLt(Expr<?> left, Expr<?> right) {
+        if (!(left.getSort() instanceof UninterpretedSort leftSort)) {
+            throw new IllegalArgumentException("left sort must be uninterpreted, got: " + left.getSort());
+        }
+        if (!(right.getSort() instanceof UninterpretedSort rightSort)) {
+            throw new IllegalArgumentException("right sort must be uninterpreted, got: " + right.getSort());
+        }
+        checkArgument(leftSort.equals(rightSort),
+                "sort of left expression " + left + " (" + leftSort +
+                        ") is different from right expression " + right + " (" + rightSort  + ")"
+        );
+        return (BoolExpr) sort2LtFunc.get(leftSort).apply(left, right);
+    }
+
+    Expr<UninterpretedSort> mkNull(UninterpretedSort s) {
+        Expr<UninterpretedSort> nullExpr = sort2NullExpr.get(s);
+        checkArgument(nullExpr != null, "no null value for sort: " + s);
+        return nullExpr;
     }
 }

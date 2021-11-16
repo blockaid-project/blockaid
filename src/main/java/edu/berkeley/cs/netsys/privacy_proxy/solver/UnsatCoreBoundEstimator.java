@@ -1,12 +1,9 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.google.common.collect.ListMultimap;
-import com.microsoft.z3.Model;
+import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
-import com.microsoft.z3.BoolExpr;
-import com.microsoft.z3.Solver;
-import com.microsoft.z3.Status;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
@@ -18,6 +15,7 @@ import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
 
 public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> extends BoundEstimator<C> {
     private final BoundEstimator<C> initialEstimator;
@@ -32,6 +30,10 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
         ListMultimap<String, Map<String, Object>> knownRows = queries.computeKnownRows(schema.getRawSchema());
 
         Solver solver = schema.getContext().mkSolver();
+        Params p = schema.getContext().mkParams();
+        p.add("core.minimize", true);
+        solver.setParameters(p);
+
         Map<String, Integer> bounds = computeUpperBounds(schema, queries, knownRows, solver, initialBounds);
         if (Options.SHRINK_BOUNDS == Options.OnOffType.ON) {
             bounds = shrinkBounds(schema, queries, knownRows, solver, bounds);
@@ -47,8 +49,8 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
         C context = schema.getContext();
         HashMap<String, Integer> bounds = new HashMap<>(initialBounds);
 
-        int iters;
-        for (iters = 0; ; ++iters) {
+        int iter;
+        for (iter = 0; ; ++iter) {
             BoundedInstance<C> instance = schema.makeBoundedInstance("inst", bounds, knownRows);
 
             ArrayList<NamedBoolExpr> assertions = new ArrayList<>();
@@ -90,10 +92,10 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 }
 
                 // todo timeouts on this...
-//            long startMs = System.currentTimeMillis();
+                long startNs = System.nanoTime();
                 Status res = solver.check();
-//            long durMs = System.currentTimeMillis() - startMs;
-//            System.out.println("\t\t| bound estimator check:\t" + durMs + "\t" + bounds);
+                long durNs = System.nanoTime() - startNs;
+                printMessage("\t\t| bound estimator check (" + iter + "):\t" + durNs / 1000000, LogLevel.VERBOSE);
                 if (res == Status.SATISFIABLE) {
                     break;
                 }
@@ -104,6 +106,7 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 for (BoolExpr expr : core) {
                     if (dependencyLabels.containsKey(expr)) {
                         Dependency dependency = dependencyLabels.get(expr);
+                        printMessage("\t\t\t" + dependency, LogLevel.VERBOSE);
                         toIncrement.addAll(dependency.getToRelations());
                     }
                 }
@@ -160,22 +163,6 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
         }
         checkArgument(solver.check() == Status.SATISFIABLE, "initial bounds not large enough");
 
-        Logger.printMessage(() -> {
-            StringBuilder sb = new StringBuilder();
-            Model m = solver.getModel();
-            for (var entry : shrunkBounds.entrySet()) {
-                if (entry.getValue() == 0) {
-                    continue;
-                }
-
-                String pks = ((ConcreteRelation<C>) instance.get(entry.getKey())).getTuples().stream()
-                        .map(t -> m.eval(t.get(0), false).toString())
-                        .collect(Collectors.joining(", "));
-                sb.append(entry.getKey()).append("\t").append(pks).append("\n");
-            }
-            return sb.toString();
-        }, LogLevel.VERBOSE);
-
         for (var entry : shrunkBounds.entrySet()) {
             String tableName = entry.getKey();
             int bound = entry.getValue();
@@ -185,9 +172,9 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 if (solver.check(context.mkNot(exists)) == Status.SATISFIABLE) {
                     solver.add(context.mkNot(exists));
                     bound -= 1;
-                    Logger.printMessage("Shrinking bound for " + tableName + " to " + bound, LogLevel.VERBOSE);
+                    printMessage("Shrinking bound for " + tableName + " to " + bound, LogLevel.VERBOSE);
                 } else {
-                    Logger.printMessage("Bound tight for " + tableName + " = " + bound, LogLevel.VERBOSE);
+                    printMessage("Bound tight for " + tableName + " = " + bound, LogLevel.VERBOSE);
                     break;
                 }
             }

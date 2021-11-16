@@ -10,11 +10,13 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.ForeignKeyDependency;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class SchemaPlusWithKey {
@@ -30,13 +32,17 @@ public class SchemaPlusWithKey {
     private static final SqlTypeFactoryImpl SQL_TYPE_FACTORY = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
     private final Map<String, RelDataType> table2Type;
 
+    private final ImmutableMap<String, SqlTypeName> constName2Type;
+
     public SchemaPlusWithKey(SchemaPlus schema,
                              ImmutableMap<String, ImmutableList<String>> primaryKeys,
-                             ImmutableSet<ForeignKeyDependency> foreignKeys) {
+                             ImmutableSet<ForeignKeyDependency> foreignKeys,
+                             ImmutableMap<String, SqlTypeName> constName2Type) {
         this.schema = checkNotNull(schema);
         this.primaryKeys = checkNotNull(primaryKeys);
         this.foreignKeys = checkNotNull(foreignKeys);
         this.table2Type = new HashMap<>();
+        this.constName2Type = constName2Type;
 
         HashSet<String> pkValuedColumns = new HashSet<>();
         ImmutableSet.Builder<String> fkColsBuilder = new ImmutableSet.Builder<>();
@@ -95,5 +101,14 @@ public class SchemaPlusWithKey {
 
     public Stream<String> getColumnNames(String tableName) {
         return getTypeForTable(tableName).getFieldList().stream().map(RelDataTypeField::getName);
+    }
+
+    public SqlTypeName getTypeForConst(String constName) {
+        if (constName.equals("_NOW")) {
+            return SqlTypeName.TIMESTAMP;
+        }
+        SqlTypeName typeName = constName2Type.get(constName);
+        checkArgument(typeName != null, "unrecognized constant: " + constName);
+        return typeName;
     }
 }

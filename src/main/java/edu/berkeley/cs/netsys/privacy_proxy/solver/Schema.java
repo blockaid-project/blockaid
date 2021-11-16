@@ -14,9 +14,8 @@ import edu.berkeley.cs.netsys.privacy_proxy.policy_checker.Policy;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.rel.type.RelDataTypeField;
-import org.apache.calcite.sql.type.SqlTypeFamily;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -28,23 +27,37 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
     private final C context;
     private final SchemaPlusWithKey rawSchema;
     private final ImmutableMap<String, ImmutableList<Column>> relations;
-    private final List<Dependency> dependencies;
+    private final ImmutableList<Dependency> dependencies;
 
     private final LoadingCache<ImmutableList<Policy>, ImmutableList<Query<C>>> policyQueries;
 
     public Schema(C context, SchemaPlusWithKey rawSchema, List<Dependency> dependencies) {
         this.context = checkNotNull(context);
         this.rawSchema = checkNotNull(rawSchema);
-        this.dependencies = checkNotNull(dependencies);
+
+        ImmutableList.Builder<Dependency> dependenciesBuilder = new ImmutableList.Builder<>();
+        dependenciesBuilder.addAll(dependencies);
 
         ImmutableMap.Builder<String, ImmutableList<Column>> relationsBuilder = new ImmutableMap.Builder<>();
         for (String tableName : rawSchema.schema.getTableNames()) {
             ImmutableList.Builder<Column> columnsBuilder = new ImmutableList.Builder<>();
             for (RelDataTypeField field : rawSchema.getTypeForTable(tableName).getFieldList()) {
-                Sort type = getSortFromSqlType(context, field.getType());
+                String fieldName = field.getName().toUpperCase();
+                RelDataType dataType = field.getType();
+                SqlTypeName typeName = dataType.getSqlTypeName();
+
+                Z3ContextWrapper.Nullability nullability;
+                if (dataType.isNullable()) {
+                    nullability = Z3ContextWrapper.Nullability.IS_NULLABLE;
+                } else {
+                    nullability = Z3ContextWrapper.Nullability.NOT_NULLABLE;
+                    dependenciesBuilder.add(new NotNullDependency(tableName.toUpperCase(), fieldName));
+                }
+
+                Sort sort = context.getSortFromSqlType(typeName, nullability);
                 // TODO(zhangwen): Other parts of the code seem to assume upper case table and column names (see
                 //  ParsedPSJ.quantifyName), and so we upper case the column and table names here.  I hope this works.
-                columnsBuilder.add(new Column(field.getName().toUpperCase(), type));
+                columnsBuilder.add(new Column(fieldName, sort));
             }
             relationsBuilder.put(tableName.toUpperCase(), columnsBuilder.build());
         }
@@ -59,52 +72,19 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                     }
                 }
         );
+
+        this.dependencies = dependenciesBuilder.build();
     }
 
     public ImmutableList<Query<C>> getPolicyQueries(ImmutableList<Policy> policies) {
         return policyQueries.getUnchecked(policies);
     }
 
-    // Turns SQL column type to Z3 sort.
-    private static <C extends Z3ContextWrapper<?, ?, ?, ?>> Sort getSortFromSqlType(C context, RelDataType type) {
-        Z3ContextWrapper.Nullability nullability = type.isNullable() ? Z3ContextWrapper.Nullability.IS_NULLABLE
-                : Z3ContextWrapper.Nullability.NOT_NULLABLE;
-
-        RelDataTypeFamily family = type.getFamily();
-        if (family == SqlTypeFamily.NUMERIC) {
-            // TODO(zhangwen): treating decimal also as int.
-            switch (type.getSqlTypeName()) {
-                case TINYINT:
-                case SMALLINT:
-                case INTEGER:
-                case BIGINT:
-                    return context.getCustomIntSort(nullability);
-                case FLOAT:
-                case REAL:
-                case DOUBLE:
-                    return context.getCustomRealSort(nullability);
-            }
-            throw new IllegalArgumentException("Unsupported numeric type: " + type);
-        } else if (family == SqlTypeFamily.CHARACTER || family == SqlTypeFamily.BINARY) {
-            return context.getCustomStringSort(nullability);
-        } else if (family == SqlTypeFamily.TIMESTAMP) {
-            return context.getTimestampSort(nullability);
-        } else if (family == SqlTypeFamily.DATE) {
-            return context.getDateSort(nullability);
-        } else if (family == SqlTypeFamily.BOOLEAN) {
-            return context.getCustomBoolSort(nullability);
-        } else if (family == SqlTypeFamily.ANY) {
-            // FIXME(zhangwen): I think text belongs in here.
-            return context.getCustomStringSort(nullability);
-        }
-        throw new IllegalArgumentException("unrecognized family: " + family);
-    }
-
     public C getContext() {
         return context;
     }
 
-    public List<Dependency> getDependencies() {
+    public ImmutableList<Dependency> getDependencies() {
         return dependencies;
     }
 

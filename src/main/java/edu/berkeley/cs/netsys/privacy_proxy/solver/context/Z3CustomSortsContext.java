@@ -1,10 +1,13 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
+import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
 
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Custom Z3 Context to track constants and use uninterpreted sorts for everything.
@@ -23,7 +26,7 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
 
     @Override
     public boolean areDistinctConstants(Expr<?> lhs, Expr<?> rhs) {
-        Optional<Object> lhsV = customSorts.getValueForExpr(lhs), rhsV = customSorts.getValueForExpr(rhs);
+        Optional<Optional<Object>> lhsV = customSorts.getValueForExpr(lhs), rhsV = customSorts.getValueForExpr(rhs);
         return lhsV.isPresent() && rhsV.isPresent() && !lhsV.get().equals(rhsV.get());
     }
 
@@ -163,32 +166,32 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
 
     @Override
     protected boolean isSortNullable(Sort s) {
-        // FIXME(zhangwen): implement this.
-        return false;
+        return true;
     }
 
     @Override
     protected Expr<?> getValueFromMaybeNullable(Expr<?> e) {
-        // FIXME(zhangwen): implement this.
         return e;
     }
 
     @Override
+    public BoolExpr mkIsSameValue(Expr<?> lhs, Expr<?> rhs) {
+        // All sorts from this context are nullable, so this method is the same as `mkRawEq`.
+        return mkRawEq(lhs, rhs);
+    }
+
+    @Override
     public <S extends Sort> Expr<S> mkNull(S sort) {
-        // FIXME(zhangwen): implement this.
-        return mkFreshConst("null", sort);
+        if (!(sort instanceof UninterpretedSort us)) {
+            throw new IllegalArgumentException("expecting uninterpreted sort, got: " + sort);
+        }
+        @SuppressWarnings("unchecked") Expr<S> nullExpr = (Expr<S>) customSorts.mkNull(us);
+        return nullExpr;
     }
 
     @Override
     public BoolExpr mkSqlIsNull(Expr<?> e) {
-        // FIXME(zhangwen): implement this.
-        return rawContext.mkFalse();
-    }
-
-    @Override
-    public BoolExpr mkSqlEqTrue(Expr<?> lhs, Expr<?> rhs) {
-        // FIXME(zhangwen): implement this.
-        return mkEq(lhs, rhs);
+        return rawContext.mkEq(e, mkNull(e.getSort()));
     }
 
     @Override
@@ -203,7 +206,7 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
 
     @Override
     public BoolExpr mkRawCustomIntLt(Expr<?> left, Expr<?> right) {
-        return (BoolExpr) customSorts.intLt.apply(left, right);
+        return customSorts.mkRawCustomLt(left, right);
     }
 
     @Override

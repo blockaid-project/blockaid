@@ -1,24 +1,31 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.executor;
 
+import com.google.common.collect.ImmutableList;
 import com.microsoft.z3.Status;
 
 import java.io.*;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class ProcessSMTExecutor extends SMTExecutor {
+    private final ProcessBuilder pb;
     private final String smtString;
-    private final String[] command;
     private Process process = null;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
     protected String output = null;
 
-    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, String[] command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
+    // Caches process builders by command.
+    // TODO(zhangwen): Is a kludge.  We should just create one process builder per command.
+    private static final ConcurrentHashMap<ImmutableList<String>, ProcessBuilder> processBuilders = new ConcurrentHashMap<>();
+
+    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, List<String> command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
         super(name, latch, satConclusive, unsatConclusive, unknownConclusive, runCore);
         this.smtString = smtString;
-        this.command = command;
+        this.pb = processBuilders.computeIfAbsent(ImmutableList.copyOf(command), ProcessBuilder::new);
     }
 
     // Sets this.output.
@@ -99,7 +106,6 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
 
     private synchronized void startProcess() throws Exception {
         if (!this.shuttingDown.get()) {
-            ProcessBuilder pb = new ProcessBuilder(command);
             process = pb.start();
         }
     }

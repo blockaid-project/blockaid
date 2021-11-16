@@ -9,7 +9,7 @@ import java.util.Collections;
 import java.util.List;
 
 public interface Relation<C extends Z3ContextWrapper<?, ?, ?, ?>> {
-    BoolExpr isEmptyExpr();
+    Iterable<BoolExpr> isEmptyExpr();
     Iterable<BoolExpr> doesContainExpr(Tuple<C> tup);
     Iterable<BoolExpr> isContainedInExpr(Relation<C> other);
     Iterable<BoolExpr> equalsExpr(Relation<C> other);

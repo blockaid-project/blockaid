@@ -118,6 +118,7 @@ public class PrivacyConnection implements Connection {
     String pks = direct_info.getProperty("pk");
     String fks = direct_info.getProperty("fk");
     String cacheSpec = direct_info.getProperty("cache_spec");
+    String constDecls = direct_info.getProperty("const_decls");
 
     Map<String, ImmutableList<String>> primaryKeys = new HashMap<>();
     pks.lines().map(String::toUpperCase).forEach(line -> {
@@ -136,7 +137,28 @@ public class PrivacyConnection implements Connection {
       return new ForeignKeyDependency(from[0], from[1], to[0], to[1]);
     }).collect(ImmutableSet.toImmutableSet());
 
-    schema = new SchemaPlusWithKey(schemaPlus, ImmutableMap.copyOf(primaryKeys), foreignKeys);
+    record NameTypePair(String name, SqlTypeName type) {
+      NameTypePair(String name, String typeName) {
+        this(name, switch (typeName) {
+          case "int" -> SqlTypeName.INTEGER;
+          case "string" -> SqlTypeName.VARCHAR;
+          case "timestamp" -> SqlTypeName.TIMESTAMP;
+          default ->  throw new IllegalArgumentException("unsupported const type: " + typeName);
+        });
+      }
+    }
+
+    ImmutableMap<String, SqlTypeName> constName2Type = constDecls.lines()
+            .map(line -> {
+              String[] parts = line.split(":", 2);
+              return new NameTypePair(parts[0], parts[1]);
+            })
+            .collect(ImmutableMap.toImmutableMap(
+                    NameTypePair::name,
+                    NameTypePair::type
+            ));
+
+    schema = new SchemaPlusWithKey(schemaPlus, ImmutableMap.copyOf(primaryKeys), foreignKeys, constName2Type);
 
     ImmutableList.Builder<Policy> policyListBuilder = new ImmutableList.Builder<>();
     for (String sql : direct_info.getProperty("policy").split("\n")) {

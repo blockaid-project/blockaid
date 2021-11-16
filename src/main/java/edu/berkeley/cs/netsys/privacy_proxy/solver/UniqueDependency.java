@@ -72,7 +72,7 @@ public class UniqueDependency implements Dependency {
         int index = 0;
         for (int i = 0; i < allColumnNames.size(); ++i) {
             if (columnNames.contains(allColumnNames.get(i))) {
-                agreeFormulaExprs[index++] = context.mkEq(tup1.get(i), tup2.get(i));
+                agreeFormulaExprs[index++] = context.mkIsSameValue(tup1.get(i), tup2.get(i));
             }
         }
         checkArgument(index == columnNames.size(), "some column(s) not found: %s.%s", relationName, columnNames);

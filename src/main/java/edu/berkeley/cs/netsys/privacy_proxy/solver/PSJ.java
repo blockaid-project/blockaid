@@ -68,7 +68,7 @@ public abstract class PSJ<C extends Z3ContextWrapper<?, ?, ?, ?>> extends Query<
         bodyClauses.add(predicateGenerator(symbolicTuples)); // The WHERE clause.
 
         for (int i = 0; i < tuple.size(); ++i) {
-            bodyClauses.add(context.mkEq(tuple.get(i), headSymTup.get(i)));
+            bodyClauses.add(context.mkIsSameValue(tuple.get(i), headSymTup.get(i)));
         }
 
         Set<Expr<?>> existentialVars = symbolicTuples.stream().flatMap(Tuple::stream).collect(Collectors.toSet());

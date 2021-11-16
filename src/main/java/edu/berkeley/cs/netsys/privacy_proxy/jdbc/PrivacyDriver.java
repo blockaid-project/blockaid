@@ -3,6 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.jdbc;
 import org.apache.calcite.avatica.DriverVersion;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +29,7 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
     private static final String pkFileName = "pk.txt";
     private static final String miscDepsFileName = "deps.sql";
     private static final String cacheEntriesFileName = "cache.txt";
+    private static final String constDeclsFileName = "const-decls.txt";
 
     static {
         new PrivacyDriver().register();
@@ -99,6 +101,7 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
             info_.setProperty("pk", readFile(Paths.get(policy_dir, pkFileName)));
             info_.setProperty("fk", readFile(Paths.get(policy_dir, fkFileName)));
             info_.setProperty("cache_spec", readFile(Paths.get(policy_dir, cacheEntriesFileName), true));
+            info_.setProperty("const_decls", readFile(Paths.get(policy_dir, constDeclsFileName)));
         } catch (IOException e) {
             throw new SQLException(e);
         }
@@ -106,10 +109,6 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
     }
 
     private String readFile(Path path, boolean optional) throws IOException {
-        if (optional && !Files.exists(path)) {
-            return "";
-        }
-
         List<String> lines = new ArrayList<>();
         try (BufferedReader reader = Files.newBufferedReader(path)) {
             String line = reader.readLine();
@@ -129,6 +128,11 @@ public class PrivacyDriver extends org.apache.calcite.avatica.remote.Driver {
                 }
                 line = reader.readLine();
             }
+        } catch (FileNotFoundException e) {
+            if (optional) {
+                return "";
+            }
+            throw e;
         }
         return String.join("\n", lines);
     }

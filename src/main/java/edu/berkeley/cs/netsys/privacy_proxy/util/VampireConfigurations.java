@@ -12,6 +12,7 @@ public class VampireConfigurations {
     /**
      * Maps configuration name to string.  Append timeout in integer deciseconds to the configuration string to pass to
      * Vampire.
+     * FIXME(zhangwen): which of these configurations are actually useful?
      */
     private static final ImmutableMap<String, String> nameToConfig = ImmutableMap.<String, String>builder()
             .put("vampire_lrs+10_1", "lrs+10_1_av=off:fde=unused:irw=on:lcm=predicate:lma=on:nm=6:nwc=1:stl=30:sd=2:ss=axioms:st=5.0:sos=on:sp=reverse_arity_")

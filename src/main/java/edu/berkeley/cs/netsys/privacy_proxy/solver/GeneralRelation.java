@@ -33,9 +33,9 @@ public class GeneralRelation<C extends Z3ContextWrapper<?, ?, ?, ?>> implements 
     }
 
     @Override
-    public BoolExpr isEmptyExpr() {
+    public Iterable<BoolExpr> isEmptyExpr() {
         Tuple<C> tup = makeFreshQuantifiedHead();
-        return context.myMkForall(tup.toExprArray(), context.mkNot(context.mkAnd(doesContainExpr(tup))));
+        return List.of(context.myMkForall(tup.toExprArray(), context.mkNot(context.mkAnd(doesContainExpr(tup)))));
     }
 
     @Override

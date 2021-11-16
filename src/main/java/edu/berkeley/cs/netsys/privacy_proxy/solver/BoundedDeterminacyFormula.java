@@ -8,6 +8,8 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PolicyLabel;
+import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.*;
@@ -62,6 +64,7 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
 
                         if (splitProducts) {
                             viewLabels.forEach(l -> {
+                                long startNs = System.nanoTime();
                                 Query<C> v = l.policy().getSolverQuery(schema);
 
                                 // (equal under each part) || (empty on one+ part per instance)
@@ -70,8 +73,8 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
                                 List<BoolExpr> empty2Parts = new ArrayList<>();
                                 for (Query<C> q : v.getComponents()) {
                                     Iterables.addAll(equalityParts, q.apply(inst1).equalsExpr(q.apply(inst2)));
-                                    empty1Parts.add(q.apply(inst1).isEmptyExpr());
-                                    empty2Parts.add(q.apply(inst2).isEmptyExpr());
+                                    Iterables.addAll(empty1Parts, q.apply(inst1).isEmptyExpr());
+                                    Iterables.addAll(empty2Parts, q.apply(inst2).isEmptyExpr());
                                 }
                                 BoolExpr equality = context.mkAnd(equalityParts.toArray(new BoolExpr[0]));
                                 BoolExpr empty1 = context.mkOr(empty1Parts.toArray(new BoolExpr[0]));
@@ -83,6 +86,11 @@ public class BoundedDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>> e
                                                 context.mkAnd(empty1, empty2)
                                         )
                                 ));
+
+                                long durMs = (System.nanoTime() - startNs) / 1000000;
+                                if (durMs > 5000) {
+                                    Logger.printMessage(() -> "Slow bounded view " + l + ":\t" + durMs, LogLevel.VERBOSE);
+                                }
                             });
                         } else {
                             viewLabels.forEach(l -> {

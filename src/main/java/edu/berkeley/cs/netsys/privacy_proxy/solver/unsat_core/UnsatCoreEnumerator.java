@@ -2,6 +2,8 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.unsat_core;
 
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.LabeledBoolExpr;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.UnsatCoreFormulaBuilder;
@@ -22,20 +24,25 @@ public class UnsatCoreEnumerator<L, BL, C extends Z3ContextWrapper<?, ?, ?, ?>> 
     private final ImmutableMap<BoolExpr, BL> boolConst2bgLabel;
     private final ImmutableBiMap<L, BoolExpr> label2BoolConst;
 
-    private final boolean solverMinimizeUnsatCore;
+    public enum Option {
+        SOLVER_MINIMIZE_CORE
+    }
+
+    private final ImmutableSet<Option> options;
+
     private @Nullable BoolExpr[] solverCore;
 
     // Sets solver to minimize unsat cores.
     public UnsatCoreEnumerator(C context, Solver solver, UnsatCoreFormulaBuilder.Formulas<L, BL> fs, Order order,
-                               boolean solverMinimizeUnsatCore) {
+                               Set<Option> options) {
         super(context, fs.labeledExprs().keySet(), order);
 
         this.context = context;
         this.solver = solver;
         solver.push();
 
-        this.solverMinimizeUnsatCore = solverMinimizeUnsatCore;
-        if (solverMinimizeUnsatCore) {
+        this.options = Sets.immutableEnumSet(options);
+        if (options.contains(Option.SOLVER_MINIMIZE_CORE)) {
             Params p = context.mkParams();
             p.add("core.minimize", true);
             solver.setParameters(p);
@@ -70,7 +77,7 @@ public class UnsatCoreEnumerator<L, BL, C extends Z3ContextWrapper<?, ?, ?, ?>> 
 
     @Override
     protected boolean isUnsatCoreAlwaysMin() {
-        return solverMinimizeUnsatCore;
+        return options.contains(Option.SOLVER_MINIMIZE_CORE);
     }
 
     public Set<L> getStartingUnsatCore() {
@@ -106,6 +113,7 @@ public class UnsatCoreEnumerator<L, BL, C extends Z3ContextWrapper<?, ?, ?, ?>> 
         BoolExpr[] boolConsts = labels.stream().map(label2BoolConst::get).toArray(BoolExpr[]::new);
         solverCore = null;
         Status status = solver.check(boolConsts);
+        printMessage("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
 
         if (status == Status.SATISFIABLE) {
 //            System.out.println("\t\t\t| isSubsetSat:\t" + status + "(" + labels.size() + ")\t" + (System.currentTimeMillis() - startMs));
@@ -124,7 +132,6 @@ public class UnsatCoreEnumerator<L, BL, C extends Z3ContextWrapper<?, ?, ?, ?>> 
 //            return Optional.of(satLabels);
         }
         checkState(status == Status.UNSATISFIABLE, "solver returned: " + status);
-        printMessage("\t\t\t| isSubsetSat:\t" + status + "\t" + (System.nanoTime() - startNs) / 1000000, LogLevel.VERBOSE);
         return Optional.empty();
     }
 

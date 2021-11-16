@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.executor;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ObjectArrays;
 
 import java.util.concurrent.CountDownLatch;
@@ -15,9 +16,12 @@ public class VampireUCoreExecutor extends ProcessSMTExecutor {
 
     public VampireUCoreExecutor(String name, String smtString, CountDownLatch latch, String config) {
         super(name, smtString, latch,
-                ObjectArrays.concat(
-                        COMMAND, new String[]{"--decode", config},
-                        String.class
+                ImmutableList.of(
+                        "term_to_kill",
+                        "vampire",
+                        "--ignore_missing_inputs_in_unsat_core", "on",
+                        "--input_syntax", "smtlib2",
+                        "--decode", config
                 ), true, true, false, true);
     }
 }

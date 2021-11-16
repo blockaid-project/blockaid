@@ -72,10 +72,6 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
         return new Formulas<>(labeledExprs, background);
     }
 
-    public Formulas<Label, PreambleLabel> buildParamRelationsOnly(UnmodifiableLinearQueryTrace trace) {
-        return buildParamRelationsOnly(trace, EnumSet.noneOf(Option.class));
-    }
-
     /**
      * Builds unsat core formulas assuming the entire trace is present, i.e., returned-row labels count as background.
      * @param trace the trace to generate formulas for.
@@ -274,7 +270,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                     }
                     label2Expr.put(
                             new EqualityLabel(expr2Operand.get(p), rhs),
-                            context.mkEq(p, vExpr)
+                            context.mkIsSameValue(p, vExpr)
                     );
                 }
             }
@@ -354,7 +350,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                         continue;
                     }
 
-                    Status res = solver.check(context.mkNot(context.mkEq(p1, p2)));
+                    Status res = solver.check(context.mkNot(context.mkIsSameValue(p1, p2)));
                     if (res == Status.UNSATISFIABLE) {
                         // Keep the query param, toss the returned row attribute.
                         Logger.printStylizedMessage("removeRedundantExprs:\t" + o1 + " == " + o2,

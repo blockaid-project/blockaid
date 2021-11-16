@@ -104,7 +104,8 @@ public abstract class AbstractUnsatCoreEnumerator<L, C extends Z3ContextWrapper<
     }
 
     private Set<L> growLinear(Set<L> seed) {
-        long startMs = System.currentTimeMillis();
+        long startNs = System.nanoTime();
+        int startSize = seed.size();
         Set<L> currSeed = new HashSet<>(seed);
         for (L label : labels) {
             if (currSeed.contains(label)) {
@@ -118,7 +119,9 @@ public abstract class AbstractUnsatCoreEnumerator<L, C extends Z3ContextWrapper<
                 currSeed = satLabels.get();
             }
         }
-        Logger.printMessage("\t\t| GrowL:\t" + (System.currentTimeMillis() - startMs), LogLevel.VERBOSE);
+        long durMs = ((System.nanoTime() - startNs) / 1000000);
+        Logger.printMessage("\t\t| GrowL:\t" + durMs + "\t" + startSize + " -> " + currSeed.size(),
+                LogLevel.VERBOSE);
         return currSeed;
     }
 

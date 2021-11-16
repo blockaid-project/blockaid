@@ -53,8 +53,8 @@ public class ConcreteRelation<C extends Z3ContextWrapper<?, ?, ?, ?>> implements
     }
 
     @Override
-    public BoolExpr isEmptyExpr() {
-        return context.mkNot(context.mkOr(exists));
+    public Iterable<BoolExpr> isEmptyExpr() {
+        return List.of(context.mkNot(context.mkOr(exists)));
     }
 
     @Override

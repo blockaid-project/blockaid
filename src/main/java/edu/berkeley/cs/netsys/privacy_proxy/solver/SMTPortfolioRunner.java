@@ -59,7 +59,7 @@ public class SMTPortfolioRunner {
         CountDownLatch latch = new CountDownLatch(1);
         ArrayList<SMTExecutor> executors = new ArrayList<>();
         executors.add(new Z3Executor("z3_fast", formula, latch, false, true, false));
-        executors.add(new CVCExecutor("cvc4", "cvc4_fast", formula, latch, false, true, false));
+//        executors.add(new CVCExecutor("cvc4", "cvc4_fast", formula, latch, false, true, false));
         executors.add(new CVCExecutor("cvc5", "cvc5_fast", formula, latch, false, true, false));
         for (Map.Entry<String, String> entry : VampireConfigurations.getAll(timeout_ms * 1000 * 10).entrySet()) {
             String configName = entry.getKey(), configString = entry.getValue();

@@ -18,5 +18,6 @@ autograders:id;
 courses:name;
 assessments:course_id,name;
 assessment_user_data:latest_submission_id;
+submissions:course_user_datum_id,assessment_id;
 scores:problem_id,submission_id;
 users:email;

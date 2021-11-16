@@ -69,7 +69,7 @@ public class Tuple<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                 // LHS and RHS represent distinct concrete values, which can't be equal!
                 return context.mkFalse();
             }
-            exprs.add(context.mkEq(get(i), other.get(i)));
+            exprs.add(context.mkIsSameValue(get(i), other.get(i)));
         }
         return context.mkAnd(exprs);
     }

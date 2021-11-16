@@ -1,5 +1,6 @@
 package client;
 
+import com.google.common.collect.Iterables;
 import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.jdbc.CalciteConnection;
@@ -20,8 +21,7 @@ import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
-import java.util.Properties;
+import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -49,6 +49,10 @@ public class AutolabTest {
                 Arrays.stream(queries).map(PQuery::new).toArray(PQuery[]::new),
                 userId, numRounds
         );
+    }
+
+    private void testQueries(Iterable<PQuery> queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
+        testQueries(Iterables.toArray(queries, PQuery.class), userId, numRounds);
     }
 
     private void testQueries(PQuery[] queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
@@ -163,21 +167,27 @@ public class AutolabTest {
     }
 
     @Test
-    public void testProductionShowGradebook() throws ClassNotFoundException, SQLException {
-        String[] queries = new String[]{
-                "SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'",
-                "SELECT  `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = 'Course0' LIMIT 1",
-                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000050 ORDER BY `users`.`id` ASC LIMIT 1",
-                "SELECT  `users`.* FROM `users` WHERE `users`.`id` = 27000050 LIMIT 1",
-                "SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = 27000050 AND `course_user_data`.`course_id` = 10000000 LIMIT 1",
-                "SELECT  `courses`.`disabled` FROM `courses` WHERE `courses`.`id` = 10000000 LIMIT 1",
-                "SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = 10000000 LIMIT 1",
-                "SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = 10000000 AND `assessments`.`name` = 'quiz4' LIMIT 1",
-                "SELECT `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`course_id` = 10000000",
-                "SELECT `assessment_user_data`.* FROM `assessment_user_data` INNER JOIN `assessments` ON `assessment_user_data`.`assessment_id` = `assessments`.`id` WHERE `assessments`.`course_id` = 10000000",
-                "SELECT `submissions`.* FROM `submissions` INNER JOIN `assessment_user_data` ON `assessment_user_data`.`latest_submission_id` = `submissions`.`id` INNER JOIN `course_user_data` ON `course_user_data`.`id` = `submissions`.`course_user_datum_id` INNER JOIN `assessments` ON `submissions`.`assessment_id` = `assessments`.`id` WHERE `assessments`.`course_id` = 10000000 AND `submissions`.`assessment_id` = 5000016",
-        };
-        testQueries(queries, 27000050, 1);
+    public void testProductionShowGradeBookPartial() throws ClassNotFoundException, SQLException {
+        List<PQuery> trace = List.of(
+                new PQuery("SELECT `scheduler`.* FROM `scheduler` WHERE `scheduler`.`next` < '%1$s'"),
+                new PQuery("SELECT `courses`.`id`, `courses`.`name` FROM `courses` WHERE `courses`.`name` = ? LIMIT ?", "Course0", 1),
+                new PQuery("SELECT  `users`.* FROM `users` WHERE `users`.`id` = ? ORDER BY `users`.`id` ASC LIMIT ?", 27000050, 1),
+                new PQuery("SELECT  `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`user_id` = ? AND `course_user_data`.`course_id` = ? LIMIT ?", 27000050, 10000000, 1),
+                new PQuery("SELECT  `courses`.* FROM `courses` WHERE `courses`.`id` = ? LIMIT ?", 10000000, 1),
+                new PQuery("SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = ? LIMIT ?", 27000050, 1),
+                new PQuery("SELECT  `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = ? AND `assessments`.`name` = ? LIMIT ?", 10000000, "quiz4", 1),
+                new PQuery("SELECT `course_user_data`.* FROM `course_user_data` WHERE `course_user_data`.`course_id` = ?", 10000000),
+                new PQuery("SELECT `assessment_user_data`.* FROM `assessment_user_data` INNER JOIN `assessments` ON `assessment_user_data`.`assessment_id` = `assessments`.`id` WHERE `assessments`.`course_id` = ?", 10000000),
+                new PQuery("SELECT `submissions`.* FROM `submissions` INNER JOIN `assessment_user_data` ON `assessment_user_data`.`latest_submission_id` = `submissions`.`id` INNER JOIN `course_user_data` ON `course_user_data`.`id` = `submissions`.`course_user_datum_id` INNER JOIN `assessments` ON `submissions`.`assessment_id` = `assessments`.`id` WHERE `assessments`.`course_id` = ? AND `submissions`.`assessment_id` = ?", 10000000, 5000016),
+                new PQuery("SELECT `scores`.* FROM `scores` INNER JOIN `submissions` ON `submissions`.`id` = `scores`.`submission_id` INNER JOIN `assessment_user_data` ON `assessment_user_data`.`latest_submission_id` = `submissions`.`id` INNER JOIN `assessments` ON `assessments`.`id` = `submissions`.`assessment_id` WHERE `submissions`.`ignored` = ? AND `assessments`.`course_id` = ? AND `submissions`.`assessment_id` = ?", false, 10000000, 5000016),
+                new PQuery("SELECT `assessments`.`id`, `assessments`.`due_at`, `assessments`.`end_at`, `assessments`.`start_at`, `assessments`.`name`, `assessments`.`updated_at`, `assessments`.`course_id`, `assessments`.`display_name`, `assessments`.`max_grace_days`, `assessments`.`category_name` FROM `assessments` WHERE `assessments`.`course_id` = ? ORDER BY due_at ASC, name ASC", 10000000),
+                new PQuery("SELECT `problems`.* FROM `problems` WHERE `problems`.`assessment_id` = ?", 5000016),
+                new PQuery("SELECT  `assessments`.* FROM `assessments` WHERE `assessments`.`id` = ? LIMIT ?", 5000016, 1),
+                new PQuery("SELECT  `users`.`id`, `users`.`first_name`, `users`.`last_name`, `users`.`email`, `users`.`school`, `users`.`major`, `users`.`year`, `users`.`administrator` FROM `users` WHERE `users`.`id` = ? LIMIT ?", 27000000, 1),
+                new PQuery("SELECT problems.* FROM problems WHERE problems.assessment_id = ?", 5000016)
+        );
+        List<PQuery> body = Collections.nCopies(1, new PQuery("SELECT scores.* FROM scores WHERE scores.submission_id = ?", 26000028));
+        testQueries(Iterables.concat(trace, body), 27000050, 100);
     }
 
     @Test

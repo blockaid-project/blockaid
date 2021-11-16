@@ -87,7 +87,12 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
         SubQueryTrace sqt = trace.getSubTrace(toKeep);
 
         // Build "param relations only" unsat core formula, i.e., assumes the entire trace is present.
-        UnsatCoreFormulaBuilder.Formulas<Label, PreambleLabel> fs = boundedUcBuilder.buildParamRelationsOnly(sqt);
+        UnsatCoreFormulaBuilder.Formulas<Label, PreambleLabel> fs = boundedUcBuilder.buildParamRelationsOnly(
+                sqt,
+                Options.PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.OFF
+                        ? EnumSet.of(UnsatCoreFormulaBuilder.Option.NO_MARK_BG)
+                        : EnumSet.noneOf(UnsatCoreFormulaBuilder.Option.class)
+        );
         ImmutableSet<Operand> allOperandsOld =
                 fs.labeledExprs().keySet().stream() // Get all labels.
                         .flatMap(l -> l.getOperands().stream()) // Gather both operands of each label.
@@ -101,9 +106,12 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
 
         // If we don't have preamble labels in the formula, let the solver minimize unsat cores
         // (consisting solely of param labels).
-        boolean solverMinimizeUnsatCore = (Options.PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.OFF);
+        ImmutableSet<UnsatCoreEnumerator.Option> enumeratorOptions =
+                Options.PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.OFF
+                        ? Sets.immutableEnumSet(UnsatCoreEnumerator.Option.SOLVER_MINIMIZE_CORE)
+                        : ImmutableSet.of();
         try (UnsatCoreEnumerator<Label, PreambleLabel, CB> uce =
-                     new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.INCREASING, solverMinimizeUnsatCore)) {
+                     new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.INCREASING, enumeratorOptions)) {
             checker.printFormula(solver::toString, "bg");
 
             Map<Label, BoolExpr> labeledExprs = fs.labeledExprs();

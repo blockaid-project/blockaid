@@ -266,27 +266,17 @@ public class ParsedPSJ {
             theta.put(predicate, info);
         }
 
-        SqlNode left = predicate.operand(0);
-        SqlNode right = predicate.operand(1);
-        if (left instanceof SqlBasicCall) {
-            addTheta((SqlBasicCall) left, info);
-        } else if (left instanceof SqlIdentifier) {
-            String name = quantifyName((SqlIdentifier) left);
-            if (!name.startsWith("!")) {
-                info.columns.add(name);
+        for (SqlNode operand : predicate.operands) {
+            if (operand instanceof SqlBasicCall) {
+                addTheta((SqlBasicCall) operand, info);
+            } else if (operand instanceof SqlIdentifier) {
+                String name = quantifyName((SqlIdentifier) operand);
+                if (!name.startsWith("!")) {
+                    info.columns.add(name);
+                }
+            } else if (operand instanceof SqlDynamicParam) {
+                ++info.parameterCount;
             }
-        } else if (left instanceof SqlDynamicParam) {
-            ++info.parameterCount;
-        }
-        if (right instanceof SqlBasicCall) {
-            addTheta((SqlBasicCall) right, info);
-        } else if (right instanceof SqlIdentifier) {
-            String name = quantifyName((SqlIdentifier) right);
-            if (!name.startsWith("!")) {
-                info.columns.add(name);
-            }
-        } else if (right instanceof SqlDynamicParam) {
-            ++info.parameterCount;
         }
     }
 
@@ -311,7 +301,10 @@ public class ParsedPSJ {
 
                 throw new RuntimeException("unknown type for column " + name);
             } else {
-                return context.mkConst(name, context.getCustomIntSort());
+                String nameWithoutBang = name.substring(1);
+                SqlTypeName typeName = schema.getRawSchema().getTypeForConst(nameWithoutBang);
+                return context.mkConst(name, context.getSortFromSqlType(typeName,
+                        Z3ContextWrapper.Nullability.NOT_NULLABLE));
             }
         } else if (theta instanceof SqlLiteral literal) {
             if (literal.getTypeName() == SqlTypeName.BOOLEAN) {
@@ -325,49 +318,36 @@ public class ParsedPSJ {
         } else if (theta instanceof SqlBasicCall call) {
             Expr<?> left = getPredicate(call.operand(0), symbolMap, params, paramNames, schema);
 
-            if (theta.getKind() == SqlKind.IN || theta.getKind() == SqlKind.NOT_IN) {
-                SqlNodeList values = call.operand(1);
-                BiFunction<Expr<?>, Expr<?>, BoolExpr> op =
-                        theta.getKind() == SqlKind.IN ? context::mkSqlEqTrue : context::mkSqlNeqTrue;
-                BoolExpr[] exprs = values.getList().stream()
-                        .map(n -> op.apply(left, getPredicate(n, symbolMap, params, paramNames, schema)))
-                        .toArray(BoolExpr[]::new);
-                return context.mkOr(exprs);
+            // Special handling for several kinds of theta.
+            switch (theta.getKind()) {
+                case IN, NOT_IN -> {
+                    SqlNodeList values = call.operand(1);
+                    BiFunction<Expr<?>, Expr<?>, BoolExpr> op =
+                            theta.getKind() == SqlKind.IN ? context::mkSqlEqTrue : context::mkSqlNeqTrue;
+                    BoolExpr[] exprs = values.getList().stream()
+                            .map(n -> op.apply(left, getPredicate(n, symbolMap, params, paramNames, schema)))
+                            .toArray(BoolExpr[]::new);
+                    return context.mkOr(exprs);
+                }
+                case IS_NULL -> {
+                    return context.mkSqlIsNull(left);
+                }
+                case IS_NOT_NULL -> {
+                    return context.mkSqlIsNotNull(left);
+                }
             }
 
+            // Assume that theta is a binary operator.
             Expr<?> right = getPredicate(((SqlBasicCall) theta).operand(1), symbolMap, params, paramNames, schema);
-            if (left instanceof ArithExpr && right instanceof SeqExpr) {
-                try {
-                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(right.getString()).getTime();
-                    throw new RuntimeException(); // TODO: is this ever used
-                } catch (ParseException e) {
-                    // do nothing
-                }
-            } else if (right instanceof ArithExpr && left instanceof SeqExpr) {
-                try {
-                    new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(left.getString()).getTime();
-                    throw new RuntimeException(); // TODO: is this ever used
-                } catch (ParseException e) {
-                    // do nothing
-                }
-            }
-            if (theta.getKind() == SqlKind.AND) {
-                return context.mkAnd((BoolExpr) left, (BoolExpr) right);
-            } else if (theta.getKind() == SqlKind.OR) {
-                return context.mkOr((BoolExpr) left, (BoolExpr) right);
-            } else if (theta.getKind() == SqlKind.EQUALS) {
-                return context.mkSqlEqTrue(left, right);
-            } else if (theta.getKind() == SqlKind.NOT_EQUALS) {
-                return context.mkSqlNeqTrue(left, right);
-            } else if (theta.getKind() == SqlKind.LESS_THAN) {
-                return context.mkCustomIntLtTrue(left, right);
-//            } else if (theta.getKind() == SqlKind.LESS_THAN_OR_EQUAL) {
-//                return context.mkLe((ArithExpr) left, (ArithExpr) right);
-            } else if (theta.getKind() == SqlKind.GREATER_THAN) {
-                return context.mkCustomIntLtTrue(right, left);
-//            } else if (theta.getKind() == SqlKind.GREATER_THAN_OR_EQUAL) {
-//                return context.mkGe((ArithExpr) left, (ArithExpr) right);
-            }
+            return switch (theta.getKind()) {
+                case AND -> context.mkAnd((BoolExpr) left, (BoolExpr) right);
+                case OR -> context.mkOr((BoolExpr) left, (BoolExpr) right);
+                case EQUALS -> context.mkSqlEqTrue(left, right);
+                case NOT_EQUALS -> context.mkSqlNeqTrue(left, right);
+                case LESS_THAN -> context.mkCustomIntLtTrue(left, right);
+                case GREATER_THAN -> context.mkCustomIntLtTrue(right, left);
+                default -> throw new IllegalArgumentException("unhandled operator kind: " + theta.getKind());
+            };
         } else if (theta instanceof SqlDynamicParam) {
             Object param = params.get(params.size() - 1);
             params.remove(params.size() - 1);
