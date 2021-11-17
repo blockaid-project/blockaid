@@ -1,13 +1,11 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.cache.*;
 import com.microsoft.z3.*;
 
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
-
-import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Custom Z3 Context to track constants and use uninterpreted sorts for everything.
@@ -17,11 +15,29 @@ import static com.google.common.base.Preconditions.checkArgument;
 public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, UninterpretedSort, UninterpretedSort, UninterpretedSort> {
     private final ArrayList<BaseTrackedDecls> trackedDeclStack;
     private final CustomSorts customSorts;
+    private final boolean doSimplify;
 
-    Z3CustomSortsContext(QuantifierOption option) {
+    private record ExprPair(Expr<?> lhs, Expr<?> rhs) {}
+    // Cache for formula for SMT equality.
+    private final LoadingCache<ExprPair, BoolExpr> rawEqCache;
+
+    Z3CustomSortsContext(Set<ContextOption> options) {
         this.trackedDeclStack = new ArrayList<>();
         trackedDeclStack.add(new BaseTrackedDecls());
-        this.customSorts = new CustomSorts(this, option);
+
+        boolean quantifierFree = options.contains(ContextOption.QUANTIFIER_FREE);
+        this.customSorts = new CustomSorts(this, quantifierFree);
+
+        this.doSimplify = options.contains(ContextOption.DO_SIMPLIFY);
+
+        this.rawEqCache = CacheBuilder.newBuilder().maximumSize(10000).build(
+                new CacheLoader<>() {
+                    @Override
+                    public BoolExpr load(ExprPair exprPair) {
+                        return rawContext.mkEq(exprPair.lhs, exprPair.rhs);
+                    }
+                }
+        );
     }
 
     @Override
@@ -175,6 +191,11 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
+    public BoolExpr mkRawEq(Expr<?> lhs, Expr<?> rhs) {
+        return rawEqCache.getUnchecked(new ExprPair(lhs, rhs));
+    }
+
+    @Override
     public BoolExpr mkIsSameValue(Expr<?> lhs, Expr<?> rhs) {
         // All sorts from this context are nullable, so this method is the same as `mkRawEq`.
         return mkRawEq(lhs, rhs);
@@ -191,7 +212,7 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
 
     @Override
     public BoolExpr mkSqlIsNull(Expr<?> e) {
-        return rawContext.mkEq(e, mkNull(e.getSort()));
+        return mkRawEq(e, mkNull(e.getSort()));
     }
 
     @Override
@@ -245,7 +266,20 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
-    public <R extends Sort> FuncDecl<R> mkFreshFuncDecl(String s, Sort[] sorts, R sort) {
-        return trackFuncDecl(rawContext.mkFreshFuncDecl(s, sorts, sort));
+    public BoolExpr mkAnd(BoolExpr... boolExprs) {
+        BoolExpr res = super.mkAnd(boolExprs);
+        if (doSimplify) {
+            res = (BoolExpr) res.simplify();
+        }
+        return res;
+    }
+
+    @Override
+    public BoolExpr mkOr(BoolExpr... boolExprs) {
+        BoolExpr res = super.mkOr(boolExprs);
+        if (doSimplify) {
+            res = (BoolExpr) res.simplify();
+        }
+        return res;
     }
 }

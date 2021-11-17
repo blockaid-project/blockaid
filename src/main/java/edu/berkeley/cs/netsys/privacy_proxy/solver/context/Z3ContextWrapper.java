@@ -1,8 +1,8 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.microsoft.z3.*;
-import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -11,7 +11,6 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkState;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.DISABLE_QE;
@@ -35,8 +34,8 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         this.qeLight = rawContext.mkTactic("qe-light");
     }
 
-    public static Z3CustomSortsContext makeCustomSortsContext(QuantifierOption option) {
-        return new Z3CustomSortsContext(option);
+    public static Z3CustomSortsContext makeCustomSortsContext(Set<ContextOption> options) {
+        return new Z3CustomSortsContext(options);
     }
 
     public static Z3ContextWrapper<IntSort, IntSort, IntSort, BoolSort> makeTheoryContext() {
@@ -87,23 +86,23 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     public abstract <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort);
 
     public BoolExpr mkAnd(BoolExpr... boolExprs) {
-        return (BoolExpr) rawContext.mkAnd(boolExprs).simplify();
+        return rawContext.mkAnd(boolExprs);
     }
 
-    public BoolExpr mkAnd(Iterable<BoolExpr> boolExprs) {
+    public final BoolExpr mkAnd(Iterable<BoolExpr> boolExprs) {
         return mkAnd(Lists.newArrayList(boolExprs));
     }
 
-    public BoolExpr mkAnd(List<BoolExpr> boolExprs) {
+    public final BoolExpr mkAnd(List<BoolExpr> boolExprs) {
         return mkAnd(boolExprs.toArray(new BoolExpr[0]));
     }
 
-    public BoolExpr mkOr(List<BoolExpr> boolExprs) {
-        return rawContext.mkOr(boolExprs.toArray(new BoolExpr[0]));
+    public BoolExpr mkOr(BoolExpr... boolExprs) {
+        return rawContext.mkOr(boolExprs);
     }
 
-    public BoolExpr mkOr(BoolExpr... boolExprs) {
-        return (BoolExpr) rawContext.mkOr(boolExprs).simplify();
+    public final BoolExpr mkOr(List<BoolExpr> boolExprs) {
+        return mkOr(boolExprs.toArray(new BoolExpr[0]));
     }
 
     public BoolExpr myMkForall(Collection<Expr<?>> quantifiers, BoolExpr body) {
@@ -266,7 +265,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     // null and equals the other side).  Treats `null` as the same value as `null`.
     public BoolExpr mkIsSameValue(Expr<?> lhs, Expr<?> rhs) {
         if (lhs.getSort().equals(rhs.getSort())) {
-            return rawContext.mkEq(lhs, rhs);
+            return mkRawEq(lhs, rhs);
         }
         // One is nullable, the other is not.
         if (isSortNullable(lhs.getSort())) {
@@ -277,7 +276,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         // LHS is non-nullable, RHS is nullable.
         return rawContext.mkAnd(
                 mkSqlIsNotNull(rhs),
-                rawContext.mkEq(lhs, getValueFromMaybeNullable(rhs))
+                mkRawEq(lhs, getValueFromMaybeNullable(rhs))
         );
     }
 
@@ -297,11 +296,11 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public BoolExpr mkSqlEqTrue(Expr<?> lhs, Expr<?> rhs) {
-        return mkSqlBinaryTrue(lhs, rhs, rawContext::mkEq);
+        return mkSqlBinaryTrue(lhs, rhs, this::mkRawEq);
     }
 
     public BoolExpr mkSqlNeqTrue(Expr<?> lhs, Expr<?> rhs) {
-        return mkSqlBinaryTrue(lhs, rhs, (e1, e2) -> rawContext.mkNot(rawContext.mkEq(e1, e2)));
+        return mkSqlBinaryTrue(lhs, rhs, (e1, e2) -> rawContext.mkNot(mkRawEq(e1, e2)));
     }
 
     public BoolExpr mkCustomIntLtTrue(Expr<?> lhs, Expr<?> rhs) {
@@ -337,7 +336,6 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public abstract <R extends Sort> FuncDecl<R> mkFuncDecl(String s, Sort[] sorts, R sort);
-    public abstract <R extends Sort> FuncDecl<R> mkFreshFuncDecl(String s, Sort[] sorts, R sort);
 
     public Sort getSortForValue(Object value) {
         if (value instanceof Integer || value instanceof Long) {

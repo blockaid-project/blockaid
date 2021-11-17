@@ -291,9 +291,4 @@ class Z3TheoryContext<NullableInt, NullableBool> extends Z3ContextWrapper<IntSor
     public <R extends Sort> FuncDecl<R> mkFuncDecl(String s, Sort[] sorts, R sort) {
         return rawContext.mkFuncDecl(s, sorts, sort);
     }
-
-    @Override
-    public <R extends Sort> FuncDecl<R> mkFreshFuncDecl(String s, Sort[] sorts, R sort) {
-        return rawContext.mkFreshFuncDecl(s, sorts, sort);
-    }
 }

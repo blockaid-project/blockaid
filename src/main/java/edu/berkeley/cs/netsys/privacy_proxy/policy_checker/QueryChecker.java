@@ -8,7 +8,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryT
 import com.google.common.collect.*;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
-import edu.berkeley.cs.netsys.privacy_proxy.solver.context.QuantifierOption;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.ContextOption;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3CustomSortsContext;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
@@ -135,12 +135,17 @@ public class QueryChecker {
         this.rawSchema = rawSchema;
         this.policySet = policySet;
 
-        Z3CustomSortsContext unboundedContext = Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.USE_QUANTIFIERS);
+        Z3CustomSortsContext unboundedContext = Z3ContextWrapper.makeCustomSortsContext(
+                // I manually read these formulas more often, so simplify them a bit.
+                Sets.immutableEnumSet(ContextOption.DO_SIMPLIFY)
+        );
         Schema<Z3CustomSortsContext> customSortsSchema = new Schema<>(unboundedContext, rawSchema, dependencies);
         Schema<?> theorySchema = new Schema<>(
                 switch (BOUNDED_FORMULA_TYPE) {
                     case THEORY -> Z3ContextWrapper.makeTheoryContext();
-                    case CUSTOM_SORTS -> Z3ContextWrapper.makeCustomSortsContext(QuantifierOption.QUANTIFIER_FREE);
+                    case CUSTOM_SORTS -> Z3ContextWrapper.makeCustomSortsContext(
+                            Sets.immutableEnumSet(ContextOption.QUANTIFIER_FREE)
+                    );
                 },
                 rawSchema, dependencies);
         this.allSchemata = ImmutableList.of(customSortsSchema, theorySchema);

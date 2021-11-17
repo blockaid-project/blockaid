@@ -51,12 +51,6 @@ public abstract class Query<C extends Z3ContextWrapper<?, ?, ?, ?>> {
         return new Tuple<>(schema, head);
     }
 
-    public Tuple<C> makeFreshHead() {
-        Schema<C> schema = getSchema();
-        C context = schema.getContext();
-        return new Tuple<>(schema, headTypes().stream().map(t -> context.mkFreshConst("z", t)));
-    }
-
     public Tuple<C> makeFreshExistentialHead() {
         Schema<C> schema = getSchema();
         C context = schema.getContext();

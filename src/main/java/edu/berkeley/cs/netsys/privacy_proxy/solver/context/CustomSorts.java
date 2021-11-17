@@ -2,6 +2,8 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.microsoft.z3.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -15,7 +17,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 class CustomSorts {
     private final Z3CustomSortsContext context;
-    private final QuantifierOption quantifierOption;
+    private final boolean quantifierFree;
 
     // Dependent types would come in handy here...
     final UninterpretedSort intSort;
@@ -49,13 +51,16 @@ class CustomSorts {
         private final Map<String, Expr<UninterpretedSort>> stringValues = new HashMap<>();
         private final Map<Boolean, Expr<UninterpretedSort>> boolValues = new HashMap<>();
 
-        private final Map<Expr<UninterpretedSort>, Object> expr2Obj = new HashMap<>();
+        // Here we use an `IdentityHashMap` to avoid hashing Z3 expressions and save some time.
+        // The keys in this map are always fresh constants and shouldn't be re-created after their initial creation.
+        // Therefore, there should be only one object for each expression, and we can get away with identity comparison.
+        private final IdentityHashMap<Expr<UninterpretedSort>, Object> expr2Obj = new IdentityHashMap<>();
     }
 
-    CustomSorts(Z3CustomSortsContext context, QuantifierOption qo) {
+    CustomSorts(Z3CustomSortsContext context, boolean quantifierFree) {
         this.context = context;
-        this.quantifierOption = qo;
         Context rawContext = context.rawContext;
+        this.quantifierFree = quantifierFree;
 
         intSort = rawContext.mkUninterpretedSort("CS!INT");
         dateSort = rawContext.mkUninterpretedSort("CS!DATE");
@@ -79,29 +84,28 @@ class CustomSorts {
                         new Sort[]{sort, sort}, context.rawContext.getBoolSort()) // value
         ));
 
-        axioms = switch (quantifierOption) {
-            case QUANTIFIER_FREE -> ImmutableList.of(); // No axioms, which require quantifiers.
-            case USE_QUANTIFIERS -> {
-                ImmutableList.Builder<BoolExpr> axiomsBuilder = ImmutableList.builder();
+        if (quantifierFree) {
+            axioms = ImmutableList.of(); // No axioms, which require quantifiers.
+        } else {
+            ImmutableList.Builder<BoolExpr> axiomsBuilder = ImmutableList.builder();
 
-                // Transitivity axiom for less-than functions.
-                for (Map.Entry<UninterpretedSort, FuncDecl<BoolSort>> entry : sort2LtFunc.entrySet()) {
-                    UninterpretedSort sort = entry.getKey();
-                    FuncDecl<BoolSort> func = entry.getValue();
-                    Expr<UninterpretedSort> x = rawContext.mkConst("x", sort),
-                            y = rawContext.mkConst("y", sort),
-                            z = rawContext.mkConst("z", sort);
-                    BoolExpr ltTrans = rawContext.mkForall(
-                            new Expr[]{x, y, z},
-                            rawContext.mkImplies(
-                                    rawContext.mkAnd(func.apply(x, y), func.apply(y, z)), func.apply(x, z)
-                            ), 1, null, null, null, null
-                    );
-                    axiomsBuilder.add(ltTrans);
-                }
-                yield axiomsBuilder.build();
+            // Transitivity axiom for less-than functions.
+            for (Map.Entry<UninterpretedSort, FuncDecl<BoolSort>> entry : sort2LtFunc.entrySet()) {
+                UninterpretedSort sort = entry.getKey();
+                FuncDecl<BoolSort> func = entry.getValue();
+                Expr<UninterpretedSort> x = rawContext.mkConst("x", sort),
+                        y = rawContext.mkConst("y", sort),
+                        z = rawContext.mkConst("z", sort);
+                BoolExpr ltTrans = rawContext.mkForall(
+                        new Expr[]{x, y, z},
+                        rawContext.mkImplies(
+                                rawContext.mkAnd(func.apply(x, y), func.apply(y, z)), func.apply(x, z)
+                        ), 1, null, null, null, null
+                );
+                axiomsBuilder.add(ltTrans);
             }
-        };
+            axioms = axiomsBuilder.build();
+        }
 
         sort2NullExpr = ImmutableMap.<UninterpretedSort, Expr<UninterpretedSort>>builder()
                 .put(boolSort, getBool(null))
@@ -136,7 +140,7 @@ class CustomSorts {
                 return e;
             }
         }
-        Expr<UninterpretedSort> c = value == null ? context.mkConst(sort.getSExpr() + "!null", sort)
+        Expr<UninterpretedSort> c = value == null ? context.mkFreshConst(sort.getSExpr() + "!null", sort)
                 : context.mkFreshConst(sort.getSExpr(), sort);
         Values vs = valuesStack.get(valuesStack.size() - 1);
         valueMapPicker.apply(vs).put(value, c);
@@ -193,23 +197,20 @@ class CustomSorts {
         }
 
         ArrayList<BoolExpr> res = new ArrayList<>();
-        switch (quantifierOption) {
-            case QUANTIFIER_FREE -> {
-                // In the quantifier-free case, there's no transitivity axiom imposed on our less-than predicate.
-                // Therefore, add a less-than constraint for every pair of values.
-                for (int i = 0; i < keys.size(); ++i) {
-                    Expr<UninterpretedSort> thisElem = exprs.get(keys.get(i));
-                    for (int j = i + 1; j < keys.size(); ++j) {
-                        Expr<UninterpretedSort> otherElem = exprs.get(keys.get(j));
-                        res.add(mkRawCustomLt(thisElem, otherElem));
-                    }
+        if (quantifierFree) {
+            // In the quantifier-free case, there's no transitivity axiom imposed on our less-than predicate.
+            // Therefore, add a less-than constraint for every pair of values.
+            for (int i = 0; i < keys.size(); ++i) {
+                Expr<UninterpretedSort> thisElem = exprs.get(keys.get(i));
+                for (int j = i + 1; j < keys.size(); ++j) {
+                    Expr<UninterpretedSort> otherElem = exprs.get(keys.get(j));
+                    res.add(mkRawCustomLt(thisElem, otherElem));
                 }
             }
-            case USE_QUANTIFIERS -> {
-                for (int i = 0; i < keys.size() - 1; ++i) {
-                    Expr<UninterpretedSort> thisElem = exprs.get(keys.get(i)), nextElem = exprs.get(keys.get(i + 1));
-                    res.add(mkRawCustomLt(thisElem, nextElem));
-                }
+        } else {
+            for (int i = 0; i < keys.size() - 1; ++i) {
+                Expr<UninterpretedSort> thisElem = exprs.get(keys.get(i)), nextElem = exprs.get(keys.get(i + 1));
+                res.add(mkRawCustomLt(thisElem, nextElem));
             }
         }
         return res;
@@ -307,7 +308,9 @@ class CustomSorts {
 
     Expr<UninterpretedSort> mkNull(UninterpretedSort s) {
         Expr<UninterpretedSort> nullExpr = sort2NullExpr.get(s);
-        checkArgument(nullExpr != null, "no null value for sort: " + s);
+        if (nullExpr == null) {
+            throw new IllegalArgumentException("no null value for sort: " + s);
+        }
         return nullExpr;
     }
 }
