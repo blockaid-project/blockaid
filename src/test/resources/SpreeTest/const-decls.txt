@@ -1,0 +1,3 @@
+_MY_UID:int;
+_TOKEN:string;
+_STORE_URL_PATTERN:string;
