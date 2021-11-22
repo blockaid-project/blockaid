@@ -1,4 +1,6 @@
 spree_orders.store_id:spree_stores.id;
+spree_orders.bill_address_id:spree_addresses.id;
+spree_orders.ship_address_id:spree_addresses.id;
 spree_role_users.role_id:spree_roles.id;
 spree_role_users.user_id:spree_users.id;
 spree_store_credits.store_id:spree_stores.id;
@@ -28,3 +30,11 @@ spree_stock_locations.state_id:spree_states.id;
 spree_stock_locations.country_id:spree_countries.id;
 spree_stock_items.stock_location_id:spree_stock_locations.id;
 spree_stock_items.variant_id:spree_variants.id;
+spree_payments.order_id:spree_orders.id;
+spree_payments.payment_method_id:spree_payment_methods.id;
+spree_shipments.order_id:spree_orders.id;
+spree_shipments.address_id:spree_addresses.id;
+spree_shipments.stock_location_id:spree_stock_locations.id;
+spree_shipping_rates.shipment_id:spree_shipments.id;
+spree_shipping_rates.shipping_method_id:spree_shipping_methods.id;
+spree_promotion_actions.promotion_id:spree_promotions.id;

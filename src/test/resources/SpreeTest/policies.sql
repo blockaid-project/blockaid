@@ -50,6 +50,9 @@ FROM `spree_orders`
 WHERE `spree_users`.`id` = _MY_UID
   AND `spree_users`.`deleted_at` IS NULL
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+-- Spree returns different errors for (1) when an order number doesn't exist, and (2) when an order's number exists but
+-- is not yours.  Have to make order numbers public.
+SELECT `spree_orders`.`number` FROM `spree_orders`;
 
 SELECT `spree_role_users`.*
 FROM `spree_role_users`
@@ -94,6 +97,25 @@ FROM `spree_addresses`
 WHERE `spree_addresses`.`deleted_at` IS NULL
   AND `spree_users`.`id` = _MY_UID
   AND `spree_users`.`deleted_at` IS NULL;
+-- My own order's billing and shipping addresses are also visible.
+-- I was going to add an integrity constraint saying that any address associated with my order are mine, but an
+-- address's user ID is optional.
+SELECT `spree_addresses`.*
+FROM `spree_addresses`
+         INNER JOIN `spree_orders` ON (`spree_addresses`.`id` = `spree_orders`.`bill_address_id` OR
+                                       `spree_addresses`.`id` = `spree_orders`.`ship_address_id`)
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_addresses`.*
+FROM `spree_addresses`
+         INNER JOIN `spree_orders` ON (`spree_addresses`.`id` = `spree_orders`.`bill_address_id` OR
+                                       `spree_addresses`.`id` = `spree_orders`.`ship_address_id`)
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
 SELECT `spree_states`.*
 FROM `spree_states`;
@@ -184,7 +206,7 @@ WHERE (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW
   AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
   AND (`spree_products`.available_on < _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
--- A product is also visible if one of its variants is in the current cart, even if it's unavailable or discontinued.
+-- A product is also visible if one of its variants is in the cart / an order, even if it's unavailable or discontinued.
 SELECT *
 FROM `spree_products`
          INNER JOIN `spree_variants` ON `spree_products`.`id` = `spree_variants`.`product_id`
@@ -366,6 +388,7 @@ WHERE `spree_users`.`id` = _MY_UID
   AND `spree_users`.`deleted_at` IS NULL
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
+-- Adjustments for orders.
 -- TODO(zhangwen): Should the `eligible` column affect visibility?
 SELECT `spree_adjustments`.*
 FROM `spree_adjustments`
@@ -382,6 +405,68 @@ FROM `spree_adjustments`
                                       `spree_adjustments`.`order_id` = `spree_orders`.`id`
          INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
          INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+-- Adjustments for line items.
+SELECT `spree_adjustments`.*
+FROM `spree_adjustments`
+         INNER JOIN `spree_line_items` ON (`spree_adjustments`.`adjustable_type` = 'Spree::LineItem' AND
+                                           `spree_adjustments`.`adjustable_id` = `spree_line_items`.`id`)
+         INNER JOIN `spree_orders` ON `spree_line_items`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_adjustments`.*
+FROM `spree_adjustments`
+         INNER JOIN `spree_line_items` ON (`spree_adjustments`.`adjustable_type` = 'Spree::LineItem' AND
+                                           `spree_adjustments`.`adjustable_id` = `spree_line_items`.`id`)
+         INNER JOIN `spree_orders` ON `spree_line_items`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+-- Adjustments for shipments.
+SELECT `spree_adjustments`.*
+FROM `spree_adjustments`
+         INNER JOIN `spree_shipments` ON (`spree_adjustments`.`adjustable_type` = 'Spree::Shipment' AND
+                                          `spree_adjustments`.`adjustable_id` = `spree_shipments`.`id`)
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_adjustments`.*
+FROM `spree_adjustments`
+         INNER JOIN `spree_shipments` ON (`spree_adjustments`.`adjustable_type` = 'Spree::Shipment' AND
+                                          `spree_adjustments`.`adjustable_id` = `spree_shipments`.`id`)
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+-- Promotion actions for shipping.
+SELECT `spree_promotion_actions`.*
+FROM `spree_promotion_actions`
+         INNER JOIN `spree_adjustments` ON (`spree_adjustments`.`source_type` = 'Spree::PromotionAction' AND
+                                            `spree_adjustments`.`source_id` = `spree_promotion_actions`.`id`)
+         INNER JOIN `spree_shipments` ON (`spree_adjustments`.`adjustable_type` = 'Spree::Shipment' AND
+                                          `spree_adjustments`.`adjustable_id` = `spree_shipments`.`id`)
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_promotion_actions`.*
+FROM `spree_promotion_actions`
+         INNER JOIN `spree_adjustments` ON (`spree_adjustments`.`source_type` = 'Spree::PromotionAction' AND
+                                            `spree_adjustments`.`source_id` = `spree_promotion_actions`.`id`)
+         INNER JOIN `spree_shipments` ON (`spree_adjustments`.`adjustable_type` = 'Spree::Shipment' AND
+                                          `spree_adjustments`.`adjustable_id` = `spree_shipments`.`id`)
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
 WHERE `spree_users`.`id` = _MY_UID
   AND `spree_users`.`deleted_at` IS NULL
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
@@ -410,3 +495,103 @@ WHERE `spree_stock_items`.`deleted_at` IS NULL
   AND `spree_users`.`id` = _MY_UID
   AND `spree_users`.`deleted_at` IS NULL
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+SELECT `spree_payments`.*
+FROM `spree_payments`
+         INNER JOIN `spree_orders` ON `spree_payments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_payments`.*
+FROM `spree_payments`
+         INNER JOIN `spree_orders` ON `spree_payments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+-- Payment method is visible for the current user's order.
+-- TODO(zhangwen): Any sensitive columns?
+SELECT `spree_payment_methods`.*
+FROM `spree_payment_methods`
+         INNER JOIN `spree_payments` ON `spree_payments`.`payment_method_id` = `spree_payment_methods`.`id`
+         INNER JOIN `spree_orders` ON `spree_payments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_payment_methods`.*
+FROM `spree_payment_methods`
+         INNER JOIN `spree_payments` ON `spree_payments`.`payment_method_id` = `spree_payment_methods`.`id`
+         INNER JOIN `spree_orders` ON `spree_payments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+-- Or if the method is active and displayed to front end.
+-- https://dev-docs.spreecommerce.org/internals/payments#payment-method-visibility
+-- TODO(zhangwen): When is a payment method not displayed in backend? Isn't the backend only accessible by an admin?
+SELECT `spree_payment_methods`.*
+FROM `spree_payment_methods`
+WHERE `spree_payment_methods`.active = TRUE
+  AND `spree_payment_methods`.`deleted_at` IS NULL
+  AND `spree_payment_methods`.`display_on` IN ('both', 'front_end');
+
+SELECT `spree_shipments`.*
+FROM `spree_shipments`
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_shipments`.*
+FROM `spree_shipments`
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+SELECT `spree_shipping_rates`.*
+FROM `spree_shipping_rates`
+         INNER JOIN `spree_shipments` ON `spree_shipping_rates`.`shipment_id` = `spree_shipments`.`id`
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_shipping_rates`.*
+FROM `spree_shipping_rates`
+         INNER JOIN `spree_shipments` ON `spree_shipping_rates`.`shipment_id` = `spree_shipments`.`id`
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+SELECT `spree_shipping_methods`.*
+FROM `spree_shipping_methods`
+         INNER JOIN `spree_shipping_rates`
+                    ON `spree_shipping_rates`.`shipping_method_id` = `spree_shipping_methods`.`id`
+         INNER JOIN `spree_shipments` ON `spree_shipping_rates`.`shipment_id` = `spree_shipments`.`id`
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN
+  AND `spree_orders`.`token` = _TOKEN;
+SELECT `spree_shipping_methods`.*
+FROM `spree_shipping_methods`
+         INNER JOIN `spree_shipping_rates`
+                    ON `spree_shipping_rates`.`shipping_method_id` = `spree_shipping_methods`.`id`
+         INNER JOIN `spree_shipments` ON `spree_shipping_rates`.`shipment_id` = `spree_shipments`.`id`
+         INNER JOIN `spree_orders` ON `spree_shipments`.`order_id` = `spree_orders`.`id`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
+WHERE `spree_users`.`id` = _MY_UID
+  AND `spree_users`.`deleted_at` IS NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+-- TODO(zhangwen): again, my understanding is that the backend is only accessible to admins, who have access to all?
+SELECT `spree_shipping_methods`.*
+FROM `spree_shipping_methods`
+WHERE `spree_shipping_methods`.`display_on` IN ('both', 'front_end')
+  AND `spree_shipping_methods`.`deleted_at` IS NULL;
