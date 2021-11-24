@@ -62,4 +62,4 @@ spree_option_value_variants:variant_id,option_value_id;
 spree_stock_items:variant_id,stock_location_id,deleted_at;
 spree_payments:number;
 spree_shipments:number;
-spree_shipping_rates:shipment_id,shipment_method_id;
+spree_shipping_rates:shipment_id,shipping_method_id;
