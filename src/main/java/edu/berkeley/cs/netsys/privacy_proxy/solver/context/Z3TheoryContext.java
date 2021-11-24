@@ -244,6 +244,11 @@ class Z3TheoryContext<NullableInt, NullableBool> extends Z3ContextWrapper<IntSor
     }
 
     @Override
+    public BoolExpr mkRawStringLike(Expr<?> left, Expr<?> right) {
+        throw new UnsupportedOperationException("String like operator has not been implemented");
+    }
+
+    @Override
     public IntSort getCustomRealSort() {
         return rawContext.getIntSort();
     }

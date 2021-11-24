@@ -231,6 +231,11 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
     }
 
     @Override
+    public BoolExpr mkRawStringLike(Expr<?> left, Expr<?> right) {
+        return customSorts.mkRawStringLike(left, right);
+    }
+
+    @Override
     public UninterpretedSort getCustomRealSort() {
         return customSorts.realSort;
     }

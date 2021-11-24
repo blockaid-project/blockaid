@@ -32,9 +32,10 @@ class CustomSorts {
     private final String sortDeclarationSMT;
     private final List<Values> valuesStack;
 
-    final ImmutableMap<UninterpretedSort, FuncDecl<BoolSort>> sort2LtFunc;
+    private final ImmutableMap<UninterpretedSort, FuncDecl<BoolSort>> sort2LtFunc;
+    private final FuncDecl<BoolSort> stringLikeFunc;
 
-    final ImmutableList<BoolExpr> axioms;
+    private final ImmutableList<BoolExpr> axioms;
 
     private static final Function<Values, Map<Date, Expr<UninterpretedSort>>> PICK_DATE = v -> v.dateValues;
     private static final Function<Values, Map<Timestamp, Expr<UninterpretedSort>>> PICK_TS = v -> v.tsValues;
@@ -83,6 +84,9 @@ class CustomSorts {
                 sort -> context.mkFuncDecl("lt!" + sort.getSExpr(),
                         new Sort[]{sort, sort}, context.rawContext.getBoolSort()) // value
         ));
+
+        stringLikeFunc = context.mkFuncDecl("like", new Sort[]{stringSort, stringSort},
+                context.rawContext.getBoolSort());
 
         if (quantifierFree) {
             axioms = ImmutableList.of(); // No axioms, which require quantifiers.
@@ -304,6 +308,10 @@ class CustomSorts {
                         ") is different from right expression " + right + " (" + rightSort  + ")"
         );
         return (BoolExpr) sort2LtFunc.get(leftSort).apply(left, right);
+    }
+
+    BoolExpr mkRawStringLike(Expr<?> left, Expr<?> right) {
+        return (BoolExpr) stringLikeFunc.apply(left, right);
     }
 
     Expr<UninterpretedSort> mkNull(UninterpretedSort s) {

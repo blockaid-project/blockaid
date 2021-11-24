@@ -188,8 +188,9 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     public abstract Expr<IntegralS> mkCustomInt(long value);
     public abstract Expr<BoolS> mkCustomBool(boolean value);
 
-    // Assumes operands are not nullable.
+    // Assume operands are not nullable.
     public abstract BoolExpr mkRawCustomIntLt(Expr<?> left, Expr<?> right);
+    public abstract BoolExpr mkRawStringLike(Expr<?> left, Expr<?> right);
 
     public abstract Expr<StringS> mkCustomString(String value);
     public abstract Expr<RealS> mkCustomReal(double value);
@@ -307,6 +308,10 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         return mkSqlBinaryTrue(lhs, rhs, this::mkRawCustomIntLt);
     }
 
+    public BoolExpr mkStringLikeTrue(Expr<?> lhs, Expr<?> rhs) {
+        return mkSqlBinaryTrue(lhs, rhs, this::mkRawStringLike);
+    }
+
     public BoolExpr mkAtMost(Collection<BoolExpr> exprs, int bound) {
         return rawContext.mkAtMost(exprs.toArray(new BoolExpr[0]), bound);
     }
@@ -371,6 +376,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
                 case FLOAT:
                 case REAL:
                 case DOUBLE:
+                case DECIMAL: // TODO(zhangwen): decimal is treated as floating point.
                     return getCustomRealSort(nullability);
             }
             throw new IllegalArgumentException("Unsupported numeric type: " + typeName);
