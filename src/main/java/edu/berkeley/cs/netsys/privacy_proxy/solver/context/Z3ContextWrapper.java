@@ -1,12 +1,12 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.microsoft.z3.*;
 import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
@@ -208,6 +208,9 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
             return mkCustomString(s);
         } else if ((value instanceof Float) || (value instanceof Double)) {
             return mkCustomReal((double) value);
+        } else if (value instanceof BigDecimal bd) {
+            // TODO(zhangwen): make decimal its own sort?
+            return mkCustomReal(bd.doubleValue());
         } else if (value instanceof Timestamp ts) {
             return mkTimestamp(ts);
         } else if (value instanceof Date date) {

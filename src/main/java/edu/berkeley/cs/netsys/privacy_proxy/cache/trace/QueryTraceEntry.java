@@ -135,12 +135,14 @@ public class QueryTraceEntry {
 
         computedColIndicesForPruning = true;
         List<List<Object>> tuples = getTuples();
-        if (tuples.size() <= 3) { // Don't prune unless many rows are returned.
+        // FIXME(zhangwen): decrease this threshold.
+        if (tuples.size() <= 10) { // Don't prune unless many rows are returned.
             colIndicesForPruning = null;
             return Optional.empty();
         }
 
         PrivacyQuery q = getQuery();
+        // FIXME(zhangwen): pk-valued columns can come in the form of polymorphic foreign keys; capture those!
         List<Integer> pkValuedColIndices = getPkValuedColIndices(rawSchema);
         for (Iterator<Integer> it = pkValuedColIndices.iterator(); it.hasNext(); ) {
             int colIdx = it.next();
@@ -158,7 +160,7 @@ public class QueryTraceEntry {
         } else {
             colIndicesForPruning = pkValuedColIndices;
         }
-        printMessage("FOR PRUNE:\t" + getParsedSql());
+        printMessage("FOR PRUNE:\t" + getParsedSql() + "\t" + parameters + "\t(#tuples = " + tuples.size() + ")");
         printMessage("\t" + colIndicesForPruning);
         return Optional.ofNullable(colIndicesForPruning);
     }

@@ -1,7 +1,6 @@
 package client;
 
 import com.google.common.collect.Iterables;
-import edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyConnection;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.rel.type.RelDataType;
@@ -14,18 +13,13 @@ import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
 import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.Pair;
-import org.junit.Before;
 import org.junit.Test;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 
 import java.sql.*;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
-public class AutolabTest {
+public class AutolabTest extends ApplicationTest {
     private static final String dbDatabaseName = "autolab_production_mod";
     private static final String dbUrl = "jdbc:mysql://127.0.0.1:3306/" + dbDatabaseName +
             "?useSSL=false&useUnicode=true&character_set_server=utf8mb4&collation_server=utf8mb4_bin";
@@ -33,76 +27,8 @@ public class AutolabTest {
     private static final String dbPassword = "12345678";
     private static final String resourcePath = "src/test/resources/AutolabTest";
 
-    private String proxyUrl;
-
-    @Before
-    public void setupDb() throws Exception {
-        proxyUrl = String.format("jdbc:privacy:thin:%s,%s,%s",
-                resourcePath,
-                dbUrl,
-                dbDatabaseName
-        );
-    }
-
-    private void testQueries(String[] queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
-        testQueries(
-                Arrays.stream(queries).map(PQuery::new).toArray(PQuery[]::new),
-                userId, numRounds
-        );
-    }
-
-    private void testQueries(Iterable<PQuery> queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
-        testQueries(Iterables.toArray(queries, PQuery.class), userId, numRounds);
-    }
-
-    private void testQueries(PQuery[] queries, int userId, int numRounds) throws ClassNotFoundException, SQLException {
-        Class.forName("edu.berkeley.cs.netsys.privacy_proxy.jdbc.PrivacyDriver");
-        try (PrivacyConnection conn = (PrivacyConnection) DriverManager.getConnection(proxyUrl, dbUsername, dbPassword)) {
-            while (numRounds-- > 0) {
-                long startMs = System.currentTimeMillis();
-                try (Statement stmt = conn.createStatement()) {
-                    stmt.execute("SET @_MY_UID = " + userId);
-                }
-
-                for (PQuery pq : queries) {
-                    String q = pq.query;
-                    if (q.contains("%")) {
-                        q = String.format(q, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")));
-                    }
-                    if (q.startsWith("SELECT")) {
-                        try (PreparedStatement stmt = conn.prepareStatement(q)) {
-                            for (int i = 1; i <= pq.params.length; ++i) {
-                                Object o = pq.params[i - 1];
-                                if (o instanceof Integer integer) {
-                                    stmt.setInt(i, integer);
-                                } else if (o instanceof String str) {
-                                    stmt.setString(i, str);
-                                } else if (o instanceof Boolean b) {
-                                    stmt.setBoolean(i, b);
-                                } else {
-                                    throw new UnsupportedOperationException("unsupported param: " + o);
-                                }
-                            }
-                            stmt.execute();
-                            try (ResultSet rs = stmt.getResultSet()) {
-                                while (rs.next()) {
-                                }
-                            }
-                        }
-                    } else {
-                        checkArgument(pq.params.length == 0);
-                        try (Statement stmt = conn.createStatement()) {
-                            stmt.execute(q);
-                        }
-                    }
-                }
-
-                try (Statement stmt = conn.createStatement()) {
-                    stmt.execute("SET @TRACE = null");
-                }
-//                System.out.println("round:\t" + (System.currentTimeMillis() - startMs));
-            }
-        }
+    public AutolabTest() {
+        super(dbDatabaseName, dbUsername, dbPassword, resourcePath);
     }
 
     @Test
@@ -265,6 +191,4 @@ public class AutolabTest {
             System.out.println(p.right);
         }
     }
-
-    private record PQuery(String query, Object... params) { }
 }

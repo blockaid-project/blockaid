@@ -18,7 +18,7 @@ class ShiftDynParams {
     static Result perform(SqlNode node, List<Object> params, List<String> paramNames) {
         checkArgument(params.size() == paramNames.size());
         List<Integer> sortedIndices = node.accept(GatherDynParamIndices.INSTANCE).sorted().collect(Collectors.toList());
-        if (!params.isEmpty()) {
+        if (!sortedIndices.isEmpty()) {
             checkArgument(sortedIndices.get(0) >= 0);
             checkArgument(sortedIndices.get(sortedIndices.size() - 1) < params.size());
         }

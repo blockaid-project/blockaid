@@ -38,6 +38,8 @@ spree_shipments:id;
 spree_shipping_rates:id;
 spree_shipping_methods:id;
 spree_promotion_actions:id;
+friendly_id_slugs:id;
+active_storage_blobs:id;
 
 spree_stores:code;
 spree_users:email;
@@ -63,3 +65,4 @@ spree_stock_items:variant_id,stock_location_id,deleted_at;
 spree_payments:number;
 spree_shipments:number;
 spree_shipping_rates:shipment_id,shipping_method_id;
+active_storage_blobs:key;

@@ -676,6 +676,7 @@ public class PrivacyConnection implements Connection {
             case CHAR, VARCHAR, BINARY, VARBINARY, ANY -> resultSet.getString(i);
             case DATE -> resultSet.getDate(i);
             case TIMESTAMP -> resultSet.getTimestamp(i);
+            case DECIMAL -> resultSet.getBigDecimal(i);
             default -> throw new UnsupportedOperationException("unsupported type: " + typeName);
           };
           if (resultSet.wasNull()) {
@@ -2288,7 +2289,7 @@ public class PrivacyConnection implements Connection {
   }
 
   private class PrivacyStatement implements Statement {
-    private final Pattern SET_PATTERN = Pattern.compile("SET\\s+@(_[A-Za-z0-9_]+)\\s*=\\s*(\\d+)");
+    private final Pattern SET_PATTERN = Pattern.compile("SET\\s+@(_[A-Za-z0-9_]+)\\s*=\\s*(.+)");
     private final Pattern CHECK_CACHE_PATTERN = Pattern.compile("CHECK\\s+CACHE\\s+READ\\s+(.+)");
 
     private final Statement active_statment;
@@ -2502,10 +2503,20 @@ public class PrivacyConnection implements Connection {
         Matcher matcher = SET_PATTERN.matcher(query);
         if (matcher.matches()) {
           String name = matcher.group(1);
-          String value = matcher.group(2);
-          current_trace.setConstValue(name, Integer.valueOf(value));
+          String valueRepr = matcher.group(2);
 
-          printStylizedMessage("Set context: " + name + " = " + value, ANSI_CYAN_BACKGROUND + ANSI_BLACK);
+          Object value;
+          if (valueRepr.startsWith("'")) {
+            if (!valueRepr.endsWith("'")) {
+              throw new SQLException("invalid param value: " + valueRepr);
+            }
+            value = valueRepr.substring(1, valueRepr.length() - 1);
+          } else { // Otherwise, assume the value is an integer.
+            value = Integer.valueOf(valueRepr);
+          }
+          current_trace.setConstValue(name, value);
+
+          printStylizedMessage("Set context: " + name + " = " + valueRepr, ANSI_CYAN_BACKGROUND + ANSI_BLACK);
 
           // TODO(zhangwen): Can I get away with not actually executing this command?
           return Optional.of(false);

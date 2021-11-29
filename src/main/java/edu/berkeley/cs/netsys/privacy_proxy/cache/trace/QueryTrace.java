@@ -22,8 +22,6 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
     private final HashSet<QueryTraceEntry> entrySet;
 
     // Maps constants to their values (e.g., _MY_UID -> 2).
-    // TODO(zhangwen): The existing code seems to assume constants are integers (in ParsedPSJ.getPredicate),
-    //  so I do the same here.
     private final HashMap<String, Object> constMap;
 
     public QueryTrace() {

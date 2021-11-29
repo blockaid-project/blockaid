@@ -50,7 +50,8 @@ public class ExtractParams extends SqlTransformer {
     public SqlNode visit(SqlLiteral sqlLiteral) {
         Object v = switch (sqlLiteral.getTypeName()) {
             case BOOLEAN -> sqlLiteral.booleanValue();
-            case INTEGER, DECIMAL -> sqlLiteral.intValue(true);
+            case INTEGER -> sqlLiteral.intValue(true);
+            case DECIMAL -> sqlLiteral.bigDecimalValue();
             case CHAR -> sqlLiteral.getValueAs(String.class);
 //            case SYMBOL -> sqlLiteral;
             default -> throw new RuntimeException("unhandled literal type: " + sqlLiteral.getTypeName());
