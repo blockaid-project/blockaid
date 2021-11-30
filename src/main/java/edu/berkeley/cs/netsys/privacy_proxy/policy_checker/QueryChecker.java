@@ -16,6 +16,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PolicyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
+import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
 
 import java.io.IOException;
@@ -49,8 +50,6 @@ public class QueryChecker {
         DENY,
         UNKNOWN
     }
-
-    public static final long SOLVE_TIMEOUT_MS = 2000; // ms
 
     private final SchemaPlusWithKey rawSchema;
     private final List<Policy> policySet;
@@ -295,8 +294,8 @@ public class QueryChecker {
                     picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
                 }
             } else {
-//                System.out.println("=== pruning ===");
-//                System.out.println(qte.getParsedSql());
+                printMessage("=== pruning start ===", LogLevel.VERBOSE);
+                printMessage(qte::getParsedSql, LogLevel.VERBOSE);
                 Collection<Integer> pkColIdxForPrune = oPkColIdxForPrune.get();
                 checkState(!pkColIdxForPrune.isEmpty());
                 for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
@@ -311,11 +310,11 @@ public class QueryChecker {
                             break;
                         }
                     }
-                    if (kept) {
-//                        System.out.println("\tkept:\t" + tuples.get(tupIdx));
+                    if (!kept) {
+                        printMessage(() -> "\tpruned:\t" + tup, LogLevel.VERBOSE);
                     }
                 }
-//                System.out.println("=== done ===");
+                System.out.println("=== pruning done ===");
             }
 
             seenPkValues.addAll(qte.getReturnedPkValues(rawSchema));

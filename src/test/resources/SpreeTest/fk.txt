@@ -15,6 +15,8 @@ spree_taxons.parent_id:spree_taxons.id;
 spree_taxons.taxonomy_id:spree_taxonomies.id;
 spree_products_stores.product_id:spree_products.id;
 spree_products_stores.store_id:spree_stores.id;
+spree_products_taxons.product_id:spree_products.id;
+spree_products_taxons.taxon_id:spree_taxons.id;
 spree_promotions.promotion_category_id:spree_promotion_categories.id;
 spree_promotion_rules.promotion_id:spree_promotions.id;
 spree_product_promotion_rules.product_id:spree_products.id;

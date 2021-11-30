@@ -345,7 +345,9 @@ public class ParsedPSJ {
                 case EQUALS -> context.mkSqlEqTrue(left, right);
                 case NOT_EQUALS -> context.mkSqlNeqTrue(left, right);
                 case LESS_THAN -> context.mkCustomIntLtTrue(left, right);
+                case LESS_THAN_OR_EQUAL -> context.mkCustomIntLteTrue(left, right);
                 case GREATER_THAN -> context.mkCustomIntLtTrue(right, left);
+                case GREATER_THAN_OR_EQUAL -> context.mkCustomIntLteTrue(right, left);
                 case LIKE -> context.mkStringLikeTrue(left, right);
                 default -> throw new IllegalArgumentException("unhandled operator kind: " + theta.getKind());
             };

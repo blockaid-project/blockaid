@@ -66,7 +66,7 @@ public class ApplicationTest {
                 }
 
                 for (PQuery pq : queries) {
-                    String q = pq.query;
+                    String q = pq.query.trim();
                     if (q.contains("%1$s")) {
                         q = String.format(q, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS")));
                     }

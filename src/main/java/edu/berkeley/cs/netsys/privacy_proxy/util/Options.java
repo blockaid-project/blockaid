@@ -112,4 +112,7 @@ public class Options {
     /* Use custom sorts (instead of ints and bools) in bounded formula. */
     public static final BoundedFormulaType BOUNDED_FORMULA_TYPE =
             BoundedFormulaType.parse(System.getProperty("privoxy.bounded_formula_type", "theory"));
+
+    /* Print formulas to file. */
+    public static final int SOLVE_TIMEOUT_MS = Integer.parseInt(System.getProperty("privoxy.solve_timeout_ms", "2000"));
 }

@@ -160,8 +160,8 @@ public class QueryTraceEntry {
         } else {
             colIndicesForPruning = pkValuedColIndices;
         }
-        printMessage("FOR PRUNE:\t" + getParsedSql() + "\t" + parameters + "\t(#tuples = " + tuples.size() + ")");
-        printMessage("\t" + colIndicesForPruning);
+//        printMessage("FOR PRUNE:\t" + getParsedSql() + "\t" + parameters + "\t(#tuples = " + tuples.size() + ")");
+//        printMessage("\t" + colIndicesForPruning);
         return Optional.ofNullable(colIndicesForPruning);
     }
 

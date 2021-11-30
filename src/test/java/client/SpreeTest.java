@@ -52,6 +52,46 @@ public class SpreeTest extends ApplicationTest {
     }
 
     @Test
+    public void testAvailableProduct() throws ClassNotFoundException, SQLException {
+        PQuery[] queries = new PQuery[]{
+                new PQuery("SELECT `spree_preferences`.* FROM `spree_preferences` WHERE `spree_preferences`.`key` = ? LIMIT ?", "spree/frontend_configuration/locale", 1),
+                new PQuery("SELECT `spree_stores`.`id`, `spree_stores`.`name`, `spree_stores`.`url`, `spree_stores`.`meta_description`, `spree_stores`.`meta_keywords`, `spree_stores`.`seo_title`, `spree_stores`.`mail_from_address`, `spree_stores`.`default_currency`, `spree_stores`.`code`, `spree_stores`.`default`, `spree_stores`.`created_at`, `spree_stores`.`updated_at`, `spree_stores`.`supported_currencies`, `spree_stores`.`facebook`, `spree_stores`.`twitter`, `spree_stores`.`instagram`, `spree_stores`.`default_locale`, `spree_stores`.`customer_support_email`, `spree_stores`.`default_country_id`, `spree_stores`.`description`, `spree_stores`.`address`, `spree_stores`.`contact_phone`, `spree_stores`.`checkout_zone_id`, `spree_stores`.`seo_robots`, `spree_stores`.`supported_locales` FROM `spree_stores` WHERE (url like '%spree.internal%') ORDER BY `spree_stores`.`created_at` ASC LIMIT ?", 1),
+                new PQuery("SELECT `spree_users`.* FROM `spree_users` WHERE `spree_users`.`deleted_at` IS NULL AND `spree_users`.`id` = ? ORDER BY `spree_users`.`id` ASC LIMIT ?", 82000001, 1),
+                new PQuery("SELECT 1 AS one FROM `spree_roles` INNER JOIN `spree_role_users` ON `spree_roles`.`id` = `spree_role_users`.`role_id` WHERE `spree_role_users`.`user_id` = ? AND `spree_roles`.`name` = ? LIMIT ?", 82000001, "admin", 1),
+                new PQuery("SELECT `spree_products`.* FROM `spree_products` INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id` WHERE `spree_products`.`deleted_at` IS NULL AND `spree_products_stores`.`store_id` = ? AND (`spree_products`.deleted_at IS NULL or `spree_products`.deleted_at >= '%1$s') AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on >= '%1$s') AND (`spree_products`.available_on <= '%1$s') AND `spree_products`.`slug` = ? LIMIT ?", 1, "polo-t-shirt", 1),
+                new PQuery("SELECT 1 AS one FROM `spree_stores` INNER JOIN `spree_products_stores` ON `spree_stores`.`id` = `spree_products_stores`.`store_id` WHERE `spree_products_stores`.`product_id` = ? AND `spree_stores`.`id` = ? LIMIT ?", 35000011, 1, 1),
+                new PQuery("SELECT `spree_taxons`.* FROM `spree_taxons` INNER JOIN `spree_products_taxons` ON `spree_taxons`.`id` = `spree_products_taxons`.`taxon_id` WHERE `spree_products_taxons`.`product_id` = ? ORDER BY `spree_taxons`.`id` ASC LIMIT ?", 35000011, 1),
+                new PQuery("SELECT `spree_preferences`.* FROM `spree_preferences` WHERE `spree_preferences`.`key` = ? LIMIT ?", "spree/frontend_configuration/http_cache_enabled", 1),
+                new PQuery("SELECT `spree_promotions`.`id` FROM `spree_promotions` INNER JOIN `spree_promotion_rules` ON `spree_promotions`.`id` = `spree_promotion_rules`.`promotion_id` INNER JOIN `spree_product_promotion_rules` ON `spree_promotion_rules`.`id` = `spree_product_promotion_rules`.`promotion_rule_id` WHERE `spree_product_promotion_rules`.`product_id` = ? AND `spree_promotions`.`advertise` = ? AND (spree_promotions.starts_at IS NULL OR spree_promotions.starts_at <= '%1$s') AND (spree_promotions.expires_at IS NULL OR spree_promotions.expires_at >= '%1$s')", 35000011, true),
+                new PQuery("SELECT DISTINCT `spree_variants`.* FROM `spree_variants` INNER JOIN `spree_prices` ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id` WHERE `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = ? AND (`spree_variants`.`discontinue_on` IS NULL OR `spree_variants`.`discontinue_on` >= '%1$s') AND (`spree_variants`.deleted_at IS NULL) AND (spree_prices.currency = 'USD') AND (spree_prices.amount IS NOT NULL) ORDER BY `spree_variants`.`position` ASC", 35000011),
+                new PQuery("SELECT `spree_prices`.* FROM `spree_prices` WHERE `spree_prices`.`currency` = ? AND `spree_prices`.`variant_id` IN (?, ?)", "USD", 83000011, 83000127),
+                new PQuery("SELECT `spree_taxons`.* FROM `spree_taxons` WHERE `spree_taxons`.`lft` <= 2 AND `spree_taxons`.`rgt` >= 11 AND (`spree_taxons`.`id` != 79000001) AND `spree_taxons`.`parent_id` IS NOT NULL ORDER BY `spree_taxons`.`lft` ASC"),
+                new PQuery("SELECT `spree_taxons`.`id` FROM `spree_taxons` WHERE `spree_taxons`.`lft` >= 2 AND `spree_taxons`.`lft` < 11 ORDER BY `spree_taxons`.`lft` ASC"),
+                new PQuery("""
+SELECT MAX(`spree_products`.`updated_at`)
+FROM `spree_products`
+         INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
+         INNER JOIN `spree_variants`
+                    ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id`
+         INNER JOIN `spree_prices`
+                    ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id`
+         INNER JOIN `spree_products_taxons` ON `spree_products_taxons`.`product_id` = `spree_products`.`id`
+WHERE `spree_products`.`deleted_at` IS NULL
+  AND `spree_products_stores`.`store_id` = ?
+  AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on > '%1$s')
+  AND (`spree_products`.available_on <= '%1$s')
+  AND `spree_prices`.`currency` = ?
+  AND `spree_prices`.`amount` IS NOT NULL
+  AND `spree_products_taxons`.`taxon_id` IN (?, ?, ?, ?, ?)
+        """, 1, "USD", 79000001, 79000004, 79000005, 79000006, 79000007),
+                new PQuery("""
+                            SELECT DISTINCT `spree_products`.* FROM `spree_products` INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id` INNER JOIN `spree_variants` ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id` INNER JOIN `spree_prices` ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id` INNER JOIN `spree_products_taxons` ON `spree_products_taxons`.`product_id` = `spree_products`.`id` WHERE `spree_products`.`deleted_at` IS NULL AND `spree_products_stores`.`store_id` = ? AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on > '%1$s') AND (`spree_products`.available_on <= '%1$s') AND `spree_prices`.`currency` = ? AND `spree_prices`.`amount` IS NOT NULL AND `spree_products_taxons`.`taxon_id` IN (?, ?, ?, ?, ?) ORDER BY `spree_products_taxons`.`position` ASC
+                        """, 1, "USD", 79000001, 79000004, 79000005, 79000006, 79000007),
+        };
+        testQueries(queries, PARAMS, 1);
+    }
+
+    @Test
     public void testCart() throws ClassNotFoundException, SQLException {
         PQuery[] queries = new PQuery[]{
 //                new PQuery("SELECT `spree_preferences`.* FROM `spree_preferences` WHERE `spree_preferences`.`key` = ? LIMIT ?", "spree/frontend_configuration/locale", 1),

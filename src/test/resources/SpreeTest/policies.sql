@@ -55,7 +55,10 @@ WHERE `spree_users`.`id` = _MY_UID
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 -- Spree returns different errors for (1) when an order number doesn't exist, and (2) when an order's number exists but
 -- is not yours.  Have to make order numbers public.
-SELECT `spree_orders`.`number` FROM `spree_orders`;
+SELECT `spree_stores`.`id`, `spree_orders`.`number`
+FROM `spree_orders`
+         INNER JOIN `spree_stores` ON `spree_orders`.`store_id` = `spree_stores`.`id`
+WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
 SELECT `spree_role_users`.*
 FROM `spree_role_users`
@@ -192,10 +195,10 @@ FROM `active_storage_attachments`
 WHERE `spree_variants`.`deleted_at` IS NULL
   AND (`spree_variants`.`is_master` = TRUE
     OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` > _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+    OR `spree_variants`.`discontinue_on` >= _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 SELECT `active_storage_attachments`.*
 FROM `active_storage_attachments`
@@ -291,10 +294,10 @@ FROM `active_storage_blobs`
 WHERE `spree_variants`.`deleted_at` IS NULL
   AND (`spree_variants`.`is_master` = TRUE
     OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` > _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+    OR `spree_variants`.`discontinue_on` >= _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 SELECT `active_storage_blobs`.*
 FROM `active_storage_blobs`
@@ -375,15 +378,36 @@ FROM spree_products_stores,
 WHERE spree_products_stores.store_id = spree_stores.id
   AND spree_stores.url LIKE _STORE_URL_PATTERN;
 
+SELECT `spree_products_taxons`.*
+FROM `spree_products_taxons`
+         INNER JOIN `spree_products` ON `spree_products`.`id` = `spree_products_taxons`.`product_id`
+         INNER JOIN `spree_products_stores` ON `spree_products_stores`.`product_id` = `spree_products`.`id`
+         INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
+WHERE (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+
+SELECT `spree_product_promotion_rules`.*
+FROM `spree_product_promotion_rules`
+         INNER JOIN `spree_products` ON `spree_products`.`id` = `spree_product_promotion_rules`.`product_id`
+         INNER JOIN `spree_products_stores` ON `spree_products_stores`.`product_id` = `spree_products`.`id`
+         INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
+WHERE (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
 -- Confirmed that Spree doesn't allow viewing products whose (1) `available_on` is null,
 -- (2) `available_on` is later than the current time, or (3) `discontinue_on` is earlier than the current time.
 SELECT `spree_products`.*
 FROM `spree_products`
          INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
          INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
-WHERE (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+WHERE (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 -- A product is also visible if one of its variants is in the cart / an order, even if it's unavailable or discontinued.
 SELECT *
@@ -405,6 +429,24 @@ WHERE `spree_users`.`id` = _MY_UID
   AND `spree_users`.`deleted_at` IS NULL
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
+-- This separate view is needed for `products_for_filters_cache_key` -- the `for_filters` scope filters for all products
+-- "active" in a currency, i.e., all products that have a variant whose price in the currency is not null.
+-- The variants checked include discontinued ones!  This is an example of a "non-uniform" policy (since in other places
+-- discontinued variants are not visible).
+SELECT `spree_products`.`id`, `spree_products`.`updated_at`, `spree_prices`.`currency`
+FROM `spree_products`
+         INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
+         INNER JOIN `spree_variants`
+                    ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id`
+         INNER JOIN `spree_prices`
+                    ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id`
+         INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
+WHERE `spree_products`.`deleted_at` IS NULL
+  AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
+  AND `spree_prices`.`amount` IS NOT NULL
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
 -- Friendly slugs for products that are directly accessible.
 SELECT `friendly_id_slugs`.*
 FROM `friendly_id_slugs`
@@ -413,9 +455,21 @@ FROM `friendly_id_slugs`
          INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
          INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
 WHERE `friendly_id_slugs`.`deleted_at` IS NULL
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+SELECT `spree_promotion_rules`.*
+FROM `spree_promotion_rules`
+         INNER JOIN `spree_product_promotion_rules`
+                    ON `spree_promotion_rules`.`id` = `spree_product_promotion_rules`.`promotion_rule_id`
+         INNER JOIN `spree_products` ON `spree_product_promotion_rules`.`product_id` = `spree_products`.`id`
+         INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
+         INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
+WHERE (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND `spree_products`.available_on <= _NOW
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
 -- TODO(zhangwen): This is a monstrosity.  We need better ergonomics.
@@ -429,11 +483,11 @@ FROM `spree_promotions`
          INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
          INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
 WHERE `spree_promotions`.`advertise` = TRUE
-  AND (spree_promotions.starts_at IS NULL OR spree_promotions.starts_at < _NOW)
-  AND (spree_promotions.expires_at IS NULL OR spree_promotions.expires_at > _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+  AND (spree_promotions.starts_at IS NULL OR spree_promotions.starts_at <= _NOW)
+  AND (spree_promotions.expires_at IS NULL OR spree_promotions.expires_at >= _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND `spree_products`.available_on <= _NOW
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
 SELECT `spree_variants`.*
@@ -446,11 +500,11 @@ WHERE `spree_variants`.`deleted_at` IS NULL
   AND (`spree_variants`.`is_master` = TRUE
     -- Other variants are visible if not discontinued.
     OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` > _NOW)
+    OR `spree_variants`.`discontinue_on` >= _NOW)
   AND `spree_products`.`deleted_at` IS NULL
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 -- A variant is visible if it's in the user's order, even if the variant is discontinued / no longer available, etc.
 -- In the discontinued / unavailable case, the "orders" page still lists the item and but says "out of stock".
@@ -504,10 +558,10 @@ FROM `spree_assets`
 WHERE `spree_variants`.`deleted_at` IS NULL
   AND (`spree_variants`.`is_master` = TRUE
     OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` > _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+    OR `spree_variants`.`discontinue_on` >= _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 SELECT `spree_assets`.*
 FROM `spree_assets`
@@ -563,20 +617,20 @@ FROM `spree_assets`
          INNER JOIN `spree_stores` ON `spree_menus`.`store_id` = `spree_stores`.`id`
 WHERE `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
+-- Allow access to deleted prices because they can be used in calculating default prices.
 SELECT `spree_prices`.*
 FROM `spree_prices`
          INNER JOIN `spree_variants` ON `spree_prices`.`variant_id` = `spree_variants`.`id`
          INNER JOIN `spree_products` ON `spree_variants`.`product_id` = `spree_products`.`id`
          INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
          INNER JOIN `spree_stores` ON `spree_products_stores`.`store_id` = `spree_stores`.`id`
-WHERE `spree_prices`.`deleted_at` IS NULL
-  AND `spree_variants`.`deleted_at` IS NULL
+WHERE `spree_variants`.`deleted_at` IS NULL
   AND (`spree_variants`.`is_master` = TRUE
     OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` > _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+    OR `spree_variants`.`discontinue_on` >= _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 
 -- These two tables don't seem sensitive.  In particular, they're not tied to any variant.
@@ -594,10 +648,10 @@ FROM `spree_option_value_variants`
 WHERE `spree_variants`.`deleted_at` IS NULL
   AND (`spree_variants`.`is_master` = TRUE
     OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` > _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at > _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on > _NOW)
-  AND (`spree_products`.available_on < _NOW)
+    OR `spree_variants`.`discontinue_on` >= _NOW)
+  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
+  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
+  AND (`spree_products`.available_on <= _NOW)
   AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
 SELECT `spree_option_value_variants`.*
 FROM `spree_option_value_variants`

@@ -210,7 +210,13 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
             return mkCustomReal((double) value);
         } else if (value instanceof BigDecimal bd) {
             // TODO(zhangwen): make decimal its own sort?
-            return mkCustomReal(bd.doubleValue());
+            if (bd.scale() <= 0) {
+                // FIXME(zhangwen): This is a hack.  Both "bigint" and "decimal" SQL types are backed by BigDecimal;
+                //   should implement a proper implicit cast.  Right now we treat integral BigDecimal as bigint.
+                return mkCustomInt(bd.intValue());
+            } else {
+                return mkCustomReal(bd.doubleValue());
+            }
         } else if (value instanceof Timestamp ts) {
             return mkTimestamp(ts);
         } else if (value instanceof Date date) {
@@ -309,6 +315,11 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
 
     public BoolExpr mkCustomIntLtTrue(Expr<?> lhs, Expr<?> rhs) {
         return mkSqlBinaryTrue(lhs, rhs, this::mkRawCustomIntLt);
+    }
+
+    public BoolExpr mkCustomIntLteTrue(Expr<?> lhs, Expr<?> rhs) {
+        return mkSqlBinaryTrue(lhs, rhs,
+                (left, right) -> rawContext.mkOr(mkRawCustomIntLt(left, right), mkRawEq(left, right)));
     }
 
     public BoolExpr mkStringLikeTrue(Expr<?> lhs, Expr<?> rhs) {

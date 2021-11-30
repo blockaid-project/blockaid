@@ -38,7 +38,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
         this.boundedSchema = boundedSchema;
         this.rruce = new ReturnedRowUnsatCoreEnumerator<>(checker, unboundedSchema, boundedSchema, policies);
         this.unboundedUcBuilder = new UnsatCoreFormulaBuilder<>(unboundedFormula, policies);
-        this.runner = new SMTPortfolioRunner(checker, QueryChecker.SOLVE_TIMEOUT_MS);
+        this.runner = new SMTPortfolioRunner(checker, Options.SOLVE_TIMEOUT_MS);
     }
 
     // Returns empty if formula is not determined UNSAT.
