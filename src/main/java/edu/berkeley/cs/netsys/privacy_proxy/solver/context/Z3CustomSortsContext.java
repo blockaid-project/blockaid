@@ -3,6 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 import com.google.common.cache.*;
 import com.microsoft.z3.*;
 
+import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
@@ -222,6 +223,11 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
 
     @Override
     public Expr<UninterpretedSort> mkCustomInt(long value) {
+        return trackConst(customSorts.getInt(value));
+    }
+
+    @Override
+    public Expr<UninterpretedSort> mkCustomInt(BigDecimal value) {
         return trackConst(customSorts.getInt(value));
     }
 

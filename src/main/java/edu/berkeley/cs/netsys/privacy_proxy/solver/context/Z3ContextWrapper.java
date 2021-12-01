@@ -146,7 +146,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         return mkSolver(); // By default, return a regular solver.
     }
 
-    public abstract IntegralS getCustomIntSort();
+    public abstract IntegralS getCustomIntSort(); // Covers both integers and BigDecimal.
     public abstract BoolS getCustomBoolSort();
     public abstract RealS getCustomRealSort();
     public abstract StringS getCustomStringSort();
@@ -186,6 +186,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     }
 
     public abstract Expr<IntegralS> mkCustomInt(long value);
+    public abstract Expr<IntegralS> mkCustomInt(BigDecimal value);
     public abstract Expr<BoolS> mkCustomBool(boolean value);
 
     // Assume operands are not nullable.
@@ -209,14 +210,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         } else if ((value instanceof Float) || (value instanceof Double)) {
             return mkCustomReal((double) value);
         } else if (value instanceof BigDecimal bd) {
-            // TODO(zhangwen): make decimal its own sort?
-            if (bd.scale() <= 0) {
-                // FIXME(zhangwen): This is a hack.  Both "bigint" and "decimal" SQL types are backed by BigDecimal;
-                //   should implement a proper implicit cast.  Right now we treat integral BigDecimal as bigint.
-                return mkCustomInt(bd.intValue());
-            } else {
-                return mkCustomReal(bd.doubleValue());
-            }
+            return mkCustomInt(bd);
         } else if (value instanceof Timestamp ts) {
             return mkTimestamp(ts);
         } else if (value instanceof Date date) {
@@ -386,11 +380,11 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
                 case SMALLINT:
                 case INTEGER:
                 case BIGINT:
+                case DECIMAL:
                     return getCustomIntSort(nullability);
                 case FLOAT:
                 case REAL:
                 case DOUBLE:
-                case DECIMAL: // TODO(zhangwen): decimal is treated as floating point.
                     return getCustomRealSort(nullability);
             }
             throw new IllegalArgumentException("Unsupported numeric type: " + typeName);

@@ -2,11 +2,10 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import com.microsoft.z3.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
@@ -39,7 +38,7 @@ class CustomSorts {
 
     private static final Function<Values, Map<Date, Expr<UninterpretedSort>>> PICK_DATE = v -> v.dateValues;
     private static final Function<Values, Map<Timestamp, Expr<UninterpretedSort>>> PICK_TS = v -> v.tsValues;
-    private static final Function<Values, Map<Long, Expr<UninterpretedSort>>> PICK_INT = v -> v.intValues;
+    private static final Function<Values, Map<BigDecimal, Expr<UninterpretedSort>>> PICK_INT = v -> v.intValues;
     private static final Function<Values, Map<Double, Expr<UninterpretedSort>>> PICK_REAL = v -> v.realValues;
     private static final Function<Values, Map<String, Expr<UninterpretedSort>>> PICK_STRING = v -> v.stringValues;
     private static final Function<Values, Map<Boolean, Expr<UninterpretedSort>>> PICK_BOOL = v -> v.boolValues;
@@ -47,7 +46,7 @@ class CustomSorts {
     private static class Values {
         private final Map<Date, Expr<UninterpretedSort>> dateValues = new HashMap<>();
         private final Map<Timestamp, Expr<UninterpretedSort>> tsValues = new HashMap<>();
-        private final Map<Long, Expr<UninterpretedSort>> intValues = new HashMap<>();
+        private final Map<BigDecimal, Expr<UninterpretedSort>> intValues = new HashMap<>();
         private final Map<Double, Expr<UninterpretedSort>> realValues = new HashMap<>();
         private final Map<String, Expr<UninterpretedSort>> stringValues = new HashMap<>();
         private final Map<Boolean, Expr<UninterpretedSort>> boolValues = new HashMap<>();
@@ -113,7 +112,7 @@ class CustomSorts {
 
         sort2NullExpr = ImmutableMap.<UninterpretedSort, Expr<UninterpretedSort>>builder()
                 .put(boolSort, getBool(null))
-                .put(intSort, getInt(null))
+                .put(intSort, getInt((BigDecimal) null))
                 .put(dateSort, getDate(null))
                 .put(tsSort, getTimestamp(null))
                 .put(realSort, getReal(null))
@@ -161,6 +160,10 @@ class CustomSorts {
     }
 
     Expr<UninterpretedSort> getInt(@Nullable Long value) {
+        return get(value == null ? null : BigDecimal.valueOf(value), intSort, PICK_INT);
+    }
+
+    Expr<UninterpretedSort> getInt(@Nullable BigDecimal value) {
         return get(value, intSort, PICK_INT);
     }
 

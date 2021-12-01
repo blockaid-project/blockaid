@@ -55,6 +55,7 @@ public class PrivacyConnection implements Connection {
   private final FrameworkConfig frameworkConfig;
   private final ImmutableList<AppCacheSpec> cacheSpecs;
   private final LoadingCache<String, ParserResultWithType> parserResults;
+  private final LoadingCache<String, ParserResult> unvalidatedParserResults;
 
   /**
    * Takes ownership of direct_info.
@@ -109,6 +110,15 @@ public class PrivacyConnection implements Connection {
                   ParserResultWithType res = new ParserResultWithType(p.left, p.right);
                   printStylizedMessage(() -> "Parsed: " + res.getParsedSql(), ANSI_RED);
                   return res;
+                }
+              }
+      );
+      this.unvalidatedParserResults = CacheBuilder.newBuilder().maximumSize(1000).build(
+              new CacheLoader<>() {
+                @Override
+                public ParserResult load(String s) throws SqlParseException, ValidationException {
+                  Planner planner = Frameworks.getPlanner(frameworkConfig);
+                  return new ParserResult(planner.parse(s));
                 }
               }
       );
@@ -205,11 +215,10 @@ public class PrivacyConnection implements Connection {
 
   // Also not cached.
   private ParserResult parseQueryUnvalidated(String s) throws SQLException {
-    Planner planner = Frameworks.getPlanner(frameworkConfig);
     try {
-      return new ParserResult(planner.parse(s));
-    } catch (SqlParseException e) {
-      throw new SQLException(e);
+      return unvalidatedParserResults.get(s);
+    } catch (ExecutionException e) {
+      throw new SQLException(e.getCause());
     }
   }
 
@@ -219,16 +228,9 @@ public class PrivacyConnection implements Connection {
     } catch (ExecutionException e) {
       throw new SQLException(e.getCause());
     }
-//    return new ParserResult(SqlParser.create(s, parserConfig).parseQuery());
   }
 
-  /**
-   * Parses SQL query and determines whether to apply policies to it.
-   * @param query the query to parse.
-   * @return parsed query if policies are applicable, empty otherwise.
-   * @throws SQLException if parsing fails.
-   */
-  private Optional<ParserResultWithType> shouldApplyPolicy(String query) throws SQLException {
+  private Optional<String> cleanUpQuery(String query) {
     String queryUpper = query.toUpperCase();
     if (queryUpper.startsWith("UPDATE")) {
       // The Calcite parser doesn't like our updates--
@@ -250,6 +252,26 @@ public class PrivacyConnection implements Connection {
     // FIXME(zhangwen): HACK-- Bang equal '!=' is not allowed under the current SQL conformance level.
     //  Maybe should change conformance level instead.
     query = query.replace("!=", "<>");
+    return Optional.of(query);
+  }
+
+  private static boolean isQueryKindChecked(SqlKind kind) {
+    // These are the types of queries we do handle.
+    return kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION);
+  }
+
+  /**
+   * Parses SQL query and determines whether to apply policies to it.
+   * @param query the query to parse.
+   * @return parsed query if policies are applicable, empty otherwise.
+   * @throws SQLException if parsing fails.
+   */
+  private Optional<ParserResultWithType> shouldApplyPolicy(String query) throws SQLException {
+    Optional<String> oQuery = cleanUpQuery(query);
+    if (oQuery.isEmpty()) {
+      return Optional.empty();
+    }
+    query = oQuery.get();
 
     long startNs = System.nanoTime();
     ParserResultWithType parser_result = parseQuery(query);
@@ -257,12 +279,29 @@ public class PrivacyConnection implements Connection {
     printStylizedMessage("\t+ parseQuery:\t" + (endNs - startNs) / 1e6,
             ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
 
-    SqlKind kind = parser_result.getSqlNode().getKind();
-    if (kind.equals(SqlKind.SELECT) || kind.equals(SqlKind.ORDER_BY) || kind.equals(SqlKind.UNION)) {
-      // These are the types of queries we do handle.
+    if (isQueryKindChecked(parser_result.getSqlNode().getKind())) {
       return Optional.of(parser_result);
     }
+    return Optional.empty();
+  }
 
+  // Validation doesn't like our usage of query context parameters (like _MY_UID).
+  private Optional<ParserResult> shouldApplyPolicyUnvalidated(String query) throws SQLException {
+    Optional<String> oQuery = cleanUpQuery(query);
+    if (oQuery.isEmpty()) {
+      return Optional.empty();
+    }
+    query = oQuery.get();
+
+    long startNs = System.nanoTime();
+    ParserResult parser_result = parseQueryUnvalidated(query);
+    long endNs = System.nanoTime();
+    printStylizedMessage("\t+ parseQuery:\t" + (endNs - startNs) / 1e6,
+            ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
+
+    if (isQueryKindChecked(parser_result.getSqlNode().getKind())) {
+      return Optional.of(parser_result);
+    }
     return Optional.empty();
   }
 
@@ -280,7 +319,7 @@ public class PrivacyConnection implements Connection {
       }
 
       for (AppCacheSpec.QueryWithParams<Object> qwp : o.get()) {
-        Optional<ParserResultWithType> parserResult = shouldApplyPolicy(qwp.query());
+        Optional<ParserResult> parserResult = shouldApplyPolicyUnvalidated(qwp.query());
         if (parserResult.isEmpty()) {
           continue;
         }

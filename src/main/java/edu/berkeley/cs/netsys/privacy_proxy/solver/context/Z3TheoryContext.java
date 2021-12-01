@@ -3,6 +3,7 @@ package edu.berkeley.cs.netsys.privacy_proxy.solver.context;
 import com.google.common.collect.ImmutableMap;
 import com.microsoft.z3.*;
 
+import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -236,6 +237,11 @@ class Z3TheoryContext<NullableInt, NullableBool> extends Z3ContextWrapper<IntSor
     @Override
     public Expr<IntSort> mkCustomInt(long value) {
         return rawContext.mkInt(value);
+    }
+
+    @Override
+    public Expr<IntSort> mkCustomInt(BigDecimal value) {
+        throw new UnsupportedOperationException("BigDecimal is implemented yet");
     }
 
     @Override

@@ -41,6 +41,16 @@ public class AppCacheSpec {
         this.queryTemplates = ImmutableList.copyOf(queryTemplates);
     }
 
+    private static Object paramNameToValue(String name, Matcher m) {
+        String valueStr = m.group(name);
+        // TODO(zhangwen): document this naming rule somewhere?
+        if (name.startsWith("str")) {
+            return valueStr;
+        }
+        // By default, we assume it's an integer.
+        return Integer.parseInt(valueStr);
+    }
+
     public Optional<List<QueryWithParams<Object>>> getQueries(String key) {
         Matcher km = keyPattern.matcher(key);
         if (!km.matches()) {
@@ -49,8 +59,8 @@ public class AppCacheSpec {
 
         ArrayList<QueryWithParams<Object>> res = new ArrayList<>();
         for (QueryWithParams<String> qt : queryTemplates) {
-            ImmutableList<Object> params = qt.params().stream().map(km::group)
-                    .map(Integer::parseInt) // TODO(zhangwen): currently only supports integers.
+            ImmutableList<Object> params = qt.params().stream()
+                    .map(name -> paramNameToValue(name, km))
                     .collect(ImmutableList.toImmutableList());
             res.add(new QueryWithParams<>(qt.query(), params));
         }

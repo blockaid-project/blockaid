@@ -1,0 +1,105 @@
+(?<strKey>spree/[A-Za-z0-9_]+_configuration/[A-Za-z0-9_]+)!
+SELECT `spree_preferences`.* FROM `spree_preferences` WHERE `spree_preferences`.`key` = ?strKey;
+
+views/spree/shared/_link_to_cart:[a-z0-9]+/.+!;
+
+spree/default-image/spree/variants/(?<variantId>\d+)-\d+!
+SELECT `mv`.*
+FROM `spree_variants` `mv`
+  INNER JOIN `spree_variants` `ov` ON `mv`.`product_id` = `ov`.`product_id`
+WHERE `mv`.`deleted_at` IS NULL
+  AND `mv`.`is_master` = true
+  AND `ov`.`id` = ?variantId!
+SELECT `spree_assets`.*
+FROM `spree_assets`
+  INNER JOIN `spree_variants` `mv`
+    ON `spree_assets`.`viewable_id` = `mv`.`id` AND `spree_assets`.`viewable_type` = 'Spree::Variant'
+  INNER JOIN `spree_variants` `ov` ON `mv`.`product_id` = `ov`.`product_id`
+WHERE `mv`.`deleted_at` IS NULL
+  AND `mv`.`is_master` = true
+  AND `ov`.`id` = ?variantId!
+SELECT `active_storage_attachments`.*
+FROM `active_storage_attachments`
+  INNER JOIN `spree_assets`
+    ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND `active_storage_attachments`.`record_id` = `spree_assets`.`id`
+  INNER JOIN `spree_variants` `mv`
+    ON `spree_assets`.`viewable_id` = `mv`.`id` AND `spree_assets`.`viewable_type` = 'Spree::Variant'
+  INNER JOIN `spree_variants` `ov` ON `mv`.`product_id` = `ov`.`product_id`
+WHERE `mv`.`deleted_at` IS NULL
+  AND `mv`.`is_master` = true
+  AND `ov`.`id` = ?variantId!
+SELECT `active_storage_blobs`.*
+FROM `active_storage_blobs`
+  INNER JOIN `active_storage_attachments` ON `active_storage_attachments`.`blob_id` = `active_storage_blobs`.`id`
+  INNER JOIN `spree_assets`
+    ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND `active_storage_attachments`.`record_id` = `spree_assets`.`id`
+  INNER JOIN `spree_variants` `mv`
+    ON `spree_assets`.`viewable_id` = `mv`.`id` AND `spree_assets`.`viewable_type` = 'Spree::Variant'
+  INNER JOIN `spree_variants` `ov` ON `mv`.`product_id` = `ov`.`product_id`
+WHERE `mv`.`deleted_at` IS NULL
+  AND `mv`.`is_master` = true
+  AND `ov`.`id` = ?variantId;
+
+default_store!
+SELECT `spree_stores`.`id`, `spree_stores`.`name`, `spree_stores`.`url`, `spree_stores`.`meta_description`, `spree_stores`.`meta_keywords`, `spree_stores`.`seo_title`, `spree_stores`.`mail_from_address`, `spree_stores`.`default_currency`, `spree_stores`.`code`, `spree_stores`.`default`, `spree_stores`.`created_at`, `spree_stores`.`updated_at`, `spree_stores`.`supported_currencies`, `spree_stores`.`facebook`, `spree_stores`.`twitter`, `spree_stores`.`instagram`, `spree_stores`.`default_locale`, `spree_stores`.`customer_support_email`, `spree_stores`.`default_country_id`, `spree_stores`.`description`, `spree_stores`.`address`, `spree_stores`.`contact_phone`, `spree_stores`.`checkout_zone_id`, `spree_stores`.`seo_robots`, `spree_stores`.`supported_locales` FROM `spree_stores` WHERE `spree_stores`.`default` = true;
+
+views/spree/shared/_header:[a-z0-9]+/[a-z0-9]+!
+SELECT `active_storage_attachments`.*
+FROM `active_storage_attachments`
+  INNER JOIN `spree_stores`
+    ON `active_storage_attachments`.`record_type` = 'Spree::Store'
+      AND `active_storage_attachments`.`record_id` = `spree_stores`.`id`
+WHERE `active_storage_attachments`.`name` = 'logo'
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN!
+SELECT `spree_menu_items`.*
+FROM `spree_menu_items`,
+     `spree_menus`,
+     `spree_stores`
+WHERE `spree_menu_items`.`menu_id` = `spree_menus`.`id`
+  AND `spree_menus`.`store_id` = `spree_stores`.`id`
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN!
+SELECT `spree_taxons`.*
+FROM `spree_taxons`,
+     `spree_taxonomies`,
+     `spree_stores`
+WHERE `spree_taxons`.`taxonomy_id` = `spree_taxonomies`.`id`
+  AND `spree_taxonomies`.`store_id` = `spree_stores`.`id`
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN!
+SELECT `spree_assets`.*
+FROM `spree_assets`
+         INNER JOIN `spree_menu_items` ON (`spree_assets`.`viewable_type` = 'Spree::MenuItem' AND
+                                           `spree_assets`.`viewable_id` = `spree_menu_items`.`id`)
+         INNER JOIN `spree_menus` ON `spree_menu_items`.`menu_id` = `spree_menus`.`id`
+         INNER JOIN `spree_stores` ON `spree_menus`.`store_id` = `spree_stores`.`id`
+WHERE `spree_assets`.`type` = 'Spree::Icon'
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+views/spree/shared/_footer:[a-z0-9]+/[a-z0-9]+!
+SELECT `active_storage_attachments`.*
+FROM `active_storage_attachments`
+  INNER JOIN `spree_stores`
+    ON `active_storage_attachments`.`record_type` = 'Spree::Store'
+      AND `active_storage_attachments`.`record_id` = `spree_stores`.`id`
+WHERE `active_storage_attachments`.`name` = 'logo'
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN!
+SELECT `spree_menu_items`.*
+FROM `spree_menu_items`,
+     `spree_menus`,
+     `spree_stores`
+WHERE `spree_menu_items`.`menu_id` = `spree_menus`.`id`
+  AND `spree_menus`.`store_id` = `spree_stores`.`id`
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN!
+SELECT `spree_taxons`.*
+FROM `spree_taxons`,
+     `spree_taxonomies`,
+     `spree_stores`
+WHERE `spree_taxons`.`taxonomy_id` = `spree_taxonomies`.`id`
+  AND `spree_taxonomies`.`store_id` = `spree_stores`.`id`
+  AND `spree_stores`.`url` LIKE _STORE_URL_PATTERN;
+
+spree/taxons/(?<taxonId>\d+)-\d+/descendant-ids!
+SELECT `descendant`.`id`
+FROM `spree_taxons` `me`, `spree_taxons` `descendant`
+WHERE `descendant`.`lft` >= `me`.`lft`
+  AND `descendant`.`lft` < `me`.`rgt`
+  AND `me`.`id` = ?taxonId;
