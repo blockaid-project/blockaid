@@ -296,6 +296,7 @@ public class QueryChecker {
             } else {
                 printMessage("=== pruning start ===", LogLevel.VERBOSE);
                 printMessage(qte::getParsedSql, LogLevel.VERBOSE);
+                printMessage("checked query params:\t" + checkedQueryParams, LogLevel.VERBOSE);
                 Collection<Integer> pkColIdxForPrune = oPkColIdxForPrune.get();
                 checkState(!pkColIdxForPrune.isEmpty());
                 for (int tupIdx = 0; tupIdx < tuples.size(); ++tupIdx) {
@@ -303,7 +304,7 @@ public class QueryChecker {
                     List<Object> tup = tuples.get(tupIdx);
                     for (int colIdx : pkColIdxForPrune) {
                         Object v = tup.get(colIdx);
-//                        System.out.println("\tlooking:\t" + v);
+                        printMessage(() -> "\tlooking:\t" + v + "\t" + checkedQueryParams.contains(v), LogLevel.VERBOSE);
                         if (checkedQueryParams.contains(v) && !seenPkValues.contains(v)) { // TODO(zhangwen): this is a hack.
                             picked.add(new QueryTupleIdxPair(queryIdx, tupIdx));
                             kept = true;
@@ -314,9 +315,10 @@ public class QueryChecker {
                         printMessage(() -> "\tpruned:\t" + tup, LogLevel.VERBOSE);
                     }
                 }
-                System.out.println("=== pruning done ===");
+                printMessage("=== pruning done ===", LogLevel.VERBOSE);
             }
 
+            // FIXME(zhangwen): what does this do again?
             seenPkValues.addAll(qte.getReturnedPkValues(rawSchema));
         }
 

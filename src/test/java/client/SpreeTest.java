@@ -83,26 +83,28 @@ public class SpreeTest extends ApplicationTest {
                 new PQuery("SELECT `spree_prices`.* FROM `spree_prices` WHERE `spree_prices`.`currency` = ? AND `spree_prices`.`variant_id` IN (?, ?)", "USD", 83000011, 83000127),
                 new PQuery("SELECT `spree_taxons`.* FROM `spree_taxons` WHERE `spree_taxons`.`lft` <= 2 AND `spree_taxons`.`rgt` >= 11 AND (`spree_taxons`.`id` != 79000001) AND `spree_taxons`.`parent_id` IS NOT NULL ORDER BY `spree_taxons`.`lft` ASC"),
                 new PQuery("SELECT `spree_taxons`.`id` FROM `spree_taxons` WHERE `spree_taxons`.`lft` >= 2 AND `spree_taxons`.`lft` < 11 ORDER BY `spree_taxons`.`lft` ASC"),
-                new PQuery("""
-SELECT MAX(`spree_products`.`updated_at`)
-FROM `spree_products`
-         INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
-         INNER JOIN `spree_variants`
-                    ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id`
-         INNER JOIN `spree_prices`
-                    ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id`
-         INNER JOIN `spree_products_taxons` ON `spree_products_taxons`.`product_id` = `spree_products`.`id`
-WHERE `spree_products`.`deleted_at` IS NULL
-  AND `spree_products_stores`.`store_id` = ?
-  AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on > '%1$s')
-  AND (`spree_products`.available_on <= '%1$s')
-  AND `spree_prices`.`currency` = ?
-  AND `spree_prices`.`amount` IS NOT NULL
-  AND `spree_products_taxons`.`taxon_id` IN (?, ?, ?, ?, ?)
-        """, 1, "USD", 79000001, 79000004, 79000005, 79000006, 79000007),
-                new PQuery("""
-                            SELECT DISTINCT `spree_products`.* FROM `spree_products` INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id` INNER JOIN `spree_variants` ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id` INNER JOIN `spree_prices` ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id` INNER JOIN `spree_products_taxons` ON `spree_products_taxons`.`product_id` = `spree_products`.`id` WHERE `spree_products`.`deleted_at` IS NULL AND `spree_products_stores`.`store_id` = ? AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on > '%1$s') AND (`spree_products`.available_on <= '%1$s') AND `spree_prices`.`currency` = ? AND `spree_prices`.`amount` IS NOT NULL AND `spree_products_taxons`.`taxon_id` IN (?, ?, ?, ?, ?)
-                        """, 1, "USD", 79000001, 79000004, 79000005, 79000006, 79000007),
+                new PQuery("CHECK CACHE READ views/spree/products/show:dbe9e72687ec06f0ed6839db0579af2b/en/USD/true/false/spree/products/35000011-20211123081639034012/"),
+                new PQuery("CHECK CACHE READ spree/default-image/spree/products/35000011-20211201233934628638"),
+//                new PQuery("""
+//SELECT MAX(`spree_products`.`updated_at`)
+//FROM `spree_products`
+//         INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id`
+//         INNER JOIN `spree_variants`
+//                    ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id`
+//         INNER JOIN `spree_prices`
+//                    ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id`
+//         INNER JOIN `spree_products_taxons` ON `spree_products_taxons`.`product_id` = `spree_products`.`id`
+//WHERE `spree_products`.`deleted_at` IS NULL
+//  AND `spree_products_stores`.`store_id` = ?
+//  AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on > '%1$s')
+//  AND (`spree_products`.available_on <= '%1$s')
+//  AND `spree_prices`.`currency` = ?
+//  AND `spree_prices`.`amount` IS NOT NULL
+//  AND `spree_products_taxons`.`taxon_id` IN (?, ?, ?, ?, ?)
+//        """, 1, "USD", 79000001, 79000004, 79000005, 79000006, 79000007),
+//                new PQuery("""
+//                            SELECT DISTINCT `spree_products`.* FROM `spree_products` INNER JOIN `spree_products_stores` ON `spree_products`.`id` = `spree_products_stores`.`product_id` INNER JOIN `spree_variants` ON `spree_variants`.`deleted_at` IS NULL AND `spree_variants`.`product_id` = `spree_products`.`id` INNER JOIN `spree_prices` ON `spree_prices`.`deleted_at` IS NULL AND `spree_prices`.`variant_id` = `spree_variants`.`id` INNER JOIN `spree_products_taxons` ON `spree_products_taxons`.`product_id` = `spree_products`.`id` WHERE `spree_products`.`deleted_at` IS NULL AND `spree_products_stores`.`store_id` = ? AND (`spree_products`.discontinue_on IS NULL or `spree_products`.discontinue_on > '%1$s') AND (`spree_products`.available_on <= '%1$s') AND `spree_prices`.`currency` = ? AND `spree_prices`.`amount` IS NOT NULL AND `spree_products_taxons`.`taxon_id` IN (?, ?, ?, ?, ?)
+//                        """, 1, "USD", 79000001, 79000004, 79000005, 79000006, 79000007),
         };
         testQueries(queries, PARAMS, 1);
     }

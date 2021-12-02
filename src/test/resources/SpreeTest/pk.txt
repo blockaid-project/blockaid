@@ -41,6 +41,9 @@ spree_promotion_actions:id;
 friendly_id_slugs:id;
 active_storage_blobs:id;
 spree_products_taxons:id;
+spree_zones:id;
+spree_product_properties:id;
+spree_properties:id;
 
 spree_stores:code;
 spree_users:email;
@@ -68,3 +71,4 @@ spree_shipments:number;
 spree_shipping_rates:shipment_id,shipping_method_id;
 active_storage_blobs:key;
 spree_products_taxons:product_id,taxon_id;
+spree_product_properties:property_id,product_id;

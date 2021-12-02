@@ -40,3 +40,5 @@ spree_shipments.stock_location_id:spree_stock_locations.id;
 spree_shipping_rates.shipment_id:spree_shipments.id;
 spree_shipping_rates.shipping_method_id:spree_shipping_methods.id;
 spree_promotion_actions.promotion_id:spree_promotions.id;
+spree_product_properties.product_id:spree_products.id;
+spree_product_properties.property_id:spree_properties.id;
