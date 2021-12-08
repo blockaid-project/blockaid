@@ -53,10 +53,10 @@ public class UnsatCoreEnumerator<L, BL, C extends Z3ContextWrapper<?, ?, ?, ?>> 
             for (LabeledBoolExpr<BL> bgExpr : fs.background()) {
                 BL label = bgExpr.label();
                 if (label == null) {
-                    solver.add(bgExpr.expr());
+                    solver.add(bgExpr.exprs().toArray(new BoolExpr[0]));
                 } else {
                     BoolExpr boolConst = context.mkBoolConst(label.toString());
-                    solver.assertAndTrack(bgExpr.expr(), boolConst);
+                    solver.assertAndTrack(context.mkAnd(bgExpr.exprs()), boolConst);
                     builder.put(boolConst, label);
                 }
             }

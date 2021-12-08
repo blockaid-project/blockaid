@@ -20,45 +20,44 @@ public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, 
     private final DeterminacyFormula<C, Instance<C>> baseFormula;
     private final PreambleLabelCollection preambleLabels;
 
-    private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel_(\\d+)_(\\d+)");
+    private static final Pattern RR_PATTERN = Pattern.compile("ReturnedRowLabel_(\\d+)_(\\d+)_\\d+");
 
     public RRLUnsatCoreDeterminacyFormula(Schema<C> schema, ImmutableList<Policy> policies) {
         Instance<C> inst1 = schema.makeUnboundedInstance("instance0"),
                 inst2 = schema.makeUnboundedInstance("instance1");
 
-        C context = schema.getContext();
         this.preambleLabels = new PreambleLabelCollection(schema.getDependencies(), policies);
 
-        HashMap<PreambleLabel, NamedBoolExpr> preamble = new HashMap<>();
+        // Use linked hash map to preserve insertion order -- easy for debugging.
+        LinkedHashMap<PreambleLabel, NamedBoolExpr> preamble = new LinkedHashMap<>();
         preambleLabels.forEachWithName((name, label) -> {
-            BoolExpr formula = switch (label.getKind()) {
+            Iterable<BoolExpr> formulas = switch (label.getKind()) {
                 case POLICY -> {
                     Query<C> v = ((PolicyLabel) label).policy().getSolverQuery(schema);
-                    yield context.mkAnd(v.apply(inst1).isContainedInExpr(v.apply(inst2)));
+                    yield v.apply(inst1).isContainedInExpr(v.apply(inst2));
                 }
                 case DEPENDENCY -> {
                     Dependency d = ((DependencyLabel) label).dependency();
-                    yield context.mkAnd(Iterables.concat(d.apply(inst1), d.apply(inst2)));
+                    yield Iterables.concat(d.apply(inst1), d.apply(inst2));
                 }
             };
 
             NamedBoolExpr expr = switch (PRUNE_PREAMBLE) {
-                case UNSAT_CORE -> new NamedBoolExpr(formula, name);
-                case OFF, COARSE -> NamedBoolExpr.makeUnnamed(formula);
+                case UNSAT_CORE -> new NamedBoolExpr(formulas, name);
+                case OFF, COARSE -> NamedBoolExpr.makeUnnamed(formulas);
             };
             preamble.put(label, expr);
         });
 
         ImmutableMap<PreambleLabel, String> preambleSMT = DeterminacyFormula.makePreambleSMTNamed(preamble);
         ImmutableMap<PreambleLabel, ImmutableList<BoolExpr>> rawPreamble = ImmutableMap.copyOf(
-                Maps.transformValues(preamble, nbe -> ImmutableList.of(nbe.expr()))
+                Maps.transformValues(preamble, LabeledBoolExpr::exprs)
         );
         this.baseFormula = new DeterminacyFormula<>(schema, inst1, inst2, rawPreamble, TextOption.USE_TEXT, preambleSMT);
     }
 
     private List<NamedBoolExpr> generateTupleCheckNamed(UnmodifiableLinearQueryTrace trace) {
         Schema<C> schema = baseFormula.schema;
-        C context = baseFormula.context;
         ArrayList<NamedBoolExpr> exprs = new ArrayList<>();
 
         List<QueryTraceEntry> allEntries = trace.getAllEntries();
@@ -74,7 +73,7 @@ public class RRLUnsatCoreDeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, 
             for (int rowIdx = 0; rowIdx < tuples.size(); ++rowIdx) {
                 Tuple<C> tuple = tuples.get(rowIdx);
                 ReturnedRowLabel l = new ReturnedRowLabel(queryIdx, rowIdx);
-                exprs.add(new NamedBoolExpr(context.mkAnd(r1.doesContainExpr(tuple)), l.toString()));
+                exprs.add(new NamedBoolExpr(r1.doesContainExpr(tuple), l.toString()));
             }
         }
 

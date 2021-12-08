@@ -57,7 +57,7 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
             int i = 0;
             for (Dependency d : schema.getDependencies()) {
                 String name = "dependency!" + (i++);
-                assertions.add(new NamedBoolExpr(context.mkAnd(d.apply(instance)), name));
+                assertions.add(new NamedBoolExpr(d.apply(instance), name));
                 dependencyLabels.put(context.mkBoolConst(name), d);
             }
 
@@ -80,7 +80,7 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 }
 
                 String name = "query!" + (i++);
-                assertions.add(new NamedBoolExpr(context.mkAnd(r.doesContainExpr(tuples)), name));
+                assertions.add(new NamedBoolExpr(r.doesContainExpr(tuples), name));
                 queryLabels.put(context.mkBoolConst(name), query);
             }
 
@@ -93,7 +93,7 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
             solver.push();
             try {
                 for (NamedBoolExpr e : assertions) {
-                    solver.assertAndTrack(e.expr(), context.mkBoolConst(e.name()));
+                    solver.assertAndTrack(context.mkAnd(e.exprs()), context.mkBoolConst(e.name()));
                 }
 
                 // todo timeouts on this...

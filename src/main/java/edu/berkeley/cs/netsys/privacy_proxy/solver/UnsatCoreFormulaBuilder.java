@@ -54,11 +54,11 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
         Stream<LabeledBoolExpr<PreambleLabel>> preambleBgStream =
                 baseFormula.preamble.entrySet().stream()
                         .map(entry -> {
-                                    BoolExpr formula = context.mkAnd(entry.getValue());
+                                    ImmutableList<BoolExpr> formulas = entry.getValue();
                                     if (options.contains(Option.NO_MARK_BG)) {
-                                        return LabeledBoolExpr.makeUnlabeled(formula);
+                                        return LabeledBoolExpr.makeUnlabeled(formulas);
                                     } else {
-                                        return new LabeledBoolExpr<>(formula, entry.getKey());
+                                        return new LabeledBoolExpr<>(formulas, entry.getKey());
                                     }
                                 });
         Stream<LabeledBoolExpr<PreambleLabel>> otherBgStream =
@@ -85,10 +85,10 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
 
         if (!options.contains(Option.NO_PREAMBLE)) {
             for (var entry : baseFormula.preamble.entrySet()) {
-                BoolExpr formula = context.mkAnd(entry.getValue());
+                ImmutableList<BoolExpr> formulas = entry.getValue();
                 bgBuilder.add(
-                        options.contains(Option.NO_MARK_BG) ? LabeledBoolExpr.makeUnlabeled(formula)
-                                : new LabeledBoolExpr<>(formula, entry.getKey())
+                        options.contains(Option.NO_MARK_BG) ? LabeledBoolExpr.makeUnlabeled(formulas)
+                                : new LabeledBoolExpr<>(formulas, entry.getKey())
                 );
             }
         }
@@ -130,7 +130,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
             // Don't include the preamble -- the `generateSMT` automatically.
             Streams.concat(
                     // The entire background of `fs` is unlabeled.
-                    fs.background().stream().map(LabeledBoolExpr::expr),
+                    fs.background().stream().flatMap(lbe -> lbe.exprs().stream()),
                     Maps.filterKeys(fs.labeledExprs(), labels::contains).values().stream()
             ), preambleLabels);
     }

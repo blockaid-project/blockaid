@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  */
 public class PreambleLabelCollection {
     private final String PREAMBLE_NAME_PREFIX = "PreambleLabel_";
-    private final Pattern PREAMBLE_NAME_PATTERN = Pattern.compile(PREAMBLE_NAME_PREFIX + "(\\d+)");
+    private final Pattern PREAMBLE_NAME_PATTERN = Pattern.compile(PREAMBLE_NAME_PREFIX + "(\\d+)_\\d+");
     private final ImmutableList<PreambleLabel> labels;
 
     public PreambleLabelCollection(Collection<Dependency> dependencies, Collection<Policy> policies) {
