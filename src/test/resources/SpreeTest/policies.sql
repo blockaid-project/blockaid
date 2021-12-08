@@ -136,163 +136,17 @@ WHERE `spree_cms_sections`.`cms_page_id` = `spree_cms_pages`.`id`
   AND `spree_cms_pages`.`deleted_at` IS NULL
   AND `spree_cms_pages`.`visible` = TRUE;
 
+-- All Active Storage information is public.  According to documentation
+-- (https://edgeguides.rubyonrails.org/active_storage_overview.html#public-access)
+-- "All Active Storage controllers are publicly accessible by default. The generated URLs use a plain signed_id,
+-- making them hard to guess but permanent. Anyone that knows the blob URL will be able to access it".
+-- My testing indicates this to be the case in Spree as well.
 SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`
-WHERE `active_storage_attachments`.`record_type` = 'Spree::Store';
-SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`,
-     `spree_cms_sections`,
-     `spree_cms_pages`
-WHERE `active_storage_attachments`.`record_type` = 'Spree::CmsSection'
-  AND `active_storage_attachments`.`record_id` = `spree_cms_sections`.`id`
-  AND `spree_cms_sections`.`cms_page_id` = `spree_cms_pages`.`id`
-  AND `spree_cms_pages`.`deleted_at` IS NULL
-  AND `spree_cms_pages`.`visible` = TRUE;
-SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants`
-                    ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                       `spree_assets`.`viewable_id` = `spree_variants`.`id`
-         INNER JOIN `spree_products` ON `spree_variants`.`product_id` = `spree_products`.`id`
-WHERE `spree_variants`.`deleted_at` IS NULL
-  AND (`spree_variants`.`is_master` = TRUE
-    OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` >= _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
-  AND `spree_products`.available_on <= _NOW;
-SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants`
-                    ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                       `spree_assets`.`viewable_id` = `spree_variants`.`id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `spree_variants`.`id`
-         INNER JOIN `spree_orders` ON `spree_orders`.`id` = `spree_line_items`.`order_id`
-WHERE `spree_orders`.`token` = _TOKEN;
-SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants`
-                    ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                       `spree_assets`.`viewable_id` = `spree_variants`.`id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `spree_variants`.`id`
-         INNER JOIN `spree_orders` ON `spree_line_items`.`order_id` = `spree_orders`.`id`
-         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
-WHERE `spree_users`.`id` = _MY_UID
-  AND `spree_users`.`deleted_at` IS NULL;
-SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants` `mv` ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                                             `spree_assets`.`viewable_id` = `mv`.`id`
-         INNER JOIN `spree_products` ON (`mv`.`product_id` = `spree_products`.`id` AND `mv`.`is_master` = TRUE)
-         INNER JOIN `spree_variants` `ov` ON `spree_products`.`id` = `ov`.`product_id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `ov`.`id`
-         INNER JOIN `spree_orders` ON `spree_orders`.`id` = `spree_line_items`.`order_id`
-WHERE `spree_orders`.`token` = _TOKEN;
-SELECT `active_storage_attachments`.*
-FROM `active_storage_attachments`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants` `mv` ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                                             `spree_assets`.`viewable_id` = `mv`.`id`
-         INNER JOIN `spree_products` ON (`mv`.`product_id` = `spree_products`.`id` AND `mv`.`is_master` = TRUE)
-         INNER JOIN `spree_variants` `ov` ON `spree_products`.`id` = `ov`.`product_id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `ov`.`id`
-         INNER JOIN `spree_orders` ON `spree_line_items`.`order_id` = `spree_orders`.`id`
-         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
-WHERE `spree_users`.`id` = _MY_UID
-  AND `spree_users`.`deleted_at` IS NULL;
-
--- Blobs for attachments.
+FROM `active_storage_attachments`;
 SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`,
-     `active_storage_attachments`
-WHERE `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-  AND `active_storage_attachments`.`record_type` = 'Spree::Store';
-SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`,
-     `active_storage_attachments`,
-     `spree_cms_sections`,
-     `spree_cms_pages`
-WHERE `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-  AND `active_storage_attachments`.`record_type` = 'Spree::CmsSection'
-  AND `active_storage_attachments`.`record_id` = `spree_cms_sections`.`id`
-  AND `spree_cms_sections`.`cms_page_id` = `spree_cms_pages`.`id`
-  AND `spree_cms_pages`.`deleted_at` IS NULL
-  AND `spree_cms_pages`.`visible` = TRUE;
-SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`
-         INNER JOIN `active_storage_attachments` ON `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants`
-                    ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                       `spree_assets`.`viewable_id` = `spree_variants`.`id`
-         INNER JOIN `spree_products` ON `spree_variants`.`product_id` = `spree_products`.`id`
-WHERE `spree_variants`.`deleted_at` IS NULL
-  AND (`spree_variants`.`is_master` = TRUE
-    OR `spree_variants`.`discontinue_on` IS NULL
-    OR `spree_variants`.`discontinue_on` >= _NOW)
-  AND (`spree_products`.deleted_at IS NULL OR `spree_products`.deleted_at >= _NOW)
-  AND (`spree_products`.discontinue_on IS NULL OR `spree_products`.discontinue_on >= _NOW)
-  AND `spree_products`.available_on <= _NOW;
-SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`
-         INNER JOIN `active_storage_attachments` ON `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants`
-                    ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                       `spree_assets`.`viewable_id` = `spree_variants`.`id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `spree_variants`.`id`
-         INNER JOIN `spree_orders` ON `spree_orders`.`id` = `spree_line_items`.`order_id`
-WHERE `spree_orders`.`token` = _TOKEN;
-SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`
-         INNER JOIN `active_storage_attachments` ON `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants`
-                    ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                       `spree_assets`.`viewable_id` = `spree_variants`.`id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `spree_variants`.`id`
-         INNER JOIN `spree_orders` ON `spree_line_items`.`order_id` = `spree_orders`.`id`
-         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
-WHERE `spree_users`.`id` = _MY_UID
-  AND `spree_users`.`deleted_at` IS NULL;
-SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`
-         INNER JOIN `active_storage_attachments` ON `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants` `mv` ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                                             `spree_assets`.`viewable_id` = `mv`.`id`
-         INNER JOIN `spree_products` ON (`mv`.`product_id` = `spree_products`.`id` AND `mv`.`is_master` = TRUE)
-         INNER JOIN `spree_variants` `ov` ON `spree_products`.`id` = `ov`.`product_id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `ov`.`id`
-         INNER JOIN `spree_orders` ON `spree_orders`.`id` = `spree_line_items`.`order_id`
-WHERE `spree_orders`.`token` = _TOKEN;
-SELECT `active_storage_blobs`.*
-FROM `active_storage_blobs`
-         INNER JOIN `active_storage_attachments` ON `active_storage_blobs`.`id` = `active_storage_attachments`.`blob_id`
-         INNER JOIN `spree_assets` ON `active_storage_attachments`.`record_type` = 'Spree::Asset' AND
-                                      `active_storage_attachments`.`record_id` = `spree_assets`.`id`
-         INNER JOIN `spree_variants` `mv` ON `spree_assets`.`viewable_type` = 'Spree::Variant' AND
-                                             `spree_assets`.`viewable_id` = `mv`.`id`
-         INNER JOIN `spree_products` ON (`mv`.`product_id` = `spree_products`.`id` AND `mv`.`is_master` = TRUE)
-         INNER JOIN `spree_variants` `ov` ON `spree_products`.`id` = `ov`.`product_id`
-         INNER JOIN `spree_line_items` ON `spree_line_items`.`variant_id` = `ov`.`id`
-         INNER JOIN `spree_orders` ON `spree_line_items`.`order_id` = `spree_orders`.`id`
-         INNER JOIN `spree_users` ON `spree_orders`.`user_id` = `spree_users`.`id`
-WHERE `spree_users`.`id` = _MY_UID
-  AND `spree_users`.`deleted_at` IS NULL;
+FROM `active_storage_blobs`;
+SELECT `active_storage_variant_records`.*
+FROM `active_storage_variant_records`;
 
 SELECT `spree_taxonomies`.*
 FROM `spree_taxonomies`;

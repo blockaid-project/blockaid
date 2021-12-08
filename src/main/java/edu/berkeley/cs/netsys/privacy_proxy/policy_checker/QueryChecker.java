@@ -15,9 +15,12 @@ import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.DependencyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PreambleLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.labels.PolicyLabel;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
+import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuerySelect;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
+import edu.berkeley.cs.netsys.privacy_proxy.sql.preprocess.SplitIn;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
+import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -273,7 +276,7 @@ public class QueryChecker {
      * @param trace the entire trace.
      * @return the sub-trace.
      */
-    private UnmodifiableLinearQueryTrace pickTrace(QueryTrace trace) {
+    private UnmodifiableLinearQueryTrace pickTrace(UnmodifiableLinearQueryTrace trace) {
         QueryTraceEntry checkedEntry = trace.getCurrentQuery();
         checkArgument(checkedEntry != null, "there must be a query being checked");
         List<Object> checkedQueryParams = checkedEntry.getParameters();
@@ -328,9 +331,9 @@ public class QueryChecker {
     public boolean checkPolicy(QueryTrace queries) {
         queryCount += 1;
 
-        PrivacyQuery currQuery = queries.getCurrentQuery().getQuery();
-//        printMessage(() -> "transformed: " + currQuery.parsedSql.getParsedSql()
-//                + "\t" + currQuery.parameters + "\t" + currQuery.paramNames
+        PrivacyQuery origCurrQuery = queries.getCurrentQuery().getQuery();
+//        printMessage(() -> "transformed: " + origCurrQuery.parsedSql.getParsedSql()
+//                + "\t" + origCurrQuery.parameters + "\t" + origCurrQuery.paramNames
 //        );
 
         if (SKIP_CHECKING) {
@@ -338,7 +341,7 @@ public class QueryChecker {
         }
 
         if (PRECHECK_SETTING != PrecheckSetting.DISABLED) {
-            FastCheckDecision precheckResult = doPrecheckPolicy(currQuery);
+            FastCheckDecision precheckResult = doPrecheckPolicy(origCurrQuery);
             if (precheckResult == FastCheckDecision.ALLOW) {
                 return true;
             }
@@ -347,34 +350,50 @@ public class QueryChecker {
                 return false;
             }
         }
-        if (ENABLE_CACHING) {
-            Boolean cacheResult = cache.policyDecisionCacheFine.checkCache(queries);
-            if (cacheResult != null) {
-                return cacheResult;
-            }
+
+        List<PrivacyQuery> queriesToCheck;
+        if (ENABLE_CACHING && SPLIT_IN == OnOffType.ON && origCurrQuery instanceof PrivacyQuerySelect pqs) {
+            queriesToCheck = SplitIn.perform(pqs, rawSchema);
+        } else {
+            queriesToCheck = List.of(origCurrQuery);
         }
 
-        // Cache miss.  Check compliance!
-        UnmodifiableLinearQueryTrace pickedTrace = PRUNE_TRACE ? pickTrace(queries) : queries;
-//        System.out.println(pickedTrace);
-        if (ENABLE_CACHING) {
-            System.out.println("\t| Generate decision template:");
-            Optional<Collection<DecisionTemplate>> oTemplates = dtg.generate(pickedTrace);
-            if (oTemplates.isEmpty()) {
-                return false;
-            }
-            for (DecisionTemplate dt : oTemplates.get()) {
-                Logger.printStylizedMessage(dt.toString(), ANSI_BLACK + ANSI_YELLOW_BACKGROUND);
-                if (!CACHE_NO_RETAIN) {
-                    cache.policyDecisionCacheFine.addCompliantToCache(currQuery.parserResult, currQuery.paramNames, dt);
+        for (PrivacyQuery queryToCheck : queriesToCheck) {
+            QueryTrace thisQueries = queries.replaceCurrQuery(queryToCheck);
+            if (ENABLE_CACHING) {
+                Optional<Boolean> cachedCompliant = cache.policyDecisionCacheFine.checkCache(thisQueries);
+                if (cachedCompliant.isPresent()) {
+                    if (!cachedCompliant.get()) {
+                        // This query is not compliant.  Give up!
+                        return false;
+                    }
+                    // This query is compliant.  Move on to next query.
+                    continue;
                 }
             }
-//            cacheDecision(queries, policyResult);
-            // FIXME(zhangwen): in case of noncompliance, find model.
-            return true;
-        } else {
-            return doCheckPolicy(pickedTrace);
+
+            // Cache miss.  Check compliance!
+            UnmodifiableLinearQueryTrace pickedTrace = PRUNE_TRACE ? pickTrace(thisQueries) : thisQueries;
+            if (ENABLE_CACHING) {
+                printMessage("\t| Generate decision template:");
+                Optional<Collection<DecisionTemplate>> oTemplates = dtg.generate(pickedTrace);
+                if (oTemplates.isEmpty()) {
+                    return false;
+                }
+                for (DecisionTemplate dt : oTemplates.get()) {
+                    Logger.printStylizedMessage(dt.toString(), ANSI_BLACK + ANSI_YELLOW_BACKGROUND);
+                    if (!CACHE_NO_RETAIN) {
+                        cache.policyDecisionCacheFine.addCompliantToCache(queryToCheck.parserResult, queryToCheck.paramNames, dt);
+                    }
+                }
+                // FIXME(zhangwen): in case of noncompliance, find model.
+            } else {
+                if (!doCheckPolicy(pickedTrace)) {
+                    return false;
+                }
+            }
         }
+        return true;
     }
 
     // The fields of `DecisionCache` are shared between `QueryChecker` objects for the same database & policy.

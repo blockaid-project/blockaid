@@ -1,5 +1,6 @@
 package edu.berkeley.cs.netsys.privacy_proxy.sql.preprocess;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.util.SqlVisitor;
 
@@ -13,7 +14,7 @@ import static com.google.common.base.Preconditions.checkArgument;
  * Shifts dynamic parameter index and names after some params are REMOVED.
  */
 class ShiftDynParams {
-    record Result(SqlNode node, List<Object> params, List<String> paramNames) {}
+    record Result(SqlNode node, List<Object> params, List<String> paramNames, ImmutableMap<Integer, Integer> oldToNew) {}
 
     static Result perform(SqlNode node, List<Object> params, List<String> paramNames) {
         checkArgument(params.size() == paramNames.size());
@@ -24,7 +25,9 @@ class ShiftDynParams {
         }
 
         if (sortedIndices.size() == params.size()) { // All parameters are still there.
-            return new Result(node, params, paramNames);
+            ImmutableMap<Integer, Integer> oldToNew = sortedIndices.stream().collect(
+                    ImmutableMap.toImmutableMap(i -> i, i -> i));
+            return new Result(node, params, paramNames, oldToNew);
         }
 
         Map<Integer, Integer> oldToNew = new HashMap<>();
@@ -41,7 +44,8 @@ class ShiftDynParams {
             newParamNames.add(paramNames.get(oldIndex));
         }
 
-        return new Result(node.accept(new DynParamRewriter(oldToNew)), newParams, newParamNames);
+        return new Result(node.accept(new DynParamRewriter(oldToNew)), newParams, newParamNames,
+                ImmutableMap.copyOf(oldToNew));
     }
 
     private static class GatherDynParamIndices implements SqlVisitor<Stream<Integer>> {

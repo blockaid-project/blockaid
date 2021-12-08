@@ -13,7 +13,6 @@ import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
 
 public class QueryTraceEntry {
     private final PrivacyQuery query;
@@ -25,8 +24,8 @@ public class QueryTraceEntry {
     private boolean computedColIndicesForPruning = false;
     private Collection<Integer> colIndicesForPruning = null;
 
-    public QueryTraceEntry(PrivacyQuery query, List<Object> parameters) {
-        this(checkNotNull(query), checkNotNull(parameters), null);
+    public QueryTraceEntry(PrivacyQuery query) {
+        this(checkNotNull(query), query.parameters, null);
     }
 
     public QueryTraceEntry(QueryTraceEntry entry) {

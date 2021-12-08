@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableMap;
 import org.junit.Test;
 
 import java.sql.SQLException;
-import java.util.Map;
 
 public class SpreeTest extends ApplicationTest {
     public SpreeTest() {
@@ -141,6 +140,25 @@ public class SpreeTest extends ApplicationTest {
                 new PQuery("SELECT `spree_taxons`.* FROM `spree_taxons` WHERE `spree_taxons`.`id` = ? LIMIT ?", 79000008, 1),
                 new PQuery("SELECT `spree_menu_items`.* FROM `spree_menu_items` WHERE `spree_menu_items`.`parent_id` = ? ORDER BY `spree_menu_items`.`lft` ASC", 15000018),
                 new PQuery("SELECT `spree_assets`.* FROM `spree_assets` WHERE `spree_assets`.`type` = ? AND `spree_assets`.`viewable_id` = ? AND `spree_assets`.`viewable_type` = ? LIMIT ?", "Spree::Icon", 15000021, "Spree::MenuItem", 1),
+        };
+        testQueries(queries, PARAMS, 1);
+    }
+
+    @Test
+    public void testOrder() throws ClassNotFoundException, SQLException {
+        PQuery[] queries = new PQuery[]{
+//                new PQuery("CHECK CACHE READ spree/frontend_configuration/locale"),
+//                new PQuery("SELECT `spree_preferences`.* FROM `spree_preferences` WHERE `spree_preferences`.`key` = ? LIMIT ?", "spree/frontend_configuration/locale", 1),
+//                new PQuery("SELECT `spree_stores`.`id`, `spree_stores`.`name`, `spree_stores`.`url`, `spree_stores`.`meta_description`, `spree_stores`.`meta_keywords`, `spree_stores`.`seo_title`, `spree_stores`.`mail_from_address`, `spree_stores`.`default_currency`, `spree_stores`.`code`, `spree_stores`.`default`, `spree_stores`.`created_at`, `spree_stores`.`updated_at`, `spree_stores`.`supported_currencies`, `spree_stores`.`facebook`, `spree_stores`.`twitter`, `spree_stores`.`instagram`, `spree_stores`.`default_locale`, `spree_stores`.`customer_support_email`, `spree_stores`.`default_country_id`, `spree_stores`.`description`, `spree_stores`.`address`, `spree_stores`.`contact_phone`, `spree_stores`.`checkout_zone_id`, `spree_stores`.`seo_robots`, `spree_stores`.`supported_locales` FROM `spree_stores` WHERE (url like '%spree.internal%') ORDER BY `spree_stores`.`created_at` ASC LIMIT ?", 1),
+                new PQuery("SELECT `spree_users`.* FROM `spree_users` WHERE `spree_users`.`deleted_at` IS NULL AND `spree_users`.`id` = ? ORDER BY `spree_users`.`id` ASC LIMIT ?", 82000001, 1),
+//                new PQuery("SELECT `spree_orders`.* FROM `spree_orders` WHERE `spree_orders`.`store_id` = ? AND `spree_orders`.`completed_at` IS NULL AND `spree_orders`.`currency` = ? AND `spree_orders`.`token` = ? LIMIT ?", 1, "USD", "0vm4Crp3w7avKavcKrjzow1637694716396", 1), new PQuery("SELECT `spree_line_items`.* FROM `spree_line_items` WHERE `spree_line_items`.`order_id` = ? ORDER BY `spree_line_items`.`created_at` ASC", 25000005),
+//                new PQuery("SELECT `spree_variants`.* FROM `spree_variants` WHERE `spree_variants`.`id` IN (?, ?, ?)", 83000136, 83000191, 83000198),
+//                new PQuery("SELECT `spree_assets`.* FROM `spree_assets` WHERE `spree_assets`.`viewable_type` = ? AND `spree_assets`.`viewable_id` IN (?, ?, ?) ORDER BY `spree_assets`.`position` ASC", "Spree::Variant", 83000136, 83000191, 83000198),
+                new PQuery("SELECT `spree_orders`.* FROM `spree_orders` WHERE `spree_orders`.`store_id` = ? AND `spree_orders`.`number` = ? AND (`spree_orders`.`user_id` = ? OR `spree_orders`.`token` = ?) LIMIT ?", 1, "R713119258", 82000001, "0vm4Crp3w7avKavcKrjzow1637694716396", 1),
+                new PQuery("SELECT `spree_line_items`.* FROM `spree_line_items` WHERE `spree_line_items`.`order_id` = ? ORDER BY `spree_line_items`.`created_at` ASC", 25000004),
+                new PQuery("SELECT `spree_variants`.* FROM `spree_variants` WHERE `spree_variants`.`id` IN (?, ?, ?, ?)", 83000220, 83000117, 83000203, 83000134),
+                new PQuery("SELECT `mv`.* FROM `spree_variants` `mv` INNER JOIN `spree_variants` `ov` ON `mv`.`product_id` = `ov`.`product_id` WHERE `mv`.`deleted_at` IS NULL AND `mv`.`is_master` = true AND `ov`.`id` = ?", 83000220),
+                new PQuery("SELECT `spree_assets`.* FROM `spree_assets` INNER JOIN `spree_variants` `mv` ON `spree_assets`.`viewable_id` = `mv`.`id` AND `spree_assets`.`viewable_type` = 'Spree::Variant' INNER JOIN `spree_variants` `ov` ON `mv`.`product_id` = `ov`.`product_id` WHERE `mv`.`deleted_at` IS NULL AND `mv`.`is_master` = true AND `ov`.`id` = ?", 83000220),
         };
         testQueries(queries, PARAMS, 1);
     }

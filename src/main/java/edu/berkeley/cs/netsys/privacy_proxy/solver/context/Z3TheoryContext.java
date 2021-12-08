@@ -241,7 +241,7 @@ class Z3TheoryContext<NullableInt, NullableBool> extends Z3ContextWrapper<IntSor
 
     @Override
     public Expr<IntSort> mkCustomInt(BigDecimal value) {
-        throw new UnsupportedOperationException("BigDecimal is implemented yet");
+        throw new UnsupportedOperationException("BigDecimal is not implemented yet");
     }
 
     @Override

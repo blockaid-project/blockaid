@@ -362,7 +362,7 @@ public class PrivacyConnection implements Connection {
             ANSI_PURPLE_BACKGROUND + ANSI_BLACK);
 
     startNs = System.nanoTime();
-    current_trace.startQuery(privacy_query, privacy_query.parameters);
+    current_trace.startQuery(privacy_query);
     try {
       boolean pass = query_checker.checkPolicy(current_trace);
       if (!pass) {

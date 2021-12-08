@@ -159,9 +159,9 @@ public abstract class UnmodifiableLinearQueryTrace {
             QueryTraceEntry qte = allEntries.get(i);
             boolean isCurrentQuery = qte == getCurrentQuery();
             if (isCurrentQuery) {
-                sb.append("[*] ");
+                sb.append("(*) ");
             } else {
-                sb.append("[").append(i).append("] ");
+                sb.append("(").append(i).append(") ");
             }
             sb.append(qte.getParsedSql()).append("\n");
             if (!isCurrentQuery) {

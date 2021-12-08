@@ -22,7 +22,7 @@ public class TraceCache {
     private final ArrayListMultimap<CacheKey, DecisionTemplate> compliantCache = ArrayListMultimap.create();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-    public Boolean checkCache(QueryTrace queryTrace) {
+    public Optional<Boolean> checkCache(QueryTrace queryTrace) {
         Lock readLock = lock.readLock();
         readLock.lock();
         try {
@@ -33,10 +33,10 @@ public class TraceCache {
             while (iterator.hasPrevious()) {
                 DecisionTemplate template = iterator.previous();
                 if (template.doesMatch(queryTrace)) {
-                    return true;
+                    return Optional.of(true);
                 }
             }
-            return null;
+            return Optional.empty();
         } finally {
             readLock.unlock();
         }

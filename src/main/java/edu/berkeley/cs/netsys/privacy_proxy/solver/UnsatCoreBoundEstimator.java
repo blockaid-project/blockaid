@@ -1,23 +1,23 @@
 package edu.berkeley.cs.netsys.privacy_proxy.solver;
 
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Maps;
 import com.microsoft.z3.*;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.UnmodifiableLinearQueryTrace;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.PrivacyQuery;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
-import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
 
 public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> extends BoundEstimator<C> {
+    private Solver solver;
     private final BoundEstimator<C> initialEstimator;
 
     public UnsatCoreBoundEstimator(BoundEstimator<C> initialEstimator) {
@@ -29,14 +29,9 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
         Map<String, Integer> initialBounds = new HashMap<>(initialEstimator.calculateBounds(schema, queries));
         ListMultimap<String, Map<String, Object>> knownRows = queries.computeKnownRows(schema.getRawSchema());
 
-        Solver solver = schema.getContext().mkSolver();
-        Params p = schema.getContext().mkParams();
-        p.add("core.minimize", true);
-        solver.setParameters(p);
-
-        Map<String, Integer> bounds = computeUpperBounds(schema, queries, knownRows, solver, initialBounds);
+        Map<String, Integer> bounds = computeUpperBounds(schema, queries, knownRows, initialBounds);
         if (Options.SHRINK_BOUNDS == Options.OnOffType.ON) {
-            bounds = shrinkBounds(schema, queries, knownRows, solver, bounds);
+            bounds = shrinkBounds(schema, queries, knownRows, bounds);
         }
         return bounds;
     }
@@ -44,8 +39,12 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
     private Map<String, Integer> computeUpperBounds(Schema<C> schema,
                                                     UnmodifiableLinearQueryTrace queries,
                                                     ListMultimap<String, Map<String, Object>> knownRows,
-                                                    Solver solver,
-                                                    Map<String, Integer> initialBounds) {
+                                                    Map<String, Integer> initialBounds)
+    {
+        // Must create the solver after creating the formula, so that the solver contains assertions on constants
+        // (e.g., distinct).
+        solver = null;
+
         C context = schema.getContext();
         HashMap<String, Integer> bounds = new HashMap<>(initialBounds);
 
@@ -85,6 +84,12 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 queryLabels.put(context.mkBoolConst(name), query);
             }
 
+            if (solver == null) {
+                solver = schema.getContext().mkSolver();
+                Params p = schema.getContext().mkParams();
+                p.add("core.minimize", true);
+                solver.setParameters(p);
+            }
             solver.push();
             try {
                 for (NamedBoolExpr e : assertions) {
@@ -120,7 +125,7 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                     }
                 }
 
-                assert !toIncrement.isEmpty();
+                checkState(!toIncrement.isEmpty());
                 for (String r : toIncrement) {
                     bounds.put(r, bounds.get(r) + 1);
                 }
@@ -128,16 +133,16 @@ public class UnsatCoreBoundEstimator<C extends Z3ContextWrapper<?, ?, ?, ?>> ext
                 solver.pop();
             }
         }
-//        System.out.println("\t\t| iterations: " + iters + ", bounds: " + bounds);
+        printMessage(() -> "Initial bounds: " + Maps.filterEntries(bounds, e -> e.getValue() > 0), LogLevel.VERBOSE);
         return bounds;
     }
 
     private Map<String, Integer> shrinkBounds(Schema<C> schema,
                                               UnmodifiableLinearQueryTrace queries,
                                               ListMultimap<String, Map<String, Object>> knownRows,
-                                              Solver solver,
                                               Map<String, Integer> initialBounds)
     {
+        checkState(solver != null);
         C context = schema.getContext();
         BoundedInstance<C> instance = schema.makeBoundedInstance("inst", initialBounds, knownRows);
         HashMap<String, Integer> shrunkBounds = new HashMap<>(initialBounds);

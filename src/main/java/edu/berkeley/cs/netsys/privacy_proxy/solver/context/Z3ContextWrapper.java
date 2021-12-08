@@ -351,7 +351,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     public abstract <R extends Sort> FuncDecl<R> mkFuncDecl(String s, Sort[] sorts, R sort);
 
     public Sort getSortForValue(Object value) {
-        if (value instanceof Integer || value instanceof Long) {
+        if (value instanceof Integer || value instanceof Long || value instanceof BigDecimal) {
             return getCustomIntSort();
         } else if (value instanceof Boolean) {
             return getCustomBoolSort();
@@ -366,7 +366,7 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         } else if (value == null) {
             throw new UnsupportedOperationException("null value unhandled");
         } else {
-            throw new UnsupportedOperationException("unknown type for constant loading");
+            throw new UnsupportedOperationException("unknown type for constant loading: " + value.getClass().getName());
         }
     }
 

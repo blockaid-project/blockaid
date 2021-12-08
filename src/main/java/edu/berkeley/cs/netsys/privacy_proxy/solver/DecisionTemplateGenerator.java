@@ -99,6 +99,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
                         .map(o -> backMapOperand(o, sqt))
                         .collect(ImmutableSet.toImmutableSet());
 
+        long startNs = System.nanoTime();
         Solver solver = rruce.getSolver();
 
         Set<Label> smallestParamsCore;
@@ -112,6 +113,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
                         : ImmutableSet.of();
         try (UnsatCoreEnumerator<Label, PreambleLabel, CB> uce =
                      new UnsatCoreEnumerator<>(boundedContext, solver, fs, Order.INCREASING, enumeratorOptions)) {
+            printMessage("Enumerator creation:\t" + (System.nanoTime() - startNs) / 1_000_000 + " ms");
             checker.printFormula(solver::toString, "bg");
 
             Map<Label, BoolExpr> labeledExprs = fs.labeledExprs();
@@ -119,7 +121,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
             Set<Label> startingUnsatCore = uce.getStartingUnsatCore();
             printMessage("starting #labels =\t" + startingUnsatCore.size() + "\t" + startingUnsatCore);
 
-            long startNs = System.nanoTime();
+            startNs = System.nanoTime();
             Solver thisSolver = boundedContext.mkSolver();
             for (Label l : startingUnsatCore) {
                 thisSolver.add(labeledExprs.get(l));
@@ -146,7 +148,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
             if (Options.PRUNE_PREAMBLE_IN_VALIDATION == Options.OnOffType.ON) {
                 minimalPreambleCore = uce.getUnsatCorePreamble();
             }
-            printMessage("\t\t| Find smallest unsat core:\t" + (System.nanoTime() - startNs) / 1e6);
+            printMessage("\t\t| Find smallest unsat core:\t" + (System.nanoTime() - startNs) / 1_000_000 + " ms");
         }
         printMessage("final #labels =\t" + smallestParamsCore.size() + "\t" + smallestParamsCore);
         if (minimalPreambleCore != null) {
@@ -160,7 +162,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
         DecisionTemplate dt = buildDecisionTemplate(trace, coreLabelsOld, allOperandsOld);
 
         // Step 4: Validate the decision template using unbounded formula.
-        System.out.println("\t\t| Validate:");
+        printMessage("\t\t| Validate:");
         String validateSMT = unboundedUcBuilder.buildValidateParamRelationsOnlySMT(sqt, smallestParamsCore, minimalPreambleCore);
         if (!runner.checkFastUnsatFormula(validateSMT, "validate")) {
             printStylizedMessage("validation failed (slack = " + boundSlack + ")", ANSI_RED_BACKGROUND);
@@ -239,7 +241,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
                 .map(uf::find)
                 .collect(Collectors.toSet());
 
-        checkArgument(rootsUsedInLessThan.stream().allMatch(o -> uf.findComplete(o).getDatum() == null),
+        checkArgument(rootsUsedInLessThan.stream().noneMatch(o -> uf.findComplete(o).hasDatum()),
                 "currently unsupported: less than with value as operand");
 
         // Assign consecutive indexes (starting from 0) to roots, excluding those with only one element (unless it's
@@ -247,7 +249,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
         Map<Operand, Integer> root2Index = new HashMap<>();
         for (Operand root : uf.getRoots()) {
             UnionFind<Operand>.EquivalenceClass ec = uf.findComplete(root);
-            if (ec.getDatum() == null && (ec.getSize() >= 2 || rootsUsedInLessThan.contains(ec.getRoot()))) {
+            if (!ec.hasDatum() && (ec.getSize() >= 2 || rootsUsedInLessThan.contains(ec.getRoot()))) {
                 root2Index.put(root, root2Index.size());
             }
         }
@@ -283,14 +285,14 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
             UnionFind<Operand>.EquivalenceClass ec = uf.findComplete(o);
             Object datum = ec.getDatum();
             Integer rootIndex = root2Index.get(ec.getRoot());
-            if (rootIndex == null && datum == null) { // This operand has no constraints on it.
+            if (rootIndex == null && !ec.hasDatum()) { // This operand has no constraints on it.
                 continue;
             }
 
             switch (o.getKind()) {
                 case CONTEXT_CONSTANT -> {
                     String constName = ((ContextConstantOperand) o).name();
-                    if (datum == null) {
+                    if (!ec.hasDatum()) {
                         constName2ECBuilder.put(constName, rootIndex);
                     } else {
                         constName2ValueBuilder.put(constName, datum);
@@ -305,7 +307,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
                                             .values();
                     // If the query index is not in `queryIdx2rowEBs`, the query is irrelevant and so we ignore.
                     ebs.forEach(
-                            datum == null ?
+                            !ec.hasDatum() ?
                                     eb -> eb.setParamEC(qpo.paramIdx(), rootIndex) :
                                     eb -> eb.setParamValue(qpo.paramIdx(), datum)
                     );
@@ -320,7 +322,7 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
                     if (eb == null) { // This returned row is irrelevant.
                         break;
                     }
-                    if (datum == null) {
+                    if (!ec.hasDatum()) {
                         eb.setRowAttrEC(rrfo.colIdx(), rootIndex);
                     } else {
                         eb.setRowAttrValue(rrfo.colIdx(), datum);

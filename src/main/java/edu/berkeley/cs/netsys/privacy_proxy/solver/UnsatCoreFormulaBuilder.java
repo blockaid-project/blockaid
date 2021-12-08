@@ -157,6 +157,8 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
     }
 
     private Map<Label, BoolExpr> makeLabeledExprsAll(UnmodifiableLinearQueryTrace trace, EnumSet<Option> options) {
+        Logger.printMessage(() -> "makeLabeledExprsAll:\n" + trace.toString(), LogLevel.VERBOSE);
+
         QueryTraceEntry lastEntry = trace.getCurrentQuery();
         ListMultimap<Object, Expr<?>> ecs = ArrayListMultimap.create(); // Value -> constants that equal that value.
 
@@ -205,9 +207,6 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                 Tuple<C> head = q.makeHead(colIdx -> tupPrefix + "_col" + colIdx);
                 for (int attrIdx = 0; attrIdx < tuple.size(); ++attrIdx) {
                     Object v = tuple.get(attrIdx);
-                    if (v == null) {
-                        continue;
-                    }
                     // Ignore irrelevant columns.
                     Set<String> attrNames = e.getQuery().getProjectColumnsByIdx(attrIdx);
                     if (attrNames.stream().noneMatch(relevantAttributes::contains)) {
@@ -247,11 +246,11 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                     pkValuedExprs,
                     Maps.filterKeys(label2Expr, l -> l.getKind() == Label.Kind.RETURNED_ROW).values()
             );
-            System.out.println("\t\t| removeRedundantExprs:\t" + (System.nanoTime() - startNs) / 1000000);
+            Logger.printMessage("\t\t| removeRedundantExprs:\t" + (System.nanoTime() - startNs) / 1000000);
         }
 
 //        for (Object value : ecs.keySet()) {
-//            List<Expr> variables = ecs.get(value);
+//            List<Expr<?>> variables = ecs.get(value);
 //            System.out.println(value + ":\t" + variables.size() + "\t" + variables);
 //        }
 
@@ -259,31 +258,30 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
             List<Expr<?>> variables = ecs.get(value);
 
             // Generate equalities of the form: variable = value.
-            Expr<?> vExpr = context.getExprForValue(value);
-            if (vExpr != null) {
-                // TODO(zhangwen): we currently ignore NULL values, i.e., assuming NULLs are irrelevant for compliance.
+            {
+                Expr<?> vExpr = context.getExprForValue(value);
                 ValueOperand rhs = new ValueOperand(value);
                 for (Expr<?> p : variables) {
                     if (pkValuedExprs.contains(p)) {
                         // Optimization based on assumption: the primary key value doesn't matter.
                         continue;
                     }
-                    label2Expr.put(
-                            new EqualityLabel(expr2Operand.get(p), rhs),
-                            context.mkIsSameValue(p, vExpr)
-                    );
+                    BoolExpr expr = value == null ? context.mkSqlIsNull(p) : context.mkIsSameValue(p, vExpr);
+                    label2Expr.put(new EqualityLabel(expr2Operand.get(p), rhs), expr);
                 }
             }
 
-            // Generate equalities of the form: variable1 = variable2.
-            for (int i = 0; i < variables.size(); ++i) {
-                Expr<?> p1 = variables.get(i);
-                Operand lhs = expr2Operand.get(p1);
-                for (int j = i + 1; j < variables.size(); ++j) {
-                    Expr<?> p2 = variables.get(j);
-                    Operand rhs = expr2Operand.get(p2);
-                    // Again, we require that `p1` and `p2` are not null.
-                    label2Expr.put(new EqualityLabel(lhs, rhs), context.mkSqlEqTrue(p1, p2));
+            // Generate equalities of the form: variable1 = variable2, but not between two nulls.
+            if (value != null) {
+                for (int i = 0; i < variables.size(); ++i) {
+                    Expr<?> p1 = variables.get(i);
+                    Operand lhs = expr2Operand.get(p1);
+                    for (int j = i + 1; j < variables.size(); ++j) {
+                        Expr<?> p2 = variables.get(j);
+                        Operand rhs = expr2Operand.get(p2);
+                        Logger.printMessage("Equality label (" + value + "):\t" + lhs + " == " + rhs, LogLevel.VERBOSE);
+                        label2Expr.put(new EqualityLabel(lhs, rhs), context.mkSqlEqTrue(p1, p2));
+                    }
                 }
             }
         }
@@ -365,7 +363,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                                 "removeRedundant solver failure: " + res);
                         Logger.printStylizedMessage(() -> {
                             Model m = solver.getModel();
-                            return "removeRedundantExprs:\t" + o1 + " != " + o2 + "\t" + m.eval(p1, false) + ", " + m.eval(p2, false);
+                            return "removeRedundantExprs: (" + v + ")\t" + o1 + " != " + o2 + "\t" + m.eval(p1, false) + ", " + m.eval(p2, false);
                         }, TerminalColor.ANSI_RED_BACKGROUND, LogLevel.VERBOSE);
                     }
                 }

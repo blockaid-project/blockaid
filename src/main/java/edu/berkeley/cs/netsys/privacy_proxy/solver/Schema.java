@@ -134,10 +134,13 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
             for (Map<String, Object> knownRow : knownRows) {
                 List<Expr<?>> values = new ArrayList<>();
                 for (Column col : columns) {
-                    Object knownValue = knownRow.get(col.name());
-                    if (knownValue != null) {
-                        // TODO(zhangwen): This ignores a known NULL value, which is safe to do; fix?
-                        values.add(context.getExprForValue(knownValue));
+                    if (knownRow.containsKey(col.name())) {
+                        Object knownValue = knownRow.get(col.name());
+                        if (knownValue == null) {
+                            values.add(context.mkNull(col.type()));
+                        } else {
+                            values.add(context.getExprForValue(knownValue));
+                        }
                     } else {
                         Expr<?> thisVar = context.mkConst(prefix + "_" + i + "_" + col.name(), col.type());
                         instBuilder.addDbVar(thisVar);
@@ -150,6 +153,7 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                 i += 1;
             }
 
+            ArrayList<BoolExpr> existsVarsSoFar = new ArrayList<>();
             for (; i < numTuples; ++i) {
                 List<Expr<?>> values = new ArrayList<>();
                 for (Column col : columns) {
@@ -160,8 +164,9 @@ public class Schema<C extends Z3ContextWrapper<?, ?, ?, ?>> {
                 tuples.add(new Tuple<>(this, values));
 
                 BoolExpr existsVar = context.mkBoolConst(prefix + "_" + i + "_exists");
+                existsVarsSoFar.add(existsVar);
                 instBuilder.addDbVar(existsVar);
-                exists.add(existsVar);
+                exists.add(context.mkAnd(existsVarsSoFar));
             }
             instBuilder.put(relationName, new ConcreteRelation<>(this, colTypes, tuples, exists));
         }

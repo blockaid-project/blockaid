@@ -10,6 +10,7 @@ import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public abstract class ProcessSMTExecutor extends SMTExecutor {
     private final ProcessBuilder pb;
@@ -22,10 +23,14 @@ public abstract class ProcessSMTExecutor extends SMTExecutor {
     // TODO(zhangwen): Is a kludge.  We should just create one process builder per command.
     private static final ConcurrentHashMap<ImmutableList<String>, ProcessBuilder> processBuilders = new ConcurrentHashMap<>();
 
-    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, List<String> command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
-        super(name, latch, satConclusive, unsatConclusive, unknownConclusive, runCore);
+    protected ProcessSMTExecutor(String name, String smtString, Consumer<String> signalFunc, List<String> command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
+        super(name, signalFunc, satConclusive, unsatConclusive, unknownConclusive, runCore);
         this.smtString = smtString;
         this.pb = processBuilders.computeIfAbsent(ImmutableList.copyOf(command), ProcessBuilder::new);
+    }
+
+    protected ProcessSMTExecutor(String name, String smtString, CountDownLatch latch, List<String> command, boolean satConclusive, boolean unsatConclusive, boolean unknownConclusive, boolean runCore) {
+        this(name, smtString, s -> latch.countDown(), command, satConclusive, unsatConclusive, unknownConclusive, runCore);
     }
 
     // Sets this.output.

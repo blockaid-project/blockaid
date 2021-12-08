@@ -20,7 +20,12 @@ public class PushPopMap<K, V> {
         keys.add(new ArrayList<>());
     }
 
+    // Does not allow null value -- here we're checking equality `x1 = x2`, which is not true when x1 or x2 is null.
+    // FIXME(zhangwen): allow "NOT NULL" labels in decision cache?
     public boolean ensureMapping(K key, V value) {
+        if (value == null) {
+            return false;
+        }
         if (map.containsKey(key)) {
             return map.get(key).equals(value);
         }

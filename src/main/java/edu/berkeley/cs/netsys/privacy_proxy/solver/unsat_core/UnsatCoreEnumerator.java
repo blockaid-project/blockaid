@@ -97,12 +97,13 @@ public class UnsatCoreEnumerator<L, BL, C extends Z3ContextWrapper<?, ?, ?, ?>> 
 
         // The entire formula had better be unsatisfiable; otherwise there is no unsat core!
         solverCore = null;
-        checkArgument(solver.check(label2BoolConst.values().toArray(new BoolExpr[0])) == Status.UNSATISFIABLE,
-                "to enumerate unsat cores, the formulas must be unsat");
+        Status res = solver.check(label2BoolConst.values().toArray(new BoolExpr[0]));
+        checkArgument( res == Status.UNSATISFIABLE,
+                "to enumerate unsat cores, the formulas must be unsat; got: " + res);
         Set<L> core = getUnsatCore().get();
 
         long durMs = System.currentTimeMillis() - startMs;
-        System.out.println("\t\t| getStartingUnsatCore:\t" + durMs);
+        printMessage("\t\t| getStartingUnsatCore:\t" + durMs);
 
         return core;
     }

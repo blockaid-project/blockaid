@@ -194,12 +194,12 @@ public class DecisionTemplate {
 
         // The following two structures exist only for queries that are not the current.
         // Maps row attribute index -> what value it must take.
-        private final ImmutableMap<Integer, Object> rowAttrIdx2Value; // Only supports non-null values.
+        private final Map<Integer, Object> rowAttrIdx2Value; // Can have nulls.
         // Maps row attribute index -> which equivalence class it belongs to.
         private final ImmutableMap<Integer, Integer> rowAttrIdx2EC;
 
         private Entry(ParserResult query, boolean isCurrentQuery, ImmutableMap<Integer, Object> paramIdx2Value,
-                     ImmutableMap<Integer, Integer> paramIdx2EC, ImmutableMap<Integer, Object> rowAttrIdx2Value,
+                     ImmutableMap<Integer, Integer> paramIdx2EC, Map<Integer, Object> rowAttrIdx2Value,
                      ImmutableMap<Integer, Integer> rowAttrIdx2EC) {
             this.qpr = query;
             this.isCurrentQuery = isCurrentQuery;
@@ -256,7 +256,7 @@ public class DecisionTemplate {
                 if (ecIdx != null) {
                     rhs = "?" + ecIdx;
                 } else {
-                    rhs = rowAttrIdx2Value.get(i).toString();
+                    rhs = Objects.toString(rowAttrIdx2Value.get(i));
                 }
                 return String.format(".%d = %s", i, rhs);
             }).collect(Collectors.joining(", "));
@@ -283,8 +283,7 @@ public class DecisionTemplate {
         private static boolean matchHelper(List<Object> target, Map<Integer, Object> idx2Value,
                                     Map<Integer, Integer> idx2EC, PushPopMap<Integer, Object> ec2Value) {
             for (Map.Entry<Integer, Object> e : idx2Value.entrySet()) {
-                Object normalizedTarget = target.get(e.getKey());
-                if (!e.getValue().equals(normalizedTarget)) {
+                if (!Objects.equals(e.getValue(), target.get(e.getKey()))) {
                     return false;
                 }
             }
@@ -341,7 +340,6 @@ public class DecisionTemplate {
         }
 
         public void setRowAttrValue(int attrIdx, Object value) {
-            checkNotNull(value);
             checkRowAttrNotSet(attrIdx);
             rowAttrIdx2Value.put(attrIdx, value);
         }
@@ -357,7 +355,8 @@ public class DecisionTemplate {
                     isCurrentQuery,
                     ImmutableMap.copyOf(paramIdx2Value),
                     ImmutableMap.copyOf(paramIdx2EC),
-                    ImmutableMap.copyOf(rowAttrIdx2Value),
+                    // TODO(zhangwen): make this map immutable.
+                    rowAttrIdx2Value, // Use regular map because immutable maps don't allow null values.
                     ImmutableMap.copyOf(rowAttrIdx2EC)
             );
         }

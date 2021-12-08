@@ -10,7 +10,6 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 
 public class UnionFind<T> {
     private final ImmutableMap<T, Integer> index;
@@ -18,6 +17,13 @@ public class UnionFind<T> {
     private final int[] root;
     private final int[] rank;
     private final int[] size; // Size of the equivalence class rooted at each element.
+
+    private static final Object MY_NULL = new Object() {
+        @Override
+        public String toString() {
+            return "NULL";
+        }
+    };
 
     // TODO(zhangwen): type parameter for data?
     private final Object[] data; // Data associated with each equivalence class; null means no data.
@@ -62,7 +68,9 @@ public class UnionFind<T> {
 
     public void attachData(T element, Object datum) {
         checkArgument(index.containsKey(element));
-        checkNotNull(datum, "union find data must be non-null");
+        if (datum == null) {
+            datum = MY_NULL;
+        }
         int rootIdx = findIdx(index.get(element));
 
         Object oldDatum = data[rootIdx];
@@ -158,18 +166,23 @@ public class UnionFind<T> {
 
     public class EquivalenceClass {
         private final T root;
+        private final boolean hasDatum;
         private final Object datum;
         private final int size;
 
         public EquivalenceClass(T root, Object datum, int size) {
             this.root = root;
-
-            this.datum = datum;
+            this.hasDatum = datum != null;
+            this.datum = datum == MY_NULL ? null : datum;
             this.size = size;
         }
 
         public T getRoot() {
             return root;
+        }
+
+        public boolean hasDatum() {
+            return hasDatum;
         }
 
         public Object getDatum() {

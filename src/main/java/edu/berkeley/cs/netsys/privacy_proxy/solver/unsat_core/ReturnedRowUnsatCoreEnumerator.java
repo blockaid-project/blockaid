@@ -15,8 +15,9 @@ import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 import edu.berkeley.cs.netsys.privacy_proxy.util.VampireConfigurations;
 
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Logger.printMessage;
@@ -24,7 +25,7 @@ import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE;
 import static edu.berkeley.cs.netsys.privacy_proxy.util.Options.PRUNE_PREAMBLE_IN_VALIDATION;
 
 public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, CB extends Z3ContextWrapper<?, ?, ?, ?>> {
-    private static final int TIMEOUT_S = 20;
+    private static final long TIMEOUT_S = 5;
 
     private final QueryChecker checker;
     private final Schema<CB> boundedSchema;
@@ -47,26 +48,51 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
     public Optional<Core> getInitialRRCore(UnmodifiableLinearQueryTrace trace) {
         long startNs = System.nanoTime();
         String smt = rrlFormula.generateUnsatCoreSMT(trace);
-        System.out.println("\t\t| Prepare formula:\t" + (System.nanoTime() - startNs) / 1000000);
+        printMessage("\t\t| Prepare formula:\t" + (System.nanoTime() - startNs) / 1000000);
         checker.printFormula(smt, "rr_unsat_core");
 
         ArrayList<ProcessSMTExecutor> executors = new ArrayList<>();
-        CountDownLatch latch = new CountDownLatch(1);
-//        executors.add(new Z3Executor("z3", smt, latch)); // We don't include Z3 as it generates large unsat cores.
-//        executors.add(new CVCExecutor("cvc4", "cvc4", smt, latch)); // Currently we just keep cvc5.
-        executors.add(new CVCExecutor("cvc5", "cvc5", smt, latch));
+        LinkedBlockingQueue<String> q = new LinkedBlockingQueue<>();
+        Consumer<String> signalFunc = q::offer;
+        executors.add(new Z3Executor("z3", smt, signalFunc));
+        executors.add(new CVCExecutor("cvc5", "cvc5", smt, signalFunc));
         for (Map.Entry<String, String> entry : VampireConfigurations.getAll(TIMEOUT_S).entrySet()) {
             String configName = entry.getKey(), configString = entry.getValue();
-            executors.add(new VampireUCoreExecutor(configName, smt, latch, configString));
+            executors.add(new VampireUCoreExecutor(configName, smt, signalFunc, configString));
         }
+
+        Map<String, ProcessSMTExecutor> nameToExecutor = executors.stream()
+                .collect(Collectors.toMap(ProcessSMTExecutor::getName, e -> e));
 
         for (SMTExecutor executor : executors) {
             executor.start();
         }
 
         startNs = System.nanoTime();
+
+        record Result(String name, Set<ReturnedRowLabel> rrCore, Set<PreambleLabel> preambleCore, long elapsedNs) {}
+        Result winner = null;
         try {
-            latch.await(TIMEOUT_S, TimeUnit.SECONDS);
+            long elapsedNs;
+            while ((elapsedNs = System.nanoTime() - startNs) <= TIMEOUT_S * 1_000_000_000) {
+                String finishedName = q.poll(TIMEOUT_S * 1_000_000_000 - elapsedNs, TimeUnit.NANOSECONDS);
+                if (finishedName == null) { // Timeout.  Stop here.
+                    break;
+                }
+
+                ProcessSMTExecutor finishedExecutor = nameToExecutor.get(finishedName);
+                if (finishedExecutor.getResult() == Status.UNSATISFIABLE) {
+                    List<String> unsatCore = Arrays.asList(finishedExecutor.getUnsatCore());
+                    Set<ReturnedRowLabel> rrCore = rrlFormula.extractRRLabels(unsatCore);
+                    if (winner == null || rrCore.size() < winner.rrCore.size()) {
+                        winner = new Result(finishedName, rrCore, rrlFormula.extractPreambleLabels(unsatCore),
+                                System.nanoTime() - startNs);
+                    }
+                    if (rrCore.size() <= 3) { // Good enough, wait no longer!
+                        break;
+                    }
+                }
+            }
             for (SMTExecutor executor : executors) {
                 executor.signalShutdown();
             }
@@ -76,37 +102,20 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
-        Set<ReturnedRowLabel> smallestRRCore = null;
-        Set<PreambleLabel> preambleCore = null;
-        String winner = null;
-        for (ProcessSMTExecutor e : executors) {
-            if (e.getResult() != Status.UNSATISFIABLE) {
-                continue;
-            }
-
-            List<String> unsatCore = Arrays.asList(e.getUnsatCore());
-            Set<ReturnedRowLabel> rrCore = rrlFormula.extractRRLabels(unsatCore);
-            if (smallestRRCore == null || smallestRRCore.size() > rrCore.size()) {
-                winner = e.getName();
-                smallestRRCore = rrCore;
-                preambleCore = rrlFormula.extractPreambleLabels(unsatCore);
-            }
-        }
         long solveDurMs = (System.nanoTime() - startNs) / 1000000;
-        System.out.println("\t\t| Solve:\t" + solveDurMs);
+        printMessage("\t\t| Solve:\t" + solveDurMs);
 
-        if (smallestRRCore == null) {
+        if (winner == null) {
             return Optional.empty();
         }
 
-        printMessage("Winner:\t" + winner + "\t" + solveDurMs);
-        printMessage("\tReturned-row core: " + smallestRRCore);
+        printMessage("Winner:\t" + winner + "\t" + winner.elapsedNs / 1_000_000 + "ms");
+        printMessage("\tReturned-row core: " + winner.rrCore);
         if (PRUNE_PREAMBLE == Options.PrunePreambleType.UNSAT_CORE) {
-            printMessage("\tPreamble core: " + preambleCore);
+            printMessage("\tPreamble core: " + winner.preambleCore);
         }
 
-        return Optional.of(new Core(smallestRRCore, preambleCore));
+        return Optional.of(new Core(winner.rrCore, winner.preambleCore));
     }
 
     // Returns empty if formula is not determined UNSAT.
@@ -142,7 +151,8 @@ public class ReturnedRowUnsatCoreEnumerator<CU extends Z3ContextWrapper<?, ?, ?,
 
             {
                 var finalSlackBounds = slackBounds;
-                printMessage(() -> "Bounds:\t" + finalSlackBounds, LogLevel.VERBOSE);
+                printMessage(() -> "Final bounds:\t" + Maps.filterEntries(finalSlackBounds, e -> e.getValue() > 0),
+                        LogLevel.VERBOSE);
             }
 
             if (PRUNE_PREAMBLE != Options.PrunePreambleType.UNSAT_CORE) {

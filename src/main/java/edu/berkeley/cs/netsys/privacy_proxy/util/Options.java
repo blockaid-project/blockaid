@@ -57,6 +57,8 @@ public class Options {
 
     public static final OnOffType CONSTRAIN_CUSTOM_BOOL = getOnOffProperty("privoxy.constrain_custom_bool", OnOffType.ON);
 
+    public static final OnOffType SPLIT_IN = getOnOffProperty("privoxy.split_in", OnOffType.ON);
+
     public static final OnOffType PRUNE_PREAMBLE_IN_VALIDATION = getOnOffProperty("privoxy.prune_preamble_in_validation", OnOffType.OFF);
 
     /**
@@ -94,7 +96,7 @@ public class Options {
     }
 
     /* Preamble pruning in decision template minimization. */
-    public static final PrunePreambleType PRUNE_PREAMBLE = PrunePreambleType.parse(System.getProperty("privoxy.prune_preamble"));
+    public static final PrunePreambleType PRUNE_PREAMBLE = PrunePreambleType.parse(System.getProperty("privoxy.prune_preamble", "coarse"));
 
     public enum BoundedFormulaType {
         THEORY, // Use ints and bools for database column types.
@@ -111,8 +113,8 @@ public class Options {
 
     /* Use custom sorts (instead of ints and bools) in bounded formula. */
     public static final BoundedFormulaType BOUNDED_FORMULA_TYPE =
-            BoundedFormulaType.parse(System.getProperty("privoxy.bounded_formula_type", "theory"));
+            BoundedFormulaType.parse(System.getProperty("privoxy.bounded_formula_type", "custom_sorts"));
 
-    /* Print formulas to file. */
-    public static final int SOLVE_TIMEOUT_MS = Integer.parseInt(System.getProperty("privoxy.solve_timeout_ms", "2000"));
+    /* Solver timeout in milliseconds. */
+    public static final int SOLVE_TIMEOUT_MS = Integer.parseInt(System.getProperty("privoxy.solve_timeout_ms", "5000"));
 }

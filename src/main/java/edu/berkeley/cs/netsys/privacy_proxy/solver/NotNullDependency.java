@@ -40,10 +40,11 @@ public record NotNullDependency(String relationName, String columnName) implemen
 
     @Override
     public List<String> getRelevantColumns() {
-        // TODO(zhangwen): is this column even relevant?
-        return List.of(
-                (relationName + "." + columnName).toUpperCase()
-        );
+        // FIXME(zhangwen): is this column relevant?
+        return Collections.emptyList();
+//        return List.of(
+//                (relationName + "." + columnName).toUpperCase()
+//        );
     }
 
     @Override

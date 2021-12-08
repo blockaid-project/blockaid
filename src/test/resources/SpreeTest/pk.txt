@@ -48,7 +48,6 @@ spree_properties:id;
 spree_stores:code;
 spree_users:email;
 spree_orders:number;
-spree_orders:token;
 spree_roles:name;
 spree_preferences:key;
 spree_oauth_access_tokens:token;

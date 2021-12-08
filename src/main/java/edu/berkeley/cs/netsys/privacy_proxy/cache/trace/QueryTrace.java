@@ -32,6 +32,17 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
         constMap = new HashMap<>();
     }
 
+    private QueryTrace(ArrayListMultimap<ParserResult, QueryTraceEntry> queries, ArrayList<QueryTraceEntry> queryList,
+                       QueryTraceEntry currentQuery, Instant lastNow, HashSet<QueryTraceEntry> entrySet,
+                       HashMap<String, Object> constMap) {
+        this.queries = ArrayListMultimap.create(queries);
+        this.queryList = new ArrayList<>(queryList);
+        this.currentQuery = currentQuery;
+        this.lastNow = lastNow;
+        this.entrySet = new HashSet<>(entrySet);
+        this.constMap = new HashMap<>(constMap);
+    }
+
     public void setConstValue(String name, Object value) {
         checkArgument(constMap.getOrDefault(name, value).equals(value));
         constMap.put(name, value);
@@ -53,7 +64,7 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
         return Collections.unmodifiableMap(cm);
     }
 
-    public void startQuery(PrivacyQuery query, List<Object> parameters) {
+    public void startQuery(PrivacyQuery query) {
         if (currentQuery != null) {
             endQuery(Collections.emptyList());
         }
@@ -61,10 +72,10 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
             String name = query.paramNames.get(i);
             if (!name.equals("?")) {
                 // Query can specify either parameter name or value, not both.
-                checkArgument(parameters.get(i) == null);
+                checkArgument(query.parameters.get(i) == null);
             }
         }
-        currentQuery = new QueryTraceEntry(query, parameters);
+        currentQuery = new QueryTraceEntry(query);
         queries.put(currentQuery.getParserResult(), currentQuery);
         queryList.add(currentQuery);
     }
@@ -103,5 +114,15 @@ public class QueryTrace extends UnmodifiableLinearQueryTrace {
 
     public QueryTraceEntry getCurrentQuery() {
         return currentQuery;
+    }
+
+    public QueryTrace replaceCurrQuery(PrivacyQuery newQuery) {
+        if (newQuery == currentQuery.getQuery()) {
+            return this;
+        }
+        QueryTrace newTrace = new QueryTrace(queries, queryList, currentQuery, lastNow, entrySet, constMap);
+        newTrace.endQueryDiscard();
+        newTrace.startQuery(newQuery);
+        return newTrace;
     }
 }
