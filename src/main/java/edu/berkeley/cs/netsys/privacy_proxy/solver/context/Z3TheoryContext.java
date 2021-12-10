@@ -86,22 +86,22 @@ class Z3TheoryContext<NullableInt, NullableBool> extends Z3ContextWrapper<IntSor
 
     @Override
     public <S extends Sort> Expr<S> mkFreshConst(String s, S sort) {
-        return rawContext.mkFreshConst(s, sort);
+        return myMkFreshConst(s, sort);
     }
 
     // Not tracked.
     @Override
     public <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort) {
-        return rawContext.mkFreshConst(s, sort);
+        return myMkFreshConst(s, sort);
     }
 
     @Override
-    public void pushTrackConsts() {
+    protected void pushTrackConsts() {
         strToIntNum.add(new HashMap<>());
     }
 
     @Override
-    public void popTrackConsts() {
+    protected void popTrackConsts() {
         strToIntNum.remove(strToIntNum.size() - 1);
     }
 

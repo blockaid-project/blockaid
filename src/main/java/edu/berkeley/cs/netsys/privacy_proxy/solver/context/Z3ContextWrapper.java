@@ -29,9 +29,14 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     protected final Context rawContext;
     private final Tactic qeLight;
 
+    private final ArrayList<Integer> freshIds;
+
     public Z3ContextWrapper() {
         this.rawContext = new Context();
         this.qeLight = rawContext.mkTactic("qe-light");
+
+        this.freshIds = new ArrayList<>();
+        freshIds.add(0);
     }
 
     public static Z3CustomSortsContext makeCustomSortsContext(Set<ContextOption> options) {
@@ -76,6 +81,12 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
 
     public BoolExpr mkDistinctUntyped(Collection<Expr<?>> exprs) {
         return mkDistinct(exprs.toArray(new Expr[0]));
+    }
+
+    protected <S extends Sort> Expr<S> myMkFreshConst(String s, S sort) {
+        int nextId = freshIds.get(freshIds.size() - 1);
+        freshIds.set(freshIds.size() - 1, nextId + 1);
+        return rawContext.mkConst(s + "!" + nextId, sort);
     }
 
     public abstract BoolExpr mkBoolConst(String s);
@@ -123,8 +134,18 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
         return rawContext.mkExists(quantifiers.toArray(new Expr[0]), body, 1, null, null, null, null);
     }
 
-    public abstract void pushTrackConsts();
-    public abstract void popTrackConsts();
+    public void push() {
+        freshIds.add(freshIds.get(freshIds.size() - 1));
+        pushTrackConsts();
+    }
+
+    public void pop() {
+        popTrackConsts();
+        freshIds.remove(freshIds.size() - 1);
+    }
+
+    protected abstract void pushTrackConsts();
+    protected abstract void popTrackConsts();
 
     // DO NOT track any new consts / func decls while iterating through the returned iterables!
     public abstract TrackedDecls getAllTrackedDecls();

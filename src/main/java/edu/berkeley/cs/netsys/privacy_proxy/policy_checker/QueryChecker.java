@@ -20,7 +20,6 @@ import edu.berkeley.cs.netsys.privacy_proxy.sql.SchemaPlusWithKey;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.preprocess.SplitIn;
 import edu.berkeley.cs.netsys.privacy_proxy.util.LogLevel;
 import edu.berkeley.cs.netsys.privacy_proxy.util.Logger;
-import edu.berkeley.cs.netsys.privacy_proxy.util.Options;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -168,16 +167,15 @@ public class QueryChecker {
         // At this point, the context should be tracking all constants from the views and constraints.
         // Call `push` to separate them from the trace-specific constants.
         for (Schema<?> schema : allSchemata) {
-            schema.getContext().pushTrackConsts();
+            schema.getContext().push();
         }
     }
-
 
     public void resetSequence() {
         for (Schema<?> schema : allSchemata) {
             Z3ContextWrapper<?, ?, ?, ?> context = schema.getContext();
-            context.popTrackConsts();
-            context.pushTrackConsts();
+            context.pop();
+            context.push();
         }
         if (CLEAR_CACHE_AT_RESET) {
             cache.policyDecisionCacheFine.clear();

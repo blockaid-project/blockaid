@@ -79,23 +79,23 @@ public class Z3CustomSortsContext extends Z3ContextWrapper<UninterpretedSort, Un
 
     @Override
     public <S extends Sort> Expr<S> mkFreshConst(String s, S sort) {
-        return trackConst(rawContext.mkFreshConst(s, sort));
+        return trackConst(myMkFreshConst(s, sort));
     }
 
     // Not tracked.
     @Override
     public <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort) {
-        return rawContext.mkFreshConst(s, sort);
+        return myMkFreshConst(s, sort);
     }
 
     @Override
-    public void pushTrackConsts() {
+    protected void pushTrackConsts() {
         customSorts.push();
         trackedDeclStack.add(new BaseTrackedDecls());
     }
 
     @Override
-    public void popTrackConsts() {
+    protected void popTrackConsts() {
         trackedDeclStack.remove(trackedDeclStack.size() - 1);
         customSorts.pop();
     }

@@ -45,8 +45,8 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
     public Optional<Collection<DecisionTemplate>> generate(UnmodifiableLinearQueryTrace trace) {
         CU unboundedContext = unboundedSchema.getContext();
         CB boundedContext = boundedSchema.getContext();
-        unboundedContext.pushTrackConsts();
-        boundedContext.pushTrackConsts();
+        unboundedContext.push();
+        boundedContext.push();
         try {
             // Step 1: Find one minimal unsat cores among the returned-row labels, assuming all equalities hold.
             Optional<ReturnedRowUnsatCoreEnumerator.Core> oCore = rruce.getInitialRRCore(trace);
@@ -64,8 +64,8 @@ public class DecisionTemplateGenerator<CU extends Z3ContextWrapper<?, ?, ?, ?>, 
 
             return Optional.empty();
         } finally {
-            boundedContext.popTrackConsts();
-            unboundedContext.popTrackConsts();
+            boundedContext.pop();
+            unboundedContext.pop();
         }
     }
 

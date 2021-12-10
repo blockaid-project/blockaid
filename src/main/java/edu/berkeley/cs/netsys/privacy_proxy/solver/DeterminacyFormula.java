@@ -164,7 +164,7 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>, I extend
                                            Set<PreambleLabel> chosenPreambleLabels) {
         checkState(textOption == TextOption.USE_TEXT, "cannot generate SMT in NO_TEXT mode");
 
-        context.pushTrackConsts();
+        context.push();
         try {
             StringBuilder sb = new StringBuilder();
 
@@ -187,7 +187,7 @@ public class DeterminacyFormula<C extends Z3ContextWrapper<?, ?, ?, ?>, I extend
                     .append(extraFooter);
             return sb.toString();
         } finally {
-            context.popTrackConsts();
+            context.pop();
         }
     }
     protected String generateSMT(Stream<BoolExpr> body, Set<PreambleLabel> chosenPreambleLabels) {
