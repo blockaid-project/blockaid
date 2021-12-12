@@ -96,6 +96,24 @@ public abstract class Z3ContextWrapper<IntegralS extends Sort, RealS extends Sor
     // Not tracked.
     public abstract <S extends Sort> Expr<S> mkFreshQuantifiedConst(String s, S sort);
 
+    // FIXME(zhangwen): is this reasonable?
+    public static Object normalizeValue(Object value) {
+        if (value instanceof Integer i) {
+            return BigDecimal.valueOf(i);
+        } else if (value instanceof Long l) {
+            return BigDecimal.valueOf(l);
+        } else {
+            return value;
+        }
+    }
+
+    public static boolean normalizedEquals(Object lhs, Object rhs) {
+        if (lhs == null || rhs == null) {
+            return lhs == rhs;
+        }
+        return normalizeValue(lhs).equals(normalizeValue(rhs));
+    }
+
     public BoolExpr mkAnd(BoolExpr... boolExprs) {
         return rawContext.mkAnd(boolExprs);
     }

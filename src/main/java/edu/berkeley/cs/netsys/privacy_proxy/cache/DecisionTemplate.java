@@ -4,6 +4,7 @@ import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTrace;
 import edu.berkeley.cs.netsys.privacy_proxy.cache.trace.QueryTraceEntry;
 import com.google.common.collect.*;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.Tuple;
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
 import edu.berkeley.cs.netsys.privacy_proxy.sql.ParserResult;
 
 import java.util.*;
@@ -72,7 +73,7 @@ public class DecisionTemplate {
         Map<String, Object> constMap = trace.getConstMap();
         for (Map.Entry<String, Object> e : constName2Value.entrySet()) {
             checkArgument(constMap.containsKey(e.getKey()));
-            if (!constMap.get(e.getKey()).equals(e.getValue())) {
+            if (!Z3ContextWrapper.normalizedEquals(constMap.get(e.getKey()), e.getValue())) {
                 return false;
             }
         }
@@ -283,7 +284,7 @@ public class DecisionTemplate {
         private static boolean matchHelper(List<Object> target, Map<Integer, Object> idx2Value,
                                     Map<Integer, Integer> idx2EC, PushPopMap<Integer, Object> ec2Value) {
             for (Map.Entry<Integer, Object> e : idx2Value.entrySet()) {
-                if (!Objects.equals(e.getValue(), target.get(e.getKey()))) {
+                if (!Z3ContextWrapper.normalizedEquals(e.getValue(), target.get(e.getKey()))) {
                     return false;
                 }
             }

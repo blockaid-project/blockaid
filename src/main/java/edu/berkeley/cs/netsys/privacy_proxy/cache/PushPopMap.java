@@ -1,5 +1,7 @@
 package edu.berkeley.cs.netsys.privacy_proxy.cache;
 
+import edu.berkeley.cs.netsys.privacy_proxy.solver.context.Z3ContextWrapper;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,7 +29,7 @@ public class PushPopMap<K, V> {
             return false;
         }
         if (map.containsKey(key)) {
-            return map.get(key).equals(value);
+            return Z3ContextWrapper.normalizedEquals(map.get(key), value);
         }
 
         keys.get(keys.size() - 1).add(key);

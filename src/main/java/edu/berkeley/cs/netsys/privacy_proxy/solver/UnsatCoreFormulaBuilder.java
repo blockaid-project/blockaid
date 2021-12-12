@@ -188,7 +188,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                 Object v = paramValues.get(paramIdx);
                 checkState(!expr2Operand.containsKey(paramExpr));
                 expr2Operand.put(paramExpr, new QueryParamOperand(queryIdx, isCurrentQuery, paramIdx));
-                ecs.put(v, paramExpr);
+                ecs.put(Z3ContextWrapper.normalizeValue(v), paramExpr);
             }
 
             if (!e.hasTuples()) {
@@ -216,7 +216,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
                     checkState(!expr2Operand.containsKey(attrExpr));
                     checkState(!isCurrentQuery);
                     expr2Operand.put(attrExpr, new ReturnedRowFieldOperand(queryIdx, rowIdx, attrIdx));
-                    ecs.put(v, attrExpr);
+                    ecs.put(Z3ContextWrapper.normalizeValue(v), attrExpr);
 
                     if (attrNames.stream().anyMatch(pkValuedColumns::contains)) {
                         pkValuedExprs.add(attrExpr);
@@ -235,7 +235,7 @@ public class UnsatCoreFormulaBuilder<C extends Z3ContextWrapper<?, ?, ?, ?>, I e
             Object value = e.getValue();
             Expr<?> constExpr = context.mkConst("!" + name, context.getSortForValue(value));
             expr2Operand.put(constExpr, new ContextConstantOperand(name));
-            ecs.put(value, constExpr);
+            ecs.put(Z3ContextWrapper.normalizeValue(value), constExpr);
         }
 
         if (!options.contains(Option.NO_REMOVE_REDUNDANT)) {
