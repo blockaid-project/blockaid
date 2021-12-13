@@ -34,7 +34,7 @@ SELECT assessments.id, assessments.course_id, assessments.name, assessments.disp
 -- But other fields are only visible for released assignments, i.e., those with `start_at < _NOW`.
 SELECT assessments.* FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = false;
 SELECT assessments.* FROM assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.course_assistant = true AND courses.disabled = false;
-SELECT assessments.* FROM assessments, course_user_data WHERE course_user_data.user_id = _MY_UID AND course_user_data.instructor = true;
+SELECT assessments.* FROM assessments, course_user_data WHERE assessments.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = true;
 
 -- We allow viewing assessment user data regardless of whether the assessment is released or not
 -- because it doesn't include sensitive information about the course.
@@ -74,11 +74,11 @@ SELECT extensions.* FROM extensions, course_user_data o, course_user_data me WHE
 
 SELECT scoreboards.* FROM scoreboards, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = false AND scoreboards.assessment_id = assessments.id;
 SELECT scoreboards.* FROM scoreboards, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.course_assistant = true AND courses.disabled = false AND scoreboards.assessment_id = assessments.id;
-SELECT scoreboards.* FROM scoreboards, assessments, course_user_data WHERE course_user_data.user_id = _MY_UID AND course_user_data.instructor = true AND scoreboards.assessment_id = assessments.id;
+SELECT scoreboards.* FROM scoreboards, assessments, course_user_data WHERE assessments.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = true AND scoreboards.assessment_id = assessments.id;
 
 SELECT problems.* FROM problems, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND assessments.start_at < _NOW AND courses.disabled = false AND problems.assessment_id = assessments.id;
 SELECT problems.* FROM problems, assessments, courses, course_user_data WHERE courses.id = course_user_data.course_id AND courses.id = assessments.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.course_assistant = true AND courses.disabled = false AND problems.assessment_id = assessments.id;
-SELECT problems.* FROM problems, assessments, course_user_data WHERE course_user_data.user_id = _MY_UID AND course_user_data.instructor = true AND problems.assessment_id = assessments.id;
+SELECT problems.* FROM problems, assessments, course_user_data WHERE assessments.course_id = course_user_data.course_id AND course_user_data.user_id = _MY_UID AND course_user_data.instructor = true AND problems.assessment_id = assessments.id;
 
 -- doesn't seem to include sensitive information.
 SELECT score_adjustments.* FROM score_adjustments;
