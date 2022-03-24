@@ -2,6 +2,7 @@
 -- fromRel.fromCol:toRel.toCol
 users.invited_by_id:users.id;
 people.owner_id:users.id;
+users.id:people.owner_id;
 posts.author_id:people.id;
 share_visibilities.user_id:users.id;
 mentions.person_id:people.id;

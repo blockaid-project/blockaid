@@ -327,6 +327,7 @@ public class ParsedPSJ {
                     BoolExpr[] exprs = values.getList().stream()
                             .map(n -> op.apply(left, getPredicate(n, symbolMap, params, paramNames, schema)))
                             .toArray(BoolExpr[]::new);
+                    // FIXME(zhangwen): NOT_IN should use mkAnd?
                     return context.mkOr(exprs);
                 }
                 case IS_NULL -> {
