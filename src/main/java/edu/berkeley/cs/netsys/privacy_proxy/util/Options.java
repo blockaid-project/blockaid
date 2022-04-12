@@ -5,37 +5,37 @@ import java.util.Objects;
 /* Global options. */
 public class Options {
     /* If relation size is greater than this threshold, concrete relation containment uses quantifiers. */
-    public static final int CONTAINMENT_USE_QUANTIFIER_THRESHOLD = Integer.parseInt(System.getProperty("privoxy.containment_use_quantifier_threshold", Integer.toString(Integer.MAX_VALUE)));
+    public static final int CONTAINMENT_USE_QUANTIFIER_THRESHOLD = Integer.parseInt(System.getProperty("blockaid.containment_use_quantifier_threshold", Integer.toString(Integer.MAX_VALUE)));
 
     /* Cache compliant queries using decision templates. */
-    public static final boolean ENABLE_CACHING = Objects.equals(System.getProperty("privoxy.enable_caching"), "true");
+    public static final boolean ENABLE_CACHING = Objects.equals(System.getProperty("blockaid.enable_caching"), "true");
 
     /* Generate decision templates but don't store them. */
-    public static final boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("privoxy.cache_no_retain"), "true");
+    public static final boolean CACHE_NO_RETAIN = Objects.equals(System.getProperty("blockaid.cache_no_retain"), "true");
 
     /* Clear decision cache at trace reset. */
-    public static final boolean CLEAR_CACHE_AT_RESET = Objects.equals(System.getProperty("privoxy.clear_cache_at_reset"), "true");
+    public static final boolean CLEAR_CACHE_AT_RESET = Objects.equals(System.getProperty("blockaid.clear_cache_at_reset"), "true");
 
     /* Skip checking and return compliant for every query (but still parses and transforms queries). */
-    public static final boolean SKIP_CHECKING = Objects.equals(System.getProperty("privoxy.skip_checking"), "true");
+    public static final boolean SKIP_CHECKING = Objects.equals(System.getProperty("blockaid.skip_checking"), "true");
 
     /* Print formulas to file. */
-    public static final boolean PRINT_FORMULAS = Objects.equals(System.getProperty("privoxy.print_formulas"), "true");
+    public static final boolean PRINT_FORMULAS = Objects.equals(System.getProperty("blockaid.print_formulas"), "true");
 
     /* Where to store formulas.  */
-    public static final String FORMULA_DIR = System.getenv("PRIVOXY_FORMULA_PATH");
+    public static final String FORMULA_DIR = System.getenv("BLOCKAID_FORMULA_PATH");
 
     /* Whether to use colors in log messages. */
-    public static final boolean USE_COLORS = Objects.equals(System.getProperty("privoxy.use_colors"), "true");
+    public static final boolean USE_COLORS = Objects.equals(System.getProperty("blockaid.use_colors"), "true");
 
     /* Quiet mode -- suppress log messages. */
-    public static final LogLevel LOG_LEVEL = LogLevel.fromString(System.getProperty("privoxy.log_level", "normal"));
+    public static final LogLevel LOG_LEVEL = LogLevel.fromString(System.getProperty("blockaid.log_level", "normal"));
 
     /* Enable quick denial check -- off by default since denials are not performance-sensitive. */
-    public static final boolean ENABLE_QUICK_DENIAL = Objects.equals(System.getProperty("privoxy.enable_quick_denial"), "true");
+    public static final boolean ENABLE_QUICK_DENIAL = Objects.equals(System.getProperty("blockaid.enable_quick_denial"), "true");
 
     /* Disable quantifier elimination optimization. */
-    public static final boolean DISABLE_QE = Objects.equals(System.getProperty("privoxy.disable_qe"), "true");
+    public static final boolean DISABLE_QE = Objects.equals(System.getProperty("blockaid.disable_qe"), "true");
 
     public enum OnOffType {
         ON,
@@ -55,16 +55,16 @@ public class Options {
         };
     }
 
-    public static final OnOffType CONSTRAIN_CUSTOM_BOOL = getOnOffProperty("privoxy.constrain_custom_bool", OnOffType.ON);
+    public static final OnOffType CONSTRAIN_CUSTOM_BOOL = getOnOffProperty("blockaid.constrain_custom_bool", OnOffType.ON);
 
-    public static final OnOffType SPLIT_IN = getOnOffProperty("privoxy.split_in", OnOffType.ON);
+    public static final OnOffType SPLIT_IN = getOnOffProperty("blockaid.split_in", OnOffType.ON);
 
-    public static final OnOffType PRUNE_PREAMBLE_IN_VALIDATION = getOnOffProperty("privoxy.prune_preamble_in_validation", OnOffType.OFF);
+    public static final OnOffType PRUNE_PREAMBLE_IN_VALIDATION = getOnOffProperty("blockaid.prune_preamble_in_validation", OnOffType.OFF);
 
     /**
      * Whether the unsat-core bound estimator should shrink bounds.
      */
-    public static final OnOffType SHRINK_BOUNDS = getOnOffProperty("privoxy.shrink_bounds", OnOffType.ON);
+    public static final OnOffType SHRINK_BOUNDS = getOnOffProperty("blockaid.shrink_bounds", OnOffType.ON);
 
     public enum PrunePreambleType {
         OFF, // No preamble pruning.
@@ -96,7 +96,7 @@ public class Options {
     }
 
     /* Preamble pruning in decision template minimization. */
-    public static final PrunePreambleType PRUNE_PREAMBLE = PrunePreambleType.parse(System.getProperty("privoxy.prune_preamble", "coarse"));
+    public static final PrunePreambleType PRUNE_PREAMBLE = PrunePreambleType.parse(System.getProperty("blockaid.prune_preamble", "coarse"));
 
     public enum BoundedFormulaType {
         THEORY, // Use ints and bools for database column types.
@@ -113,8 +113,8 @@ public class Options {
 
     /* Use custom sorts (instead of ints and bools) in bounded formula. */
     public static final BoundedFormulaType BOUNDED_FORMULA_TYPE =
-            BoundedFormulaType.parse(System.getProperty("privoxy.bounded_formula_type", "custom_sorts"));
+            BoundedFormulaType.parse(System.getProperty("blockaid.bounded_formula_type", "custom_sorts"));
 
     /* Solver timeout in milliseconds. */
-    public static final int SOLVE_TIMEOUT_MS = Integer.parseInt(System.getProperty("privoxy.solve_timeout_ms", "5000"));
+    public static final int SOLVE_TIMEOUT_MS = Integer.parseInt(System.getProperty("blockaid.solve_timeout_ms", "5000"));
 }
