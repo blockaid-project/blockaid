@@ -192,6 +192,8 @@
             <groupId>com.microsoft</groupId>
             <artifactId>z3</artifactId>
             <version>4.8.12</version>
+            <!--<scope>system</scope>-->
+            <!--<systemPath>${project.basedir}/lib/com.microsoft.z3.jar</systemPath>-->
         </dependency>
         <!-- https://mvnrepository.com/artifact/mysql/mysql-connector-java -->
         <dependency>
@@ -210,24 +212,6 @@
             <artifactId>commons-io</artifactId>
             <version>2.6</version>
         </dependency>
-
-        <!--    <dependency>-->
-<!--        <groupId>com.microsoft</groupId>-->
-<!--        <artifactId>z3</artifactId>-->
-<!--        <scope>system</scope>-->
-<!--        <version>1.0.0</version>-->
-<!--        <systemPath>${pom.basedir}/lib/com.microsoft.z3.jar</systemPath>-->
-<!--    </dependency>-->
-
-
-      <!--
-  <dependency>
-    <groupId>org.flywaydb</groupId>
-    <artifactId>flyway-core</artifactId>
-    <version>3.2.1</version>
-    <scope>test</scope>
-  </dependency>
-  -->
     </dependencies>
 
 

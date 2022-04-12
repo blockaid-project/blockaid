@@ -9,8 +9,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import edu.berkeley.cs.netsys.privacy_proxy.solver.*;
 import edu.berkeley.cs.netsys.privacy_proxy.util.UnionFind;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -327,8 +325,7 @@ public class ParsedPSJ {
                     BoolExpr[] exprs = values.getList().stream()
                             .map(n -> op.apply(left, getPredicate(n, symbolMap, params, paramNames, schema)))
                             .toArray(BoolExpr[]::new);
-                    // FIXME(zhangwen): NOT_IN should use mkAnd?
-                    return context.mkOr(exprs);
+                    return theta.getKind() == SqlKind.IN ? context.mkOr(exprs) : context.mkAnd(exprs);
                 }
                 case IS_NULL -> {
                     return context.mkSqlIsNull(left);
